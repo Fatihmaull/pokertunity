@@ -86,4 +86,10 @@ Matchmaker details that are easy to break: ticks never overlap (an overlapping t
 
 ## Else
 
-- Do not do ever git commit yourself
+- Commit and push your own work, on the branch the task named. Never straight to
+  `main`, and never a force-push to a branch somebody else is working on.
+- A commit message says why the change is the way it is, the same as the
+  comments do. What changed is already in the diff.
+- Opening a pull request is fine once the work is finished and `pnpm lint`,
+  `pnpm test`, `pnpm build` and `pnpm exec tsc --noEmit` are all clean. In that
+  order: the typecheck reads route types the build generates.

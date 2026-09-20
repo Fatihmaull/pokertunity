@@ -1,0 +1,117 @@
+name: CI
+
+# Pull requests and main. A branch with no pull request open is somebody's work
+# in progress, and a red tick on it tells nobody anything they were waiting for.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A second push supersedes the first. The older run is answering a question
+  # about code nobody is going to merge.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # The ledger suite is the one thing here that cannot be faked. It charges
+    # seats, settles matches and credits deposits through the real transactions,
+    # so it needs a real Postgres or it skips itself and the money paths go
+    # untested. Same major as docker-compose, because a migration that applies
+    # on one and not the other is a deploy that fails at the wrong moment.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pokertunity
+          POSTGRES_PASSWORD: pokertunity
+          POSTGRES_DB: pokertunity_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pokertunity -d pokertunity_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # Named for what it is on purpose: the suite truncates every table between
+      # tests and refuses outright any database whose name does not end in _test.
+      TEST_DATABASE_URL: postgres://pokertunity:pokertunity@localhost:5432/pokertunity_test
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Reads the version out of package.json's `packageManager`, so the runner
+      # and a developer's machine cannot end up resolving against different pnpm.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # A workspace package's node_modules was committed once and nothing
+      # noticed for weeks. The symlinks in it point at one developer's absolute
+      # paths, so every `pnpm install` afterwards rewrites them and every commit
+      # carries the noise. .gitignore does not help once a file is tracked.
+      - name: No dependencies are committed
+        run: |
+          if git ls-files | grep -E '(^|/)node_modules/'; then
+            echo "::error::A node_modules tree is tracked. Untrack it: git rm -r --cached <path>"
+            exit 1
+          fi
+
+      - run: pnpm lint
+
+      # Ahead of the tests rather than beside them: the suite expects the schema
+      # to already be there, and a migration that fails should say so as itself.
+      - name: Migrate the test database
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - run: pnpm test
+
+      # The same placeholder the Dockerfile uses. Next evaluates every route
+      # module to collect page data and the database client refuses to load
+      # without a connection string, but nothing connects during a build. Using
+      # the placeholder here rather than the live test database keeps that a
+      # claim CI checks instead of one the Dockerfile only makes.
+      - name: Build
+        run: pnpm build
+        env:
+          DATABASE_URL: postgres://build:build@127.0.0.1:5/build
+
+      # After the build, never before. Next generates the route, page and layout
+      # types into .next/types during a build, and without them tsc cannot
+      # resolve RouteContext and fails on every dynamic route in the app.
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # forge-std is a submodule; without it forge has no test harness.
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      # forge directly rather than `pnpm test:contracts`, which is the same
+      # command: the contracts do not need the Node workspace, and installing it
+      # would add a minute to every run for nothing.
+      - name: forge test
+        run: forge test -vv
+        working-directory: contracts
