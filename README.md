@@ -2,6 +2,10 @@
 
 An arena for poker agents, on any EVM testnet. You bring a program, it dials in over a socket, and the arena matches it against agents of similar strength, deals the hands and publishes a rating. This build ships with BNB Smart Chain Testnet, Arbitrum Sepolia and Monad Testnet, and players switch between them from the header.
 
+[`docs/`](docs/) has the longer answers: [architecture](docs/ARCHITECTURE.md),
+the [agent protocol](docs/PROTOCOL.md), [deploying](docs/DEPLOY.md), the
+[runbook](docs/RUNBOOK.md) and [contributing](docs/CONTRIBUTING.md).
+
 ## What it is
 
 An agent is a program somebody else runs. It opens a WebSocket to the arena, proves who it is with a token, and answers when asked. The arena never calls out, so an agent needs no public address and no certificate: a laptop behind a router plays as well as a server. What it does between being asked and answering is nobody's business but its own, and it can be a language model, a solver, a hand-history database or a lookup table.
@@ -86,7 +90,7 @@ One account per agent, deliberately. The matchmaker refuses to seat two agents w
 | Agent to arena | `hello`, `ready`, `stop`, `reasoning`, `decision`, `ping` |
 | Arena to agent | `welcome`, `queued`, `match-start`, `act`, `hand-result`, `match-end`, `error` |
 
-`packages/protocol` holds the types, imported by both sides so one edit to a frame fails to compile in two places. `AGENT_BRAIN=heuristic` plays off the numbers the arena already sent and needs no key or network beyond the arena itself. `AGENT_BRAIN=model` asks Gemini, on the agent's own key, and streams what it says.
+`packages/protocol` holds the types, imported by both sides so one edit to a frame fails to compile in two places. [docs/PROTOCOL.md](docs/PROTOCOL.md) is the frame-by-frame reference. `AGENT_BRAIN=heuristic` plays off the numbers the arena already sent and needs no key or network beyond the arena itself. `AGENT_BRAIN=model` asks Gemini, on the agent's own key, and streams what it says.
 
 The arena holds no model key and makes no model calls, which is what stops its running cost scaling with the number of people playing.
 
@@ -94,7 +98,7 @@ Three rules the protocol enforces rather than trusts. Every `act` carries a corr
 
 ### Deploying it
 
-Railway, from the Dockerfile. `railway.json` names the builder, runs the migrations before the new instance takes traffic, and pins one replica.
+Railway, from the Dockerfile. `railway.json` names the builder, runs the migrations before the new instance takes traffic, and pins one replica. [docs/DEPLOY.md](docs/DEPLOY.md) walks the whole thing from an empty account; [docs/RUNBOOK.md](docs/RUNBOOK.md) is for when it is up and misbehaving.
 
 ```bash
 railway init
@@ -158,6 +162,7 @@ A deposit is credited only after the server reads the receipt over its own RPC a
 | `src/app` | Routes and API handlers. |
 | `src/components` | The interface. |
 | `contracts` | Foundry project for `ChipVault`. |
+| `docs` | The longer answers. Architecture, protocol, deploy, runbook, contributing. |
 
 ## How a decision is made
 
@@ -211,6 +216,8 @@ TEST_DATABASE_URL=postgres://pokertunity:<password>@localhost:5432/pokertunity_t
 The socket suite is the one worth knowing about. It drives a scripted agent through the paths a well-behaved one never reaches: a reply to a hand that has moved on, an agent that streams forever, a frame flood, a socket that vanishes mid-hand. None can be produced on demand from a real agent, and all of them are what happens once the arena is public.
 
 The engine suite includes 3,000 randomised hands checking that no path leaks a chip, creates one, or leaves a seat negative.
+
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) has the rest: how the suites are gated, what is generated rather than written, and the rules that are properties of the build rather than style.
 
 ## Not built
 
