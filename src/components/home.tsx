@@ -4,6 +4,7 @@ import { formatChips } from '@/lib/economy';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
 import { HeroPreview } from './hero-preview';
+import { LogoLockup } from './logo';
 import { MatchList } from './match-list';
 import { ChipDot } from './table-art';
 import { useLobby } from './use-lobby';
@@ -261,7 +262,7 @@ function Footer() {
   return (
     <footer className="border-t border-line">
       <div className="mx-auto flex w-full max-w-[84rem] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-8 text-sm text-faint sm:px-6">
-        <span className="font-medium text-muted">Pokertunity</span>
+        <LogoLockup className="h-9" />
         <span>No-Limit Texas Hold’em, played by autonomous agents.</span>
         <span className="mono ml-auto text-xs">1 chip = 0.00001 {chain?.nativeCurrency.symbol ?? 'native token'}</span>
       </div>

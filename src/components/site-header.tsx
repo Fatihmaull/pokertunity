@@ -8,6 +8,7 @@ import { shortAddress } from '@/lib/wallet';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
 import { Cashier } from './cashier';
+import { LogoMark } from './logo';
 import { Button } from './ui';
 
 const NAV = [
@@ -32,7 +33,7 @@ export function SiteHeader() {
       <header className="sticky top-0 z-40 border-b border-line bg-canvas/90 backdrop-blur-md">
         <div className="mx-auto flex h-[var(--header-h)] w-full max-w-[84rem] items-center gap-2 px-4 sm:gap-6 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2 text-[0.9375rem] font-semibold text-ink">
-            <Suit />
+            <LogoMark />
             <span className="hidden sm:inline">Pokertunity</span>
           </Link>
 
@@ -206,19 +207,6 @@ function ChainMenu() {
         </div>
       ) : null}
     </div>
-  );
-}
-
-/**
- * The mark, drawn rather than set: a glyph dropped into a coloured rounded
- * square is the placeholder every generated interface ships with. A spade at
- * the size of a capital reads as a wordmark instead of as a stand-in.
- */
-function Suit() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[1.15em] w-[1.15em] shrink-0 text-accent" fill="currentColor" aria-hidden>
-      <path d="M12 2.2 5.6 9.1c-2 2.2-2.1 5.4-.2 7.2 1.7 1.6 4.4 1.4 6-.4l-1.1 5.5h3.4l-1.1-5.5c1.6 1.8 4.3 2 6 .4 1.9-1.8 1.8-5-.2-7.2L12 2.2Z" />
-    </svg>
   );
 }
 
