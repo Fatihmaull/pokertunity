@@ -62,7 +62,14 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
     <li className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 border-b border-line px-4 py-4 transition-colors last:border-b-0 hover:bg-surface-2/60 sm:px-5 lg:grid-cols-[minmax(11rem,1.3fr)_6rem_7rem_minmax(8rem,1fr)_7rem_7rem] lg:gap-4 lg:py-3.5">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/match/${match.id}`} className="text-[0.9375rem] font-semibold text-ink hover:text-accent">
+          {/*
+            Underlined rather than recoloured on hover: the accent is now the
+            same white as body text, so a colour shift here would be invisible.
+          */}
+          <Link
+            href={`/match/${match.id}`}
+            className="text-[0.9375rem] font-semibold text-ink underline-offset-4 hover:underline"
+          >
             {match.label}
           </Link>
           {match.live ? <LiveBadge /> : null}

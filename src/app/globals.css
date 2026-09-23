@@ -13,37 +13,61 @@
 */
 
 @theme {
-  /* Neutral ramp. Very slightly green so it sits under the felt without a jump. */
-  --color-canvas: #0b0f0e;
-  --color-surface: #121816;
-  --color-surface-2: #182120;
-  --color-surface-3: #1f2b28;
-  --color-line: #26332f;
-  --color-line-strong: #35453f;
+  /*
+    Neutral ramp, and neutral on purpose. It used to carry a slight green so it
+    sat under the felt without a jump. The mark is black, white and red, and a
+    green cast beneath a red accent reads as mud. The felt keeps its green and
+    is now the only thing wearing one, which is the point: the table is where
+    the interface is allowed to become a game.
+  */
+  --color-canvas: #0a0a0b;
+  --color-surface: #141416;
+  --color-surface-2: #1c1c1f;
+  --color-surface-3: #262629;
+  --color-line: #2b2b2f;
+  --color-line-strong: #3b3b41;
   /*
     The boundary of anything you can type in or toggle. A field's fill barely
     differs from the card behind it, so the border is what identifies the
     control and it clears the 3:1 that WCAG asks of a component boundary.
   */
-  --color-line-input: #566f66;
+  --color-line-input: #6a6a6f;
 
-  --color-ink: #e9efec;
-  --color-muted: #9dada7;
+  --color-ink: #ededee;
+  --color-muted: #a8a8ac;
   /*
     Help text and row subtitles carry real information, so this clears 4.5:1
     against every fill it sits on, including a row inside a card. It is the
     quietest colour allowed to hold a sentence.
   */
-  --color-faint: #7a8b85;
+  --color-faint: #8e8e93;
 
-  /* One accent. Join, live, and money in. */
-  --color-accent: #17b26a;
-  --color-accent-hover: #14a05e;
-  --color-accent-soft: #0f2a20;
-  --color-accent-ink: #04140d;
+  /*
+    One accent, and it is the mark's white. Join, live and money in are the
+    things a player is here to do, and on a screen this dark white is the
+    loudest a colour gets -- louder than the red, which is exactly why the red
+    is not spent on them.
+  */
+  --color-accent: #fafafa;
+  --color-accent-hover: #e4e4e7;
+  --color-accent-soft: #1a1a1d;
+  --color-accent-ink: #0a0a0b;
 
-  --color-danger: #f0555a;
-  --color-danger-soft: #2a1214;
+  /*
+    The mark's red, sampled from the artwork. It is for fills and dots, never
+    for a sentence: at this value it clears the 3:1 a graphic owes its
+    background but not the 4.5:1 a line of text does. Red you can read is
+    --color-danger.
+  */
+  --color-brand: #e60116;
+
+  /*
+    Red means attention and means nothing else here -- a table dealing now, or
+    something that failed. Lifted off the mark's red only as far as 4.5:1 on a
+    card demands, so the two still read as one colour.
+  */
+  --color-danger: #ff4550;
+  --color-danger-soft: #2b0a0f;
   --color-warning: #f5a524;
 
   /*
