@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { db, sql } from '../db/client';
+import { eq } from 'drizzle-orm';
 import { agents } from '../db/schema';
 import { registerAgent } from '../server/credentials';
 
@@ -19,7 +20,8 @@ async function main(): Promise<void> {
   const [first] = await db.select({ userId: agents.userId }).from(agents).limit(1);
   if (!first) throw new Error('seed some agents first');
 
-  const { token } = await registerAgent(first.userId, 'Spare (dev)');
+  const { token, agentId } = await registerAgent(first.userId, 'Spare (dev)');
+  await db.update(agents).set({ demo: true }).where(eq(agents.id, agentId));
   const field = JSON.parse(readFileSync(path, 'utf8')) as unknown[];
   field.push({ name: 'Spare (dev)', token, brain: 'heuristic' });
   writeFileSync(path, `${JSON.stringify(field, null, 2)}\n`);

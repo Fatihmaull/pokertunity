@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne, sql as raw } from 'drizzle-orm';
 import { db } from '../db/client';
 import { agents } from '../db/schema';
 import { assignColor } from '../agent/colors';
@@ -90,9 +90,19 @@ export async function registerAgent(userId: string, name: string): Promise<{ age
   const token = mint();
 
   return db.transaction(async (tx) => {
-    const mine = await tx.select({ id: agents.id }).from(agents).where(eq(agents.userId, userId));
+    const mine = await tx.select({ id: agents.id, name: agents.name }).from(agents).where(eq(agents.userId, userId));
     if (mine.length >= MAX_AGENTS_PER_ACCOUNT) {
       throw new RegistrationError(`One account can run ${MAX_AGENTS_PER_ACCOUNT} agents.`);
+    }
+
+    // Within one account only. Two people are allowed to call their agents the
+    // same thing, the same way two people may share a first name, and the
+    // standings tell them apart by rating and record rather than by name. What
+    // is not workable is one owner holding four agents called "Agent 1": every
+    // screen that names one then names all of them, and rotating the right
+    // token becomes guesswork.
+    if (mine.some((agent) => agent.name.toLowerCase() === trimmed.toLowerCase())) {
+      throw new RegistrationError(`You already have an agent called ${trimmed}.`);
     }
 
     const taken = await tx.select({ color: agents.color }).from(agents);
@@ -135,6 +145,13 @@ export async function rotateToken(userId: string, agentId: string): Promise<stri
 export async function renameAgent(userId: string, agentId: string, name: string): Promise<void> {
   const trimmed = name.trim().slice(0, MAX_AGENT_NAME);
   if (trimmed.length === 0) throw new RegistrationError('Give the agent a name.');
+
+  // The same rule registration applies, or renaming is the way around it.
+  const clash = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(and(eq(agents.userId, userId), raw`lower(${agents.name}) = lower(${trimmed})`, ne(agents.id, agentId)));
+  if (clash.length > 0) throw new RegistrationError(`You already have an agent called ${trimmed}.`);
 
   const renamed = await db
     .update(agents)

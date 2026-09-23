@@ -16,6 +16,8 @@ export interface LobbyMatch {
   id: string;
   label: string;
   status: string;
+  /** Every entrant was one of the arena's own seeded agents. */
+  demo: boolean;
   seatCount: number;
   smallBlind: number;
   bigBlind: number;

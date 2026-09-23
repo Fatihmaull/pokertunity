@@ -469,7 +469,7 @@ async function candidate(chips: number, name: string, rating: Rating = DEFAULT_R
     })
     .returning({ id: agents.id });
 
-  return { agentId: row.id, name, ownerId: account.userId, rating, published: conservative(rating) };
+  return { agentId: row.id, name, ownerId: account.userId, rating, published: conservative(rating), demo: false };
 }
 
 async function balance(userId: string): Promise<number> {

@@ -61,6 +61,8 @@ export async function GET(): Promise<Response> {
       id: row.matchId,
       label: `${stakesLabel()} match`,
       status: row.status,
+      // So a reader can tell the arena's own field from other people's agents.
+      demo: row.demo,
       seatCount: row.seatCount,
       smallBlind: row.smallBlind,
       bigBlind: row.bigBlind,

@@ -119,6 +119,16 @@ export const agents = pgTable(
     /** Net chips won across every hand. Negative is a losing agent. */
     chipsWon: bigint('chips_won', { mode: 'number' }).notNull().default(0),
     biggestPot: integer('biggest_pot').notNull().default(0),
+    /**
+     * A seeded agent, run by the arena's own operator to keep the floor
+     * inhabited.
+     *
+     * Marked so a reader can tell the field from the entrants. It buys no
+     * advantage and the matchmaker cannot see it: a demo agent queues, is
+     * banded and is seated exactly like anyone else's, which is the only way a
+     * stranger's first match against one means anything.
+     */
+    demo: boolean('demo').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -239,6 +249,14 @@ export const matches = pgTable(
     handsPlayed: integer('hands_played').notNull().default(0),
     /** Average published rating of the entrants when it started, for the lobby. */
     bandRating: real('band_rating'),
+    /**
+     * Every entrant was a seeded agent.
+     *
+     * Settled here rather than derived later, because seats are deleted the
+     * moment a match ends and the answer would stop being recoverable exactly
+     * when somebody wants to read it off the finished match.
+     */
+    demo: boolean('demo').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp('started_at', { withTimezone: true }),
     endedAt: timestamp('ended_at', { withTimezone: true }),

@@ -15,6 +15,13 @@
       "when": 1789352702834,
       "tag": "0001_brief_spyke",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790184425550,
+      "tag": "0002_yellow_maelstrom",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,8 @@ import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { db, sql } from '../db/client';
-import { ledgerEntries, users } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { agents, ledgerEntries, users } from '../db/schema';
 import { registerAgent } from '../server/credentials';
 import { STARTING_GRANT } from '../lib/economy';
 
@@ -89,7 +90,12 @@ async function main(): Promise<void> {
     });
 
     const name = `${character.name} (dev)`;
-    const { token } = await registerAgent(userId, name);
+    const { token, agentId } = await registerAgent(userId, name);
+
+    // Marked as the arena's own, so a visitor can tell the field that keeps the
+    // floor inhabited from agents other people brought. It changes nothing
+    // about how they are seated or rated.
+    await db.update(agents).set({ demo: true }).where(eq(agents.id, agentId));
 
     const brain = index < modelSeats ? 'model' : 'heuristic';
     field.push(brain === 'model' ? { name, token, brain, strategy: character.strategy } : { name, token, brain });

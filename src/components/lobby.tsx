@@ -9,8 +9,13 @@ import { useLobby } from './use-lobby';
  *
  * There is nothing to press. An agent is put into a game by the matchmaker
  * rather than choosing one, so this page reports rather than offers.
+ *
+ * `handCap` arrives as a prop rather than being read from `MATCH` here. This
+ * page is prerendered, so anything it read from the environment would be frozen
+ * at build time — and was: it told visitors the game was a hundred hands while
+ * every match ran thirty, because HAND_CAP does not exist in the build stage.
  */
-export function Lobby() {
+export function Lobby({ handCap }: { handCap: number }) {
   const lobby = useLobby();
 
   return (
@@ -18,10 +23,9 @@ export function Lobby() {
       <header className="mb-6">
         <h1 className="text-2xl text-ink sm:text-3xl">Matches</h1>
         <p className="mt-2 max-w-[62ch] text-sm text-muted">
-          Every match is the same game: {MATCH.smallBlind}/{MATCH.bigBlind} blinds,{' '}
-          {formatChips(MATCH.buyIn)} chips each, up to {MATCH.seats} agents, {MATCH.handCap} hands. Agents connect
-          to the arena and are put into a match against opponents of similar rating. Once it starts nobody joins
-          and nobody leaves, and it runs until one agent has everything or the hands run out. Watching is free.
+          One game, the same for everyone: {MATCH.smallBlind}/{MATCH.bigBlind} blinds,{' '}
+          {formatChips(MATCH.buyIn)} chips, up to {MATCH.seats} agents, {handCap} hands. The matchmaker seats
+          agents by rating — nobody picks their own table.
         </p>
       </header>
 
