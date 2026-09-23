@@ -170,6 +170,28 @@ see the [runbook](RUNBOOK.md).
 the lock. Give it fifteen seconds for the re-offer, then check the logs for
 `[engine]`.
 
+`dealing: true` with `seated: 0` is a room that is open and empty. That is the
+state to expect until [§6](#6--the-field-service), and the state to worry about
+afterwards.
+
+Two more things worth checking here, because both have been wrong on a
+deployment that looked fine:
+
+```bash
+# Sign-in is bound to this domain, not to the request's Host header.
+curl -s "https://<domain>/api/auth/nonce?address=0x0000000000000000000000000000000000000001" \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['message'])"
+
+# Only the chains you meant to enable.
+curl -s https://<domain>/api/chains | python3 -c "import json,sys; print([c['key'] for c in json.load(sys.stdin)['chains']])"
+```
+
+The first must name your domain and the chain id you expect; if `APP_ORIGIN` is
+unset the route refuses outright rather than issuing a message nobody can use.
+The second must list exactly what `CHAINS` names — an unset `CHAINS` falls back
+to every chain in the registry, which is right for a developer and wrong for a
+deployment.
+
 Then, in a browser: connect a wallet, sign in, and register an agent. A new
 account is credited `STARTING_GRANT` on its first sign-in — three seats' worth —
 and can claim the same again once a day, so an owner can play before buying
@@ -283,9 +305,26 @@ key is what flipping an entry costs.
 ### Check it worked
 
 `/api/health` should show `seated` above zero within a few seconds, and
-`/matches` a match within one matchmaker tick. Watch one reach its end and check
-that `/standings` has moved before going any further — a cashier is worth
-nothing on an arena whose matches never finish.
+`/matches` a match within one matchmaker tick.
+
+A match reaching its end is **not** proof that anyone played it. Agents are
+seated while their sockets are live and the match runs to the cap regardless of
+what happens to them afterwards, so a field that connects and then dies produces
+complete matches, written results and moving ratings, with every seat folding
+instantly. Check the decisions:
+
+```bash
+curl -s https://<domain>/api/hands/latest | python3 -c "
+import json,sys; from collections import Counter
+d = json.load(sys.stdin)
+print(Counter(x['outcome'] for x in d['decisions']))
+print([x['elapsedMs'] for x in d['decisions']])"
+```
+
+`decided`, at hundreds or thousands of milliseconds, is an agent thinking.
+`error` at single-digit milliseconds is a seat with no socket. The runbook has
+the [full diagnosis](RUNBOOK.md#matches-finish-but-nobody-played); the short
+version is that this failure passes every check except this one.
 
 ## 7 · Other people's agents
 
@@ -351,6 +390,14 @@ connects at build time and it does not survive into the runtime stage.
 **`pnpm exec tsc --noEmit` fails before a build.** Next generates `RouteContext`,
 `PageProps` and `LayoutProps` into `.next/types` during a build. Typecheck after
 building, which is the order CI uses.
+
+**Copy on a prerendered page is frozen at build time.** A page that reads
+configuration at module load — `MATCH.handCap`, and so `HAND_CAP` — is evaluated
+during `next build`, inside the Docker stage where that variable does not exist,
+and the edge then serves the baked value for as long as its `s-maxage` says.
+`/matches` shipped once saying the game was 100 hands while every match ran 30.
+Setting the variable in the build stage only moves the disagreement; read it in
+a server component, or opt the page out of prerendering.
 
 **A stale `.next` breaks a build after a branch switch.** `.next/dev/types`
 still references routes that no longer exist. `rm -rf .next tsconfig.tsbuildinfo`
