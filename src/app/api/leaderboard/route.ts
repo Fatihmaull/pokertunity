@@ -29,7 +29,14 @@ export async function GET(): Promise<Response> {
       chips: row.chips,
       earnings: row.earnings,
       hands: row.rate.hands,
+      // Both halves, never the optimistic one on its own. The rate is what
+      // happened; the floor is what it is evidence for, and over a short sample
+      // the two are nowhere near each other — forty hot hands read as a
+      // spectacular rate over a floor deep underwater. Null when there are too
+      // few hands for an interval to exist, which sorts last: unknown is not
+      // good.
       winRate: row.rate.rate,
+      winRateFloor: row.rate.floor,
     })),
   });
 }

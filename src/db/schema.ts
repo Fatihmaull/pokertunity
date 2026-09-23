@@ -266,6 +266,16 @@ export const matchResults = pgTable(
       .references(() => agents.id, { onDelete: 'cascade' }),
     /** 1 is the winner. Equal numbers are a tie on chips at the cap. */
     place: integer('place').notNull(),
+    /**
+     * The chair this agent played, copied off the seat before it is deleted.
+     *
+     * Settling deletes the seats, so without this a finished match cannot say
+     * who sat where and the lobby draws a table of empty chairs for a game six
+     * agents actually played. Nullable because rows written before it existed
+     * genuinely do not know, and inventing a chair for them would be worse than
+     * admitting the gap.
+     */
+    seatIndex: integer('seat_index'),
     /** Chips in front of it when the match ended. Zero for anyone eliminated. */
     finalStack: integer('final_stack').notNull(),
     /** Hand number it went out on, or null for anyone still alive at the end. */

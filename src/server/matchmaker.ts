@@ -4,6 +4,7 @@ import { closeMatch, openMatch } from './registry';
 import { conservative } from '../lib/rating';
 import {
   createMatch,
+  handsDealt,
   liveMatchIds,
   queuedAgents,
   seatingStatus,
@@ -114,7 +115,11 @@ export async function abandonOrphanedMatches(): Promise<number> {
 
   for (const matchId of orphaned) {
     try {
-      announce(matchId, 'abandoned', 0, await settleMatch(matchId, 'abandoned', 0));
+      // Counted from the hands themselves. The runtime that knew the tally went
+      // away with the process, and recording a zero would deny hands that were
+      // dealt and stored.
+      const dealt = await handsDealt(matchId);
+      announce(matchId, 'abandoned', dealt, await settleMatch(matchId, 'abandoned', dealt));
     } catch (error) {
       console.error(`[matchmaker] could not abandon ${matchId}`, error);
     }

@@ -107,6 +107,8 @@ export interface Candidate {
   rating: Rating;
   /** The published figure, which is what the bands are drawn on. */
   published: number;
+  /** Matches finished. Zero means the published figure is a starting point, not a measurement. */
+  matchesPlayed: number;
 }
 
 /**
@@ -131,6 +133,7 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: users.id,
       mu: agents.ratingMu,
       sigma: agents.ratingSigma,
+      matchesPlayed: agents.matchesPlayed,
     })
     .from(agents)
     .innerJoin(users, eq(users.id, agents.userId))
@@ -151,8 +154,25 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: row.ownerId,
       rating,
       published: conservative(rating),
+      matchesPlayed: row.matchesPlayed,
     };
   });
+}
+
+/**
+ * The band a match was drawn from, or null when nobody in it has been rated.
+ *
+ * Averaged over every entrant, unrated ones included, because that is what the
+ * matchmaker actually banded on. The one thing the average cannot describe is a
+ * field where nobody has played yet: that is zero by construction, and floating
+ * point will not hand back a clean zero to test against, since mu minus three
+ * sigma over a stored default lands a hair either side of it. Recording the
+ * absence as an absence is both safer to read and the truer claim — a field
+ * nobody has rated is not a field rated zero.
+ */
+function bandOf(entrants: readonly Candidate[]): number | null {
+  if (entrants.every((entrant) => entrant.matchesPlayed === 0)) return null;
+  return entrants.reduce((sum, entrant) => sum + entrant.published, 0) / entrants.length;
 }
 
 /**
@@ -180,7 +200,7 @@ export async function createMatch(
         buyIn: MATCH.buyIn,
         entryFee: MATCH.entryFee,
         handCap: MATCH.handCap,
-        bandRating: entrants.reduce((sum, entrant) => sum + entrant.published, 0) / entrants.length,
+        bandRating: bandOf(entrants),
         startedAt: new Date(),
       })
       .returning();
@@ -300,6 +320,7 @@ export async function settleMatch(matchId: string, ending: MatchEnding, handsPla
       .select({
         agentId: seats.agentId,
         name: agents.name,
+        seatIndex: seats.seatIndex,
         stack: seats.stack,
         bustedAtHand: seats.bustedAtHand,
         userId: agents.userId,
@@ -362,6 +383,9 @@ export async function settleMatch(matchId: string, ending: MatchEnding, handsPla
         matchId,
         agentId: entry.row.agentId,
         place: entry.place,
+        // Copied off the seat here because the seats are gone by the time
+        // anybody asks a finished match who sat where.
+        seatIndex: entry.row.seatIndex,
         finalStack: entry.row.stack,
         bustedAtHand: entry.row.bustedAtHand,
         ratingMuBefore: entry.rating.mu,
@@ -422,6 +446,24 @@ function placeOf(
 export async function liveMatchIds(): Promise<string[]> {
   const rows = await db.select({ id: matches.id }).from(matches).where(eq(matches.status, 'playing'));
   return rows.map((row) => row.id);
+}
+
+/**
+ * How many hands a match actually got through, counted from the hands.
+ *
+ * The runtime keeps its own tally, but a process recovering somebody else's
+ * abandoned match has no runtime to ask and would otherwise record a zero over
+ * hands that were dealt, stored and are sitting in the table right now. Nothing
+ * about money or rating reads this, which is exactly why it is worth getting
+ * right: a number nobody checks is the one that quietly stays wrong.
+ */
+export async function handsDealt(matchId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: raw<number>`count(*)::int` })
+    .from(hands)
+    .where(eq(hands.matchId, matchId));
+
+  return row?.count ?? 0;
 }
 
 /** A decision as it is stored with its hand. */
@@ -713,25 +755,59 @@ export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
 
   if (rows.length === 0) return [];
 
-  const occupied = await db
-    .select({
-      matchId: seats.matchId,
-      seatIndex: seats.seatIndex,
-      agentId: seats.agentId,
-      stack: seats.stack,
-      bustedAtHand: seats.bustedAtHand,
-      name: agents.name,
-      color: agents.color,
-    })
-    .from(seats)
-    .innerJoin(agents, eq(agents.id, seats.agentId))
-    .where(
-      inArray(
-        seats.matchId,
-        rows.map((row) => row.id),
-      ),
-    )
-    .orderBy(seats.seatIndex);
+  const dealing = rows.filter((row) => row.status === 'playing').map((row) => row.id);
+  const finished = rows.filter((row) => row.status !== 'playing').map((row) => row.id);
+
+  const occupied =
+    dealing.length === 0
+      ? []
+      : await db
+          .select({
+            matchId: seats.matchId,
+            seatIndex: seats.seatIndex,
+            agentId: seats.agentId,
+            stack: seats.stack,
+            bustedAtHand: seats.bustedAtHand,
+            name: agents.name,
+            color: agents.color,
+          })
+          .from(seats)
+          .innerJoin(agents, eq(agents.id, seats.agentId))
+          .where(inArray(seats.matchId, dealing))
+          .orderBy(seats.seatIndex);
+
+  // A settled match has no seats left — they are deleted when the chips go
+  // back — so who played is read off the finishing record instead. Without
+  // this the lobby draws a row of empty chairs for a game six agents actually
+  // sat down to, which reads as a match nobody turned up for.
+  const recorded =
+    finished.length === 0
+      ? []
+      : await db
+          .select({
+            matchId: matchResults.matchId,
+            seatIndex: matchResults.seatIndex,
+            agentId: matchResults.agentId,
+            stack: matchResults.finalStack,
+            bustedAtHand: matchResults.bustedAtHand,
+            name: agents.name,
+            color: agents.color,
+          })
+          .from(matchResults)
+          .innerJoin(agents, eq(agents.id, matchResults.agentId))
+          .where(inArray(matchResults.matchId, finished));
+
+  // One shape for both sources. A live seat always knows its chair; a recorded
+  // one may not, if it was written before the chair was kept.
+  const lineup: Array<{
+    matchId: string;
+    seatIndex: number | null;
+    agentId: string;
+    stack: number;
+    bustedAtHand: number | null;
+    name: string;
+    color: string;
+  }> = [...occupied, ...recorded];
 
   return rows.map((row) => ({
     matchId: row.id,
@@ -745,15 +821,24 @@ export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
     bandRating: row.bandRating,
     startedAt: row.startedAt,
     endedAt: row.endedAt,
-    seats: occupied
-      .filter((seat) => seat.matchId === row.id)
-      .map((seat) => ({
-        index: seat.seatIndex,
-        agentId: seat.agentId,
-        name: seat.name,
-        color: seat.color,
-        stack: seat.stack,
-        busted: seat.bustedAtHand !== null,
-      })),
+    seats: lineup
+      // A chair nobody recorded is left out rather than guessed at. That is
+      // only ever a match settled before the chair was kept, and an invented
+      // seating is worse than a missing one.
+      .flatMap((seat) =>
+        seat.matchId === row.id && seat.seatIndex !== null
+          ? [
+              {
+                index: seat.seatIndex,
+                agentId: seat.agentId,
+                name: seat.name,
+                color: seat.color,
+                stack: seat.stack,
+                busted: seat.bustedAtHand !== null,
+              },
+            ]
+          : [],
+      )
+      .sort((a, b) => a.index - b.index),
   }));
 }

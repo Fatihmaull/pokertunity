@@ -82,9 +82,7 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
           {/* The band, not the softness. An agent cannot choose its game, so
               nothing here is a signal for picking one: it says how strong the
               company is, which is what a spectator wants to know. */}
-          {match.bandRating !== null && match.bandRating > 0
-            ? `Rated around ${match.bandRating.toFixed(1)}`
-            : 'Unrated field'}
+          {match.bandRating === null ? 'Unrated field' : `Rated around ${match.bandRating.toFixed(1)}`}
           <span className="lg:hidden">
             {' · '}
             {match.smallBlind}/{match.bigBlind} blinds · {formatChips(match.buyIn)} buy-in

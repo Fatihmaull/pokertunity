@@ -26,11 +26,14 @@ import type { Session } from './auth';
 import type { observeDeposit } from './chain';
 import { shuffledDeck } from './deck';
 import { leaderboard } from './metrics';
+import { abandonOrphanedMatches } from './matchmaker';
 import {
   createMatch,
+  handsDealt,
   markInHand,
   recordHand,
   settleMatch,
+  storedMatches,
   type Candidate,
   type PersistedHand,
 } from './store';
@@ -321,6 +324,67 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.ok(rated.every((rating) => rating.mu === DEFAULT_RATING.mu && rating.matchesPlayed === 0));
   });
 
+  test('a match recovered from a dead process is credited with the hands it really dealt', async () => {
+    const field = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B')];
+    const match = (await createMatch(field))!;
+    await markInHand(match.id, [0, 1]);
+    await recordHand(foldedHand(match.id, field, [MATCH.buyIn, MATCH.buyIn]));
+
+    // The count comes from the hands themselves, because the runtime that kept
+    // the tally went away with the process that was dealing.
+    assert.equal(await handsDealt(match.id), 1);
+
+    const recovered = await abandonOrphanedMatches();
+    assert.equal(recovered, 1);
+
+    const [row] = await db.select().from(matches).where(eq(matches.id, match.id));
+    assert.equal(row.status, 'abandoned');
+    assert.equal(row.handsPlayed, 1, 'a hand that was dealt and stored is not recorded as never having happened');
+  });
+
+  test('a field nobody has rated records no band rather than a band of zero', async () => {
+    const fresh = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B')];
+    const match = (await createMatch(fresh))!;
+
+    const [row] = await db.select().from(matches).where(eq(matches.id, match.id));
+    // Not a number near zero. Mu minus three sigma over a stored default lands
+    // a hair either side of it, so a reader testing the sign gets whichever
+    // way the rounding fell. An unrated field is not a field rated zero.
+    assert.equal(row.bandRating, null);
+  });
+
+  test('a field with a record carries the band it was drawn from', async () => {
+    const played = [
+      await candidate(SEAT_COST, 'A', { mu: 30, sigma: 4 }, 12),
+      await candidate(SEAT_COST, 'B', { mu: 24, sigma: 4 }, 9),
+    ];
+    const match = (await createMatch(played))!;
+
+    const [row] = await db.select().from(matches).where(eq(matches.id, match.id));
+    assert.ok(row.bandRating !== null);
+    assert.equal(
+      Math.round(row.bandRating),
+      Math.round((conservative({ mu: 30, sigma: 4 }) + conservative({ mu: 24, sigma: 4 })) / 2),
+    );
+  });
+
+  test('a settled match still says who sat where, once its seats are gone', async () => {
+    const field = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B'), await candidate(SEAT_COST, 'C')];
+    const match = (await createMatch(field))!;
+    await setStacks(match.id, [{ stack: 3_000 }, { stack: 2_000 }, { stack: 1_000 }]);
+    await settleMatch(match.id, 'cap', 100);
+
+    assert.equal((await seatsOf(match.id)).length, 0, 'the seats really are deleted');
+
+    const [listed] = (await storedMatches()).filter((entry) => entry.matchId === match.id);
+    assert.ok(listed, 'a finished match is still worth showing');
+    assert.deepEqual(
+      listed.seats.map((seat) => `${seat.index} ${seat.name} ${seat.stack}`),
+      ['0 A 3000', '1 B 2000', '2 C 1000'],
+      'the lobby draws the table that played, not a row of empty chairs',
+    );
+  });
+
   /* ------------------------------------------------------------------------ */
   /* Deposits                                                                 */
   /* ------------------------------------------------------------------------ */
@@ -455,7 +519,14 @@ async function owner(chips: number): Promise<Session> {
   return { userId: row.id, address };
 }
 
-async function candidate(chips: number, name: string, rating: Rating = DEFAULT_RATING): Promise<Candidate> {
+async function candidate(
+  chips: number,
+  name: string,
+  rating: Rating = DEFAULT_RATING,
+  // Written onto the row as well as carried on the candidate, because the two
+  // disagreeing is exactly the bug a fixture should not be able to hide.
+  matchesPlayed = 0,
+): Promise<Candidate> {
   const account = await owner(chips);
   const [row] = await db
     .insert(agents)
@@ -466,10 +537,11 @@ async function candidate(chips: number, name: string, rating: Rating = DEFAULT_R
       tokenHash: `test-${name}-${wallets}`,
       ratingMu: rating.mu,
       ratingSigma: rating.sigma,
+      matchesPlayed,
     })
     .returning({ id: agents.id });
 
-  return { agentId: row.id, name, ownerId: account.userId, rating, published: conservative(rating) };
+  return { agentId: row.id, name, ownerId: account.userId, rating, published: conservative(rating), matchesPlayed };
 }
 
 async function balance(userId: string): Promise<number> {
