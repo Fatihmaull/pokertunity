@@ -142,7 +142,7 @@ export function DealerButton({ size = 22 }: { size?: number }) {
 
 /** Falls back to the interface accent, so an unowned bar still looks deliberate. */
 export function agentHex(color: string | null | undefined): string {
-  return color ? colorById(color).hex : '#17b26a';
+  return color ? colorById(color).hex : '#fafafa';
 }
 
 const RANK_WORDS: Record<string, string> = {

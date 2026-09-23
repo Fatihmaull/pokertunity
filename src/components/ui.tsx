@@ -60,11 +60,18 @@ export function Card({ className = '', children }: { className?: string; childre
   return <div className={`rounded-card border border-line bg-surface ${className}`}>{children}</div>;
 }
 
-type BadgeTone = 'neutral' | 'accent' | 'warning' | 'danger';
+type BadgeTone = 'neutral' | 'accent' | 'live' | 'warning' | 'danger';
 
+/*
+  `live` and `danger` are both red because red carries one meaning here: look
+  at this. They are separate tones anyway, because a table that is dealing and
+  a deposit that failed are not the same event, and the day one of them needs
+  to stop being red the other should not move with it.
+*/
 const BADGE_TONES: Record<BadgeTone, string> = {
   neutral: 'border-line-strong bg-surface-2 text-muted',
   accent: 'border-accent/35 bg-accent-soft text-accent',
+  live: 'border-brand/40 bg-danger-soft text-danger',
   warning: 'border-warning/35 bg-warning/10 text-warning',
   danger: 'border-danger/35 bg-danger-soft text-danger',
 };
@@ -90,8 +97,8 @@ export function Badge({
 /** A table that is dealing right now. The dot is the convention people know. */
 export function LiveBadge({ label = 'Live' }: { label?: string }) {
   return (
-    <Badge tone="accent">
-      <span className="live-dot h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
+    <Badge tone="live">
+      <span className="live-dot h-1.5 w-1.5 rounded-full bg-brand" aria-hidden />
       {label}
     </Badge>
   );
