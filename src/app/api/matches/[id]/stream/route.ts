@@ -27,10 +27,17 @@ export async function GET(request: Request, context: RouteContext<'/api/matches/
     // match", which would send a client away from a game that is running
     // perfectly well somewhere it cannot see. A match that has finished is also
     // gone from here, and that is the same answer.
-    return new Response('That match is not being dealt by this instance. It has either finished or is running elsewhere.', {
-      status: 503,
-      headers: { 'retry-after': '5' },
-    });
+    // JSON, like every other refusal in this API. It used to be bare text,
+    // which is what a reader got in the face when anything opened this URL
+    // directly, and told a client nothing it could branch on.
+    return Response.json(
+      {
+        error: 'That match is not being dealt by this instance. It has either finished or is running elsewhere.',
+        matchId: id,
+        dealing: false,
+      },
+      { status: 503, headers: { 'retry-after': '5' } },
+    );
   }
 
   const session = await getSession();

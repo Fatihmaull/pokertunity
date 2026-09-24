@@ -541,7 +541,15 @@ async function candidate(
     })
     .returning({ id: agents.id });
 
-  return { agentId: row.id, name, ownerId: account.userId, rating, published: conservative(rating), matchesPlayed };
+  return {
+    agentId: row.id,
+    name,
+    ownerId: account.userId,
+    rating,
+    published: conservative(rating),
+    demo: false,
+    matchesPlayed,
+  };
 }
 
 async function balance(userId: string): Promise<number> {

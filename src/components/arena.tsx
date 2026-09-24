@@ -32,6 +32,7 @@ export function Arena({ matchId }: { matchId: string }) {
     isStreaming,
     idleReason,
     connected,
+    gaveUp,
     moved,
     potKey,
     actionKeys,
@@ -79,6 +80,30 @@ export function Arena({ matchId }: { matchId: string }) {
           null,
       }
     : null;
+
+  /*
+    The feed refused long enough that it is not coming. The page only renders
+    this component for a match the server said was still being dealt, so the
+    remaining cause is that it is being dealt somewhere this instance cannot
+    see — a second web instance, or a deploy that has already handed the room
+    over. Saying so beats a spinner that never resolves.
+  */
+  if (gaveUp && !table) {
+    return (
+      <div className="page mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
+        <Card className="p-6 text-center">
+          <h1 className="text-lg font-semibold">This match is not being dealt here</h1>
+          <p className="mt-2 text-sm text-muted">
+            It has either just finished, or it is running on an instance this page cannot reach. Its result appears on
+            the matches list once it settles.
+          </p>
+          <div className="mt-5 flex justify-center">
+            <ButtonLink href="/matches">Back to matches</ButtonLink>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="page mx-auto w-full max-w-[104rem] px-4 py-4 sm:px-6 sm:py-6">

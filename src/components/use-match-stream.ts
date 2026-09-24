@@ -9,6 +9,8 @@ export interface StreamState {
   isStreaming: boolean;
   idleReason: string | null;
   connected: boolean;
+  /** The feed refused often enough that asking again is not worth doing. */
+  gaveUp: boolean;
   /** Seats whose stack changed on the last event, so the figure settles once. */
   moved: number[];
   /**
@@ -26,15 +28,20 @@ const initial: StreamState = {
   isStreaming: false,
   idleReason: null,
   connected: false,
+  gaveUp: false,
   moved: [],
   actionKeys: {},
   potKey: 0,
 };
 
-type Action = { type: 'event'; event: ArenaEvent } | { type: 'connected'; value: boolean };
+type Action =
+  | { type: 'event'; event: ArenaEvent }
+  | { type: 'connected'; value: boolean }
+  | { type: 'gave-up' };
 
 function reduce(state: StreamState, action: Action): StreamState {
-  if (action.type === 'connected') return { ...state, connected: action.value };
+  if (action.type === 'gave-up') return { ...state, gaveUp: true, connected: false };
+  if (action.type === 'connected') return { ...state, connected: action.value, gaveUp: false };
 
   const event = action.event;
   const table = state.table;
@@ -237,6 +244,18 @@ const RETRY_MIN_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
 
 /**
+ * How many refusals before the feed is treated as one that is not coming.
+ *
+ * There has to be a number. A match that has ended answers 503 for good, and a
+ * client that reads that as "try again shortly" retries until the tab closes —
+ * which is what this did, every thirty seconds, on every finished match anybody
+ * opened. Six attempts is about a minute of backoff, comfortably longer than a
+ * deploy handing the room from one process to the next, which is the case the
+ * retry exists for.
+ */
+const RETRY_LIMIT = 6;
+
+/**
  * Subscribes to one table's feed. Passing null subscribes to nothing, which
  * lets a page decide what to watch without breaking the rules of hooks.
  *
@@ -256,6 +275,7 @@ export function useMatchStream(matchId: string | null): StreamState {
     let retry: ReturnType<typeof setTimeout> | null = null;
     let over = false;
     let delay = RETRY_MIN_MS;
+    let refusals = 0;
 
     const open = () => {
       const current = new EventSource(`/api/matches/${matchId}/stream`);
@@ -263,11 +283,20 @@ export function useMatchStream(matchId: string | null): StreamState {
 
       current.onopen = () => {
         delay = RETRY_MIN_MS;
+        refusals = 0;
         dispatch({ type: 'connected', value: true });
       };
       current.onerror = () => {
         dispatch({ type: 'connected', value: false });
         if (over || current.readyState !== EventSource.CLOSED) return;
+
+        refusals += 1;
+        if (refusals >= RETRY_LIMIT) {
+          over = true;
+          dispatch({ type: 'gave-up' });
+          return;
+        }
+
         retry = setTimeout(open, delay);
         delay = Math.min(delay * 2, RETRY_MAX_MS);
       };

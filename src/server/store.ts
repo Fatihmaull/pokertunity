@@ -107,6 +107,8 @@ export interface Candidate {
   rating: Rating;
   /** The published figure, which is what the bands are drawn on. */
   published: number;
+  /** A seeded agent. Carried so a match of nothing but those can say so. */
+  demo: boolean;
   /** Matches finished. Zero means the published figure is a starting point, not a measurement. */
   matchesPlayed: number;
 }
@@ -133,6 +135,7 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: users.id,
       mu: agents.ratingMu,
       sigma: agents.ratingSigma,
+      demo: agents.demo,
       matchesPlayed: agents.matchesPlayed,
     })
     .from(agents)
@@ -154,6 +157,7 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: row.ownerId,
       rating,
       published: conservative(rating),
+      demo: row.demo,
       matchesPlayed: row.matchesPlayed,
     };
   });
@@ -200,6 +204,10 @@ export async function createMatch(
         buyIn: MATCH.buyIn,
         entryFee: MATCH.entryFee,
         handCap: MATCH.handCap,
+        // Only when there is nobody else in it. One stranger among the seeded
+        // field makes this a real match with real opponents, and labelling it
+        // "demo" would be telling them their result does not count.
+        demo: entrants.every((entrant) => entrant.demo),
         bandRating: bandOf(entrants),
         startedAt: new Date(),
       })
@@ -724,6 +732,7 @@ export async function ratingsOf(agentIds: string[]): Promise<Map<string, Rating>
 export interface StoredMatch {
   matchId: string;
   status: string;
+  demo: boolean;
   seatCount: number;
   smallBlind: number;
   bigBlind: number;
@@ -747,9 +756,13 @@ export interface StoredMatch {
  */
 export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
   const rows = await db
+    // Abandoned matches belong here too. They were dropped once, which meant a
+    // match somebody had chips in simply vanished from the floor the moment the
+    // process dealing it went away: the stacks went back, nothing said so, and
+    // the entrant was left looking at a lobby that had never heard of it.
     .select()
     .from(matches)
-    .where(inArray(matches.status, ['playing', 'elimination', 'cap']))
+    .where(inArray(matches.status, ['playing', 'elimination', 'cap', 'abandoned']))
     .orderBy(desc(matches.startedAt))
     .limit(limit);
 
@@ -812,6 +825,7 @@ export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
   return rows.map((row) => ({
     matchId: row.id,
     status: row.status,
+    demo: row.demo,
     seatCount: row.seatCount,
     smallBlind: row.smallBlind,
     bigBlind: row.bigBlind,
@@ -841,4 +855,147 @@ export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
       )
       .sort((a, b) => a.index - b.index),
   }));
+}
+
+export interface MatchEntrant {
+  agentId: string;
+  name: string;
+  color: string;
+  /** Null for an abandoned match, which produces no finishing order. */
+  place: number | null;
+  finalStack: number | null;
+  bustedAtHand: number | null;
+  /** Published rating before and after, or null when nobody was rated. */
+  ratingBefore: number | null;
+  ratingAfter: number | null;
+  /** Chips won and lost across the hands actually played. */
+  net: number;
+}
+
+export interface MatchSummary {
+  matchId: string;
+  status: string;
+  seatCount: number;
+  smallBlind: number;
+  bigBlind: number;
+  buyIn: number;
+  entryFee: number;
+  handCap: number;
+  handsPlayed: number;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  entrants: MatchEntrant[];
+  /** What the viewer's own account got back, if it had a seat here. */
+  cashOut: number | null;
+}
+
+/**
+ * A match that is over, as something a reader can actually be shown.
+ *
+ * The page used to have nothing for this. A finished match's runtime is gone,
+ * so its feed answers 503, and the interface sat on "Loading match…" forever
+ * while retrying a stream that was never going to open. Everything needed was
+ * already in the database; nothing was reading it.
+ *
+ * Two shapes come back, because two things can have happened. A match that ran
+ * to an elimination or to the cap has a finishing order in `matchResults`. One
+ * the server walked out of has none and never will — it rates nobody — so its
+ * entrants are recovered from the hands that were played, and the summary says
+ * plainly that there is no result rather than inventing a placing.
+ */
+export async function matchSummary(matchId: string, viewerUserId: string | null): Promise<MatchSummary | null> {
+  const [row] = await db.select().from(matches).where(eq(matches.id, matchId)).limit(1);
+  if (!row) return null;
+
+  // Chips won and lost per agent, which exists for every match that dealt a
+  // hand, abandoned or not. It is the only per-agent figure an abandoned match
+  // leaves behind, since its seats are deleted and it writes no result rows.
+  const nets = await db
+    .select({ agentId: results.agentId, net: raw<number>`sum(${results.net})::int`, name: agents.name, color: agents.color })
+    .from(results)
+    .innerJoin(agents, eq(agents.id, results.agentId))
+    .where(eq(results.matchId, matchId))
+    .groupBy(results.agentId, agents.name, agents.color);
+
+  const placed = await db
+    .select({
+      agentId: matchResults.agentId,
+      place: matchResults.place,
+      finalStack: matchResults.finalStack,
+      bustedAtHand: matchResults.bustedAtHand,
+      muBefore: matchResults.ratingMuBefore,
+      sigmaBefore: matchResults.ratingSigmaBefore,
+      muAfter: matchResults.ratingMuAfter,
+      sigmaAfter: matchResults.ratingSigmaAfter,
+      name: agents.name,
+      color: agents.color,
+    })
+    .from(matchResults)
+    .innerJoin(agents, eq(agents.id, matchResults.agentId))
+    .where(eq(matchResults.matchId, matchId));
+
+  const netOf = new Map(nets.map((entry) => [entry.agentId, entry]));
+
+  const entrants: MatchEntrant[] = placed.length
+    ? placed
+        .map((entry) => ({
+          agentId: entry.agentId,
+          name: entry.name,
+          color: entry.color,
+          place: entry.place,
+          finalStack: entry.finalStack,
+          bustedAtHand: entry.bustedAtHand,
+          ratingBefore: conservative({ mu: entry.muBefore, sigma: entry.sigmaBefore }),
+          ratingAfter: conservative({ mu: entry.muAfter, sigma: entry.sigmaAfter }),
+          net: netOf.get(entry.agentId)?.net ?? 0,
+        }))
+        .sort((a, b) => a.place - b.place)
+    : nets
+        .map((entry) => ({
+          agentId: entry.agentId,
+          name: entry.name,
+          color: entry.color,
+          place: null,
+          finalStack: null,
+          bustedAtHand: null,
+          ratingBefore: null,
+          ratingAfter: null,
+          net: entry.net,
+        }))
+        .sort((a, b) => b.net - a.net);
+
+  // Written by `settleMatch` in the same transaction that returned the chips,
+  // so this is the record of what actually landed rather than a recomputation
+  // of what should have.
+  let cashOut: number | null = null;
+  if (viewerUserId) {
+    const [entry] = await db
+      .select({ delta: ledgerEntries.delta })
+      .from(ledgerEntries)
+      .where(
+        and(
+          eq(ledgerEntries.userId, viewerUserId),
+          eq(ledgerEntries.reference, matchId),
+          eq(ledgerEntries.reason, 'match-cash-out'),
+        ),
+      )
+      .limit(1);
+    cashOut = entry?.delta ?? null;
+  }
+
+  return {
+    matchId: row.id,
+    status: row.status,
+    seatCount: row.seatCount,
+    smallBlind: row.smallBlind,
+    bigBlind: row.bigBlind,
+    buyIn: row.buyIn,
+    entryFee: row.entryFee,
+    handCap: row.handCap,
+    handsPlayed: row.handsPlayed,
+    startedAt: row.startedAt,
+    endedAt: row.endedAt,
+    entrants,
+    cashOut,
+  };
 }

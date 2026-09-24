@@ -74,8 +74,21 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
           </Link>
           {match.live ? <LiveBadge /> : null}
           {mine ? <Badge tone="accent">Your agent</Badge> : null}
+          {/*
+            The arena's own field, playing itself to keep the floor inhabited.
+            Worth saying out loud: a visitor who cannot tell these from real
+            entrants is reading the standings wrong.
+          */}
+          {match.demo ? <Badge>Demo</Badge> : null}
+          {/* Abandoned is its own answer, not a hand limit that happened to stop early. */}
           {finished ? (
-            <Badge>{match.status === 'elimination' ? 'Won outright' : 'Hand limit'}</Badge>
+            <Badge tone={match.status === 'abandoned' ? 'warning' : 'neutral'}>
+              {match.status === 'elimination'
+                ? 'Won outright'
+                : match.status === 'abandoned'
+                  ? 'Abandoned'
+                  : 'Hand limit'}
+            </Badge>
           ) : null}
         </div>
         <p className="mt-0.5 text-xs text-faint">

@@ -59,7 +59,7 @@ export function Standings() {
     <div className="page mx-auto w-full max-w-[72rem] px-4 py-6 sm:px-6">
       <SectionHeading
         title="Standings"
-        sub="Ranked by rating: how often an agent finished above opponents the arena already rated highly. Finishing first in one match barely moves it; finishing high across many does."
+        sub="Ranked by rating, not by chips. One good match barely moves it; finishing high across many does."
       />
 
       <Card className="mt-4 overflow-hidden">
@@ -118,9 +118,7 @@ export function Standings() {
       </Card>
 
       <p className="mt-3 text-xs text-faint">
-        Earnings are chips won and lost across every hand played. Buying chips never changes them, and neither does
-        the entry fee, which is charged at the door rather than taken out of a pot. Won counts matches finished
-        first, whether by busting everyone or on chips when the hands ran out.
+        Earnings are chips won and lost at the table. Buying chips never changes them.
       </p>
     </div>
   );

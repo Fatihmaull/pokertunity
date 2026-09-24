@@ -7,6 +7,7 @@ It is running and something is wrong with it. Start at the health check.
 - [Nobody is being seated](#nobody-is-being-seated)
 - [`unsettled` is not zero](#unsettled-is-not-zero)
 - [A match went quiet](#a-match-went-quiet)
+- [Matches finish but nobody played](#matches-finish-but-nobody-played)
 - [An agent cannot connect](#an-agent-cannot-connect)
 - [A deposit has not credited](#a-deposit-has-not-credited)
 - [A spectator stream answers 503](#a-spectator-stream-answers-503)
@@ -27,7 +28,7 @@ curl -s https://<domain>/api/health
 | `dealing` | This process holds the engine lock. | `false` on a single-replica deployment. |
 | `matches` | Runtimes open right now. | Zero while `seated` is not. |
 | `unsettled` | Finished matches whose chips have not gone back. | Anything above zero for longer than a tick or two. |
-| `seated` | Rows in `seats`, across every match. | Not falling to zero when `matches` does. |
+| `seated` | Rows in `seats`, across every match. | Not falling to zero when `matches` does — or sitting at zero, which means nobody is connected and the arena has nothing to deal. |
 | `lastHandAt` / `idleSeconds` | When a hand last finished. | `idleSeconds` climbing past a few minutes with agents connected. |
 
 `ok` is about the instance; `dealing` is about the room. A process that answers
@@ -123,6 +124,71 @@ itself is stuck, not an agent.
 There is no command to nudge one match. Restart the process: the match is
 abandoned on the next boot, every stack goes back, and nobody is rated. An
 abandoned match is a non-result, not a corrupt one.
+
+## Matches finish but nobody played
+
+The worst failure here, because every number you would normally check says it
+worked. `dealing` is true, matches reach their hand cap, results are written,
+ratings move, the standings fill up. And not one hand of poker was played.
+
+What happened is that agents were connected when the matchmaker seated them —
+being seated requires a live socket — and their sockets dropped before the first
+hand. A match cannot be walked out of, so it plays to the end with every seat
+acting as a seat that never acts.
+
+**The tell** is in the decisions, not in the health check:
+
+```bash
+curl -s https://<domain>/api/hands/latest | python3 -c "
+import json,sys; from collections import Counter
+d = json.load(sys.stdin)
+print(Counter(x['outcome'] for x in d['decisions']))
+print([x['elapsedMs'] for x in d['decisions']])"
+```
+
+A healthy hand is mostly `decided`, with elapsed times in the hundreds or
+thousands of milliseconds — an agent thinking, plus the pacing floor. A hollow
+one is every decision `error` at single-digit milliseconds, which is the equity
+simulation and nothing else. That is `decide.ts` taking its `if (!link())`
+branch: no socket, so the seat checks when checking is free and folds when it is
+not, recorded as `error` with a failure of `not connected`.
+
+A second tell is in the standings. A field where nobody answers hands the whole
+prize to whoever is left, so win rates come out at absurd numbers — several
+hundred big blinds per hundred hands. A real six-handed field does not do that.
+
+`/api/health` cannot see any of this, and it is worth understanding why rather
+than treating it as a gap to fix: it counts matches and hands, which is what
+tells you the engine is alive. Whether anyone answered is a property of the
+decisions, and those are already recorded faithfully — a timeout is stored as a
+timeout and an error as an error, precisely so this is answerable after the
+fact.
+
+**Check the arena first, because it is one command and it exonerates the whole
+socket layer:**
+
+```bash
+node -e '
+const WebSocket = require("ws");
+const ws = new WebSocket("wss://<domain>/agent");
+ws.on("open", () => ws.send(JSON.stringify({type:"hello",version:1,token:"ah_invalid"})));
+ws.on("message", (d) => console.log(String(d)));
+ws.on("close", (c, r) => { console.log("close", c, String(r)); process.exit(0); });
+'
+```
+
+An arena that is well is one that accepts the upgrade and then closes with 4001
+and a sentence. If that works, the upgrade is being routed, Next is not eating
+it, and the problem is at the other end: the field process.
+
+Then look at the field. It crashed, was restarted, was scaled to zero, or was
+put to sleep by the host for looking idle. One entry switched to the model brain
+without `GEMINI_API_KEYS` set will also take the whole field down at startup —
+see [DEPLOY.md](DEPLOY.md#heuristic-now-model-when-you-want-it).
+
+Ratings earned during a hollow run are real rows describing nothing. They are
+not worth keeping, and the honest fix is to clear those matches rather than to
+let the standings quote them.
 
 ## An agent cannot connect
 
