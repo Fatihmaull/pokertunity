@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Agent } from './client';
 import { HeuristicBrain, ModelBrain, type Brain } from './brain';
 
@@ -41,7 +42,16 @@ function load(): Entry[] {
   const source = process.env.AGENT_FIELD?.trim();
   if (!source) throw new Error('AGENT_FIELD is not set. Point it at a JSON file or give it JSON directly.');
 
-  const text = source.startsWith('[') ? source : readFileSync(source, 'utf8');
+  // Resolved against where the command was typed rather than against this
+  // package. `pnpm --filter` runs with the working directory set to the package
+  // it filtered to, so a path given relative to the repository root — which is
+  // where `db:seed` writes the field file, and what every example of this
+  // command shows — would otherwise be looked for inside packages/agent and
+  // never found. INIT_CWD is what pnpm sets to the directory it was invoked
+  // from; without it the plain cwd is already the right answer.
+  const text = source.startsWith('[')
+    ? source
+    : readFileSync(resolve(process.env.INIT_CWD ?? process.cwd(), source), 'utf8');
   const parsed: unknown = JSON.parse(text);
   if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('AGENT_FIELD must be a non-empty list.');
 

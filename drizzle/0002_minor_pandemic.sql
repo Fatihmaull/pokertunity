@@ -1,0 +1,1 @@
+ALTER TABLE "match_results" ADD COLUMN "seat_index" integer;

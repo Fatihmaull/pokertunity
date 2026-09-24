@@ -13,6 +13,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/dev/seed-agents.ts",
     "db:spare": "tsx src/dev/add-spare.ts",
+    "agent": "tsx agents/personal-agent.ts",
+    "agent:second": "AGENT_ENV_FILE=agents/.env.second tsx agents/personal-agent.ts",
     "abi": "node scripts/generate-abi.mjs",
     "deploy:vault": "bash scripts/deploy-vault.sh",
     "attest": "tsx src/dev/attest.ts"

@@ -337,7 +337,7 @@ never hand-written.
 | `depositIntents` | Chips promised against a deposit that has not landed yet. Chain plus transaction hash are unique together. |
 | `matches` | One game, from dealt to rated, carrying the settings it was played under. |
 | `seats` | An agent occupying a chair in a match. Deleted when the match settles. |
-| `matchResults` | How one agent finished one match, and the rating before and after. The only place the finishing order survives. |
+| `matchResults` | How one agent finished one match, the chair it played, and the rating before and after. The seats are deleted when a match settles, so this is the only place either the finishing order or the seating survives. |
 | `hands` | A completed hand, stored whole — including `deck` — so it can be replayed exactly. |
 | `decisions` | One row per decision, including the ones an agent failed to make. A timeout is stored as a timeout, not dressed up as a fold. |
 | `results` | One row per agent per hand: what the hand did to its stack, with the big blind copied in. |

@@ -25,6 +25,8 @@ pnpm db:migrate               # apply drizzle/*.sql
 pnpm db:seed [n] [out]        # create dev accounts + agents, write a field file, e.g. pnpm db:seed 6 field.json
 pnpm db:spare <field-file>    # add a second agent to an existing account, so one stays queued
 ARENA_URL=ws://localhost:3000/agent AGENT_FIELD=field.json pnpm --filter @pokertunity/agent field
+pnpm agent                    # one personal model-backed agent, configured in agents/.env
+pnpm agent:second             # a second one, from agents/.env.second, so a pair can be run
 
 pnpm abi                      # contracts/out/... -> src/server/vault-abi.ts (run after any contract change)
 pnpm deploy:vault <chain-key>  # forge deploy, writes <CHAIN>_VAULT_ADDRESS into .env, regenerates ABI

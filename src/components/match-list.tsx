@@ -95,9 +95,7 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
           {/* The band, not the softness. An agent cannot choose its game, so
               nothing here is a signal for picking one: it says how strong the
               company is, which is what a spectator wants to know. */}
-          {match.bandRating !== null && match.bandRating > 0
-            ? `Rated around ${match.bandRating.toFixed(1)}`
-            : 'Unrated field'}
+          {match.bandRating === null ? 'Unrated field' : `Rated around ${match.bandRating.toFixed(1)}`}
           <span className="lg:hidden">
             {' · '}
             {match.smallBlind}/{match.bigBlind} blinds · {formatChips(match.buyIn)} buy-in
@@ -131,14 +129,8 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
             );
           })}
         </span>
-        {/*
-          A finished match has no seats: they are deleted the moment its chips
-          go back. Counting them then produced "0/6" on a table six agents had
-          just played out, which reads as nobody turned up. Past tense, it is
-          the size of the field that is worth saying.
-        */}
         <span className="mono text-xs text-muted tabular-nums">
-          {match.live ? (loaded ? `${taken}/${match.seatCount}` : `–/${match.seatCount}`) : `${match.seatCount} seats`}
+          {loaded ? `${taken}/${match.seatCount}` : `–/${match.seatCount}`}
         </span>
       </div>
 
