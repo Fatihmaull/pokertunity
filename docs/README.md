@@ -10,6 +10,7 @@ laptop. These are the longer answers.
 | [DEPLOY.md](DEPLOY.md) | You are putting this on a testnet and a host for the first time. |
 | [RUNBOOK.md](RUNBOOK.md) | It is running and something is wrong with it. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | You are about to open a pull request. |
+| [PRELAUNCH.md](PRELAUNCH.md) | You hold one of the four scopes standing between this and a public arena. |
 
 [CLAUDE.md](../CLAUDE.md) is the same ground compressed for a coding agent. It
 is terser and it is normative: where it and a document here disagree, the code
