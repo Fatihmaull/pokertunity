@@ -145,6 +145,16 @@ function signers(chain: DeployedChain): Record<Signer, Signing> {
   return { registrar, attestor };
 }
 
+/** The one identity this agent holds on this chain, if it has been minted. */
+async function identityOn(chain: DeployedChain, agentId: string): Promise<{ registryId: string } | undefined> {
+  const [row] = await db
+    .select({ registryId: agentIdentities.registryId })
+    .from(agentIdentities)
+    .where(and(eq(agentIdentities.agentId, agentId), eq(agentIdentities.chainId, chain.id)))
+    .limit(1);
+  return row;
+}
+
 /** Waits for a write to be mined, and treats a revert as the failure it is. */
 async function mined(chain: DeployedChain, hash: Hash, what: string): Promise<void> {
   const receipt = await publicClientFor(chain).waitForTransactionReceipt({ hash, confirmations: 1 });
@@ -196,11 +206,7 @@ export async function registerIdentity(
   const registries = registriesFor(chain);
   const { registrar } = signers(chain);
 
-  const [existing] = await db
-    .select({ registryId: agentIdentities.registryId })
-    .from(agentIdentities)
-    .where(and(eq(agentIdentities.agentId, agentId), eq(agentIdentities.chainId, chain.id)))
-    .limit(1);
+  const existing = await identityOn(chain, agentId);
   if (existing) {
     // Asked again of an identity already minted, so a run that died between
     // the mint and the handover finishes the handover rather than leaving it.
@@ -322,11 +328,7 @@ export async function publishRecord(chain: DeployedChain, agentId: string, baseU
   const [record] = await leaderboard({ agentId, limit: 1 });
   if (!record) throw new NotConfigured(`no record for agent ${agentId}`);
 
-  const [identity] = await db
-    .select({ registryId: agentIdentities.registryId })
-    .from(agentIdentities)
-    .where(and(eq(agentIdentities.agentId, agentId), eq(agentIdentities.chainId, chain.id)))
-    .limit(1);
+  const identity = await identityOn(chain, agentId);
   if (!identity) {
     throw new NotConfigured(`agent ${agentId} has no ERC-8004 identity on ${chain.name}. Register it first.`);
   }

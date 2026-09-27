@@ -638,54 +638,6 @@ export interface HandOutcome {
   opponentRating: number;
 }
 
-/**
- * Files a finished hand for everyone who was dealt into it.
- *
- * Two things happen here and they answer different questions. The counters on
- * the agent row are what a profile page reads without scanning anything. The
- * result rows are what every metric is computed from, including ones that do
- * not exist yet, over hands already played.
- */
-export async function recordResults(
-  hand: { handId: string; matchId: string; bigBlind: number },
-  outcomes: HandOutcome[],
-): Promise<void> {
-  if (outcomes.length === 0) return;
-  await db.transaction(async (tx) => {
-    await tx
-      .insert(results)
-      .values(
-        outcomes.map((outcome) => ({
-          handId: hand.handId,
-          agentId: outcome.agentId,
-          matchId: hand.matchId,
-          bigBlind: hand.bigBlind,
-          startingStack: outcome.startingStack,
-          net: outcome.net,
-          showdown: outcome.showdown,
-          opponents: outcome.opponents,
-          opponentRating: outcome.opponentRating,
-        })),
-      )
-      // A hand that somehow gets stored twice must not count twice. The rows
-      // are the measurement, so a duplicate would move every published number.
-      .onConflictDoNothing();
-
-    for (const outcome of outcomes) {
-      await tx
-        .update(agents)
-        .set({
-          handsPlayed: raw`${agents.handsPlayed} + 1`,
-          handsWon: raw`${agents.handsWon} + ${outcome.won ? 1 : 0}`,
-          chipsWon: raw`${agents.chipsWon} + ${outcome.net}`,
-          biggestPot: raw`GREATEST(${agents.biggestPot}, ${outcome.won ? outcome.potSize : 0})`,
-          updatedAt: new Date(),
-        })
-        .where(eq(agents.id, outcome.agentId));
-    }
-  });
-}
-
 /** The most recently completed hand anywhere, for the landing page replay. */
 export async function latestHand(): Promise<{
   id: string;

@@ -53,8 +53,8 @@ export const MIN_ATTESTED_HANDS = 200;
 export const REPUTATION_DECIMALS = 2;
 
 /** Both registries take these, and both are indexed, so they are the query. */
-export const REPUTATION_TAGS = { game: 'texas-holdem', metric: 'trueskill-rating' } as const;
-export const VALIDATION_TAG = 'poker-record';
+const REPUTATION_TAGS = { game: 'texas-holdem', metric: 'trueskill-rating' } as const;
+const VALIDATION_TAG = 'poker-record';
 
 /**
  * How much to believe the rating, as the 0 to 100 the Validation Registry takes.

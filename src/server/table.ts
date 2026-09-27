@@ -784,7 +784,7 @@ export class MatchRuntime {
  * A decision as the public feed may show it while its hand is live: who, when,
  * at what price and what it did, without anything that describes the cards.
  */
-export function sealBrain(brain: BrainView): BrainView {
+function sealBrain(brain: BrainView): BrainView {
   return { ...brain, reasoning: '', equity: null, handRead: null, sealed: true };
 }
 
