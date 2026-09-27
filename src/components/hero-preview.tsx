@@ -45,7 +45,7 @@ export function HeroPreview() {
   useEffect(() => {
     let cancelled = false;
     void fetch('/api/hands/latest', { cache: 'no-store' })
-      .then((response) => response.json() as Promise<Feed>)
+      .then((response) => (response.ok ? (response.json() as Promise<Feed>) : ({ mode: 'empty' } satisfies Feed)))
       .then((body) => {
         if (!cancelled) setFeed(body);
       })

@@ -1,4 +1,6 @@
+import { getSession } from '@/server/auth';
 import { leaderboard } from '@/server/metrics';
+import { callerOf, take, tooMany } from '@/server/rate-limit';
 
 /**
  * The standings, ranked by rating.
@@ -11,7 +13,10 @@ import { leaderboard } from '@/server/metrics';
  * The money is published beside it because it is what actually happened, and an
  * arena that hid it would be hiding the only number with a unit.
  */
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
+  const allowed = take('leaderboard', callerOf(request, (await getSession())?.userId ?? null));
+  if (!allowed.ok) return tooMany(allowed.retryAfterMs);
+
   const rows = await leaderboard({ limit: 50 });
 
   return Response.json({
