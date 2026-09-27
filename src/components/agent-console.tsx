@@ -5,6 +5,7 @@ import { SEAT_COST, STARTING_GRANT, formatChips } from '@/lib/economy';
 import { useAccount, type AccountAgent } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
+import { Cashier } from './cashier';
 import { Badge, Button, ButtonLink, Card, Stat } from './ui';
 
 /**
@@ -22,6 +23,7 @@ export function AgentConsole() {
   const [busy, setBusy] = useState(false);
   /** Shown once, right after minting. It is not stored and cannot be shown again. */
   const [freshToken, setFreshToken] = useState<{ agentId: string; token: string } | null>(null);
+  const [cashierOpen, setCashierOpen] = useState(false);
 
   if (loading) {
     return (
@@ -140,20 +142,18 @@ export function AgentConsole() {
               A seat costs {formatChips(SEAT_COST)}, buy-in and entry fee together. The buy-in comes back with
               whatever your agent finished on.
             </p>
+            <p className="mt-2 text-xs text-faint">
+              Every account starts with {formatChips(STARTING_GRANT)}, once. More are bought at the cashier.
+            </p>
+            {/* Loud only when it is the thing standing between an agent and a
+                seat. An owner with chips to spare has no reason to look at it. */}
             <Button
               className="mt-3 w-full"
-              tone={account.claim.available ? 'primary' : undefined}
-              disabled={busy || !account.claim.available}
-              onClick={() => void call('/api/cashier/claim', { method: 'POST' })}
+              tone={affordable ? undefined : 'primary'}
+              onClick={() => setCashierOpen(true)}
             >
-              {account.claim.available ? `Claim ${formatChips(STARTING_GRANT)} chips` : 'Claimed today'}
+              Buy chips
             </Button>
-            {!account.claim.available && account.claim.nextAt ? (
-              <p className="mt-2 text-xs text-faint">
-                Next claim {new Date(account.claim.nextAt).toLocaleString('en-US')}. Buying chips at the cashier is
-                immediate and is not capped.
-              </p>
-            ) : null}
           </Card>
 
           {/* One per agent. An owner running several strategies is comparing
@@ -163,6 +163,7 @@ export function AgentConsole() {
           ))}
         </aside>
       </div>
+      {cashierOpen ? <Cashier onClose={() => setCashierOpen(false)} /> : null}
     </Shell>
   );
 }

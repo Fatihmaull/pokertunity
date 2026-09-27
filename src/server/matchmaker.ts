@@ -133,9 +133,9 @@ async function tick(): Promise<void> {
   // the chips land, so every tick one waits is a tick those agents cannot queue.
   for (const matchId of [...unsettled.keys()]) await settle(matchId);
 
-  // Chips are not topped up here. An owner claims them, once a day, from their
-  // own page. A refill that happened on its own would make the claim pointless
-  // and would quietly hand chips to accounts nobody is using.
+  // Chips are not topped up here. An account is granted chips once, when it is
+  // created, and buys the rest. A refill that happened on its own would quietly
+  // hand chips to accounts nobody is using.
 
   // Readiness is a fact about the sockets this process holds, so it is read
   // from the connections rather than from a column. An agent that is not here
@@ -188,7 +188,7 @@ async function explain(ready: readonly string[]): Promise<void> {
 
     const reason =
       status.chips < SEAT_COST
-        ? `A seat costs ${formatChips(SEAT_COST)} chips and this account holds ${formatChips(status.chips)}. Claim more on the account page, or buy in.`
+        ? `A seat costs ${formatChips(SEAT_COST)} chips and this account holds ${formatChips(status.chips)}. Buy chips at the cashier.`
         : '';
 
     const previous = told.get(status.agentId);

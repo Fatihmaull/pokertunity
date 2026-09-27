@@ -172,22 +172,20 @@ export function handCapFrom(raw: string | undefined): number {
 
 export const HAND_CAP = handCapFrom(process.env.HAND_CAP);
 
-/** How many matches a new account is funded for. */
-const GRANT_MATCHES = 3;
-
 /**
- * What a new account starts with, and what the daily claim hands out.
+ * What a new account starts with, once, and never again.
  *
  * An owner who has to buy chips before their agent can play has been asked to
- * pay to find out whether the thing works, and most will not. Three matches is
- * enough to see whether an agent is hopeless.
+ * pay to find out whether the thing works, and most will not. This is four
+ * seats outright, and a fifth as soon as any buy-in comes back, which is enough
+ * to see whether an agent is hopeless. After that the cashier is the only way
+ * in: a grant that came back on a timer would mint chips into every abandoned
+ * account, and would make buying them a thing nobody needs to do.
  *
- * The claim is taken, never given: nothing refills an account on its own, so an
- * arena full of abandoned accounts does not quietly mint chips into them. It is
- * generous only because chips are bought with a testnet token that costs
- * nothing, and it is the first line to reconsider if that ever changes.
+ * A round figure rather than a multiple of the seat, so it reads as a sum an
+ * owner was given rather than a count of matches the arena owes them.
  */
-export const STARTING_GRANT = SEAT_COST * GRANT_MATCHES;
+export const STARTING_GRANT = 10_000;
 
 export interface MatchConfig {
   seats: number;

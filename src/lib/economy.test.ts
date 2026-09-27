@@ -57,9 +57,11 @@ test('the entry fee is small, whole, and charged at the door', () => {
 });
 
 test('the grant funds a few matches and no more', () => {
-  assert.equal(STARTING_GRANT % SEAT_COST, 0, 'whole matches, not an arbitrary number');
-  const matches = STARTING_GRANT / SEAT_COST;
-  assert.ok(matches >= 2 && matches <= 5, `a new owner is funded for ${matches} matches, which is a few`);
+  const outright = Math.floor(STARTING_GRANT / SEAT_COST);
+  assert.equal(outright, 4, `a new owner can sit ${outright} times even if their agent busts every one`);
+  // The fifth seat is what is left over plus whatever came back. Four matches
+  // that return a tenth of one buy-in between them are enough.
+  assert.ok(STARTING_GRANT - outright * SEAT_COST + BUY_IN / 10 >= SEAT_COST, 'a fifth seat is within reach');
 });
 
 test('stacks are deep enough for the hand cap to bite without crushing anyone', () => {

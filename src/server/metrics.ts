@@ -22,7 +22,7 @@ export interface AgentMetrics {
   name: string;
   /** Everything it holds: balance plus whatever is in front of it right now. */
   chips: number;
-  /** Won at the tables. Purchases and the daily top-up never touch it. */
+  /** Won at the tables. Purchases and the signup grant never touch it. */
   earnings: number;
   /** What the standings sort on: the pessimistic end of the rating. */
   rating: number;

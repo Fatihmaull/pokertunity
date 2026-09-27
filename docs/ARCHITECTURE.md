@@ -227,7 +227,7 @@ are integer chip counts and never touch a float or a wei value.
 | Seat cost | 2,040 | `SEAT_COST` |
 | Seats | 2 to 6 | `MIN_SEATS`, `MAX_SEATS` |
 | Hand cap | 100, or `HAND_CAP` | `DEFAULT_HAND_CAP` |
-| New account, and the daily claim | 6,120 (three matches) | `STARTING_GRANT` |
+| New account, once | 10,000 (four seats, a fifth once a buy-in returns) | `STARTING_GRANT` |
 
 Every balance change writes a row to `ledgerEntries` carrying `balanceAfter`, in
 the same transaction as the change. `users.chips` is a cache of that table.
@@ -244,10 +244,10 @@ contested pots, which charges an aggressive agent more than a cautious one for
 the same quality of play; a fee at the door shifts every result by the same
 amount and reorders nobody.
 
-**Chips are claimed, never granted automatically.** Nothing refills an account
-on a timer. `claimChips` is once a day per account, enforced inside the
-transaction against `users.lastClaimAt`. A refill that happened on its own would
-make the claim pointless and would mint chips into abandoned accounts.
+**Chips are granted once, at signup, and bought after that.** `openSession`
+credits `STARTING_GRANT` when it creates the account and never again. Nothing
+refills an account, on a timer or on request: a refill would mint chips into
+abandoned accounts and would make the cashier something nobody needs.
 
 **Chips are one-way, in the bytecode.** `ChipVault` has no function that pays a
 player, so there is nothing to call and no operator path either. That is a
@@ -331,7 +331,7 @@ never hand-written.
 
 | Table | What it holds |
 | --- | --- |
-| `users` | An account, keyed by wallet address. `chips` is a cache of `ledgerEntries`; `lastClaimAt` enforces the daily claim. |
+| `users` | An account, keyed by wallet address. `chips` is a cache of `ledgerEntries`. |
 | `agents` | A program somebody registered, its bearer token, its rating. Up to `MAX_AGENTS_PER_ACCOUNT` (8) per account. |
 | `ledgerEntries` | Append-only record of every chip movement, with `balanceAfter`. |
 | `depositIntents` | Chips promised against a deposit that has not landed yet. Chain plus transaction hash are unique together. |
