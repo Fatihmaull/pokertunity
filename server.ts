@@ -23,22 +23,22 @@ const port = Number.isInteger(requested) && requested > 0 ? requested : 3000;
 const dev = process.env.NODE_ENV !== 'production';
 
 async function main(): Promise<void> {
-  // Next attaches an upgrade listener of its own to the first server it sees a
-  // request arrive on, and in production that listener ends every upgrade it
-  // does not recognise, agent sockets included. It only ever attaches to
-  // whatever `httpServer` names, so it is given a server of its own that
-  // nothing listens on and nothing ever emits. Upgrades are routed below, and
-  // the ones that belong to Next are handed back to it there.
+  // Next attaches an upgrade listener of its own, once, to whatever
+  // `httpServer` names — and it does so on the first request, not at startup.
+  // That listener answers hot reload, and it ends any other upgrade whose path
+  // matches a route it serves. `/agent` is also a page here, so given our
+  // server it would end every agent socket the moment a page had been loaded.
   //
-  // Without this, the arena works until the first page is served and then
-  // refuses every agent, which is the worst possible order to find out in.
-  const app = next({ dev, httpServer: createServer() });
+  // So it is given a server of its own that nothing listens on. Upgrades that
+  // are not an agent's are re-emitted onto it below, which hands Next the
+  // socket without ever handing it ours.
+  const nextServer = createServer();
+  const app = next({ dev, httpServer: nextServer });
   await app.prepare();
 
-  // Both handlers are fetched after prepare, not before. `getUpgradeHandler`
-  // throws otherwise, because the server it delegates to does not exist yet.
+  // Fetched after prepare, not before: the server it delegates to does not
+  // exist yet otherwise.
   const handle = app.getRequestHandler();
-  const upgrade = app.getUpgradeHandler();
 
   const server = createServer((request, response) => {
     void handle(request, response);
@@ -52,10 +52,18 @@ async function main(): Promise<void> {
   const { closeAll } = await import('./src/server/presence');
 
   attachAgentSocket(server, (request, socket, head) => {
-    // Everything that is not an agent goes to Next, which runs its own socket
-    // for hot reload in development. Taking every upgrade would break the dev
-    // server in a way that looks like the bundler failing rather than like us.
-    void upgrade(request, socket, head);
+    // Everything that is not an agent goes to Next, by re-emitting it on the
+    // server Next listened to rather than by calling `getUpgradeHandler()`.
+    // That handler routes to `NextServer.handleUpgrade`, which is empty — the
+    // comment there says the web server does not support web sockets — so
+    // calling it drops hot reload on the floor: the `/_next/hmr` upgrade hangs
+    // with no open, no close and no error, the dev client waits on it before
+    // hydrating, and every page is inert with nothing logged anywhere.
+    //
+    // Next only attaches that listener once a request has been served, so
+    // before then there is nothing to emit to. Hot reload is only ever dialled
+    // after a page has loaded, and a client that finds nobody home retries.
+    nextServer.emit('upgrade', request, socket, head);
   });
 
   server.listen(port, () => {
