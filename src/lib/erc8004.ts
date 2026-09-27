@@ -22,6 +22,10 @@
  *   more direct answer than any proxy: the uncertainty term literally means how
  *   sure we are.
  *
+ * No chain has a canonical Validation Registry yet, so where one is not
+ * configured only the reputation goes up. The confidence still does, inside the
+ * evidence document the reputation's hash commits to.
+ *
  * Everything here is pure. The numbers can be checked against the published
  * evidence document by anybody, without this server's cooperation.
  */
@@ -144,4 +148,139 @@ export function canonicalise(attestation: Attestation): string {
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * Which of the arena's two keys signs a write.
+ *
+ * Two, because the standard pulls in opposite directions and one key cannot
+ * satisfy both. Feedback must not come from the agent's owner or an approved
+ * operator, and the deployed Reputation Registry reverts it if it does. A
+ * validation request must come from exactly that owner. So the registrar owns
+ * every identity and asks for validation, and the attestor, which owns nothing,
+ * is the judge that answers it and scores the agent.
+ */
+export type Signer = 'registrar' | 'attestor';
+
+export interface PlannedWrite {
+  signer: Signer;
+  registry: 'reputation' | 'validation';
+  functionName: 'validationRequest' | 'validationResponse' | 'giveFeedback';
+  args: readonly unknown[];
+  /** The attestation column its transaction hash is written to once mined. */
+  column: 'validationTx' | 'validationResponseTx' | 'reputationTx';
+}
+
+/**
+ * Every write that publishes one attestation, in the order they must be mined.
+ *
+ * The validation request goes first where there is a registry for it, so the
+ * score that follows answers a question that was already public rather than
+ * one written to fit the answer. Pure, so who signs what is testable without a
+ * chain: that is the mistake that cost a revert on every feedback before.
+ */
+export function publishPlan(input: {
+  registryId: bigint;
+  attestor: `0x${string}`;
+  uri: string;
+  evidenceHash: `0x${string}`;
+  attestation: Attestation;
+  validation: boolean;
+}): PlannedWrite[] {
+  const { registryId, attestor, uri, evidenceHash, attestation } = input;
+  const writes: PlannedWrite[] = [];
+
+  if (input.validation) {
+    writes.push(
+      {
+        signer: 'registrar',
+        registry: 'validation',
+        functionName: 'validationRequest',
+        args: [attestor, registryId, uri, evidenceHash],
+        column: 'validationTx',
+      },
+      {
+        signer: 'attestor',
+        registry: 'validation',
+        functionName: 'validationResponse',
+        args: [evidenceHash, attestation.confidence, uri, evidenceHash, VALIDATION_TAG],
+        column: 'validationResponseTx',
+      },
+    );
+  }
+
+  writes.push({
+    signer: 'attestor',
+    registry: 'reputation',
+    functionName: 'giveFeedback',
+    args: [
+      registryId,
+      BigInt(Math.round(attestation.rating * 10 ** REPUTATION_DECIMALS)),
+      REPUTATION_DECIMALS,
+      REPUTATION_TAGS.game,
+      REPUTATION_TAGS.metric,
+      uri,
+      uri,
+      evidenceHash,
+    ],
+    column: 'reputationTx',
+  });
+
+  return writes;
+}
+
+/** One minted identity, as the registration file lists it. */
+export interface Identity {
+  chainId: number;
+  registry: string;
+  registryId: string;
+}
+
+/**
+ * The document an agent's on-chain URI resolves to: ERC-8004's registration-v1.
+ *
+ * One file for every chain. Each chain's mint points here, and the file lists
+ * all of them, which is how the standard says an agent registered in several
+ * places is recognised as one agent rather than several strangers.
+ */
+export interface Registration {
+  type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
+  name: string;
+  description: string;
+  image: string;
+  services: Array<{ name: string; endpoint: string }>;
+  x402Support: false;
+  active: boolean;
+  registrations: Array<{ agentId: number; agentRegistry: string }>;
+  supportedTrust: string[];
+}
+
+export function buildRegistration(input: {
+  agentId: string;
+  name: string;
+  baseUrl: string;
+  identities: Identity[];
+}): Registration {
+  const { agentId, name, baseUrl } = input;
+
+  return {
+    type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+    name,
+    description: `${name} is an agent that plays no-limit Texas hold'em on Pokertunity. Its rating is earned from where it finishes in matches whose opponents the arena chose, each of which costs an entry fee.`,
+    image: `${baseUrl}/icon.png`,
+    services: [
+      { name: 'web', endpoint: `${baseUrl}/standings` },
+      { name: 'attestation', endpoint: `${baseUrl}/api/agents/${agentId}/attestation` },
+    ],
+    x402Support: false,
+    active: true,
+    // Sorted so the same set of mints always serialises the same way.
+    registrations: [...input.identities]
+      .sort((a, b) => a.chainId - b.chainId)
+      .map((identity) => ({
+        agentId: Number(identity.registryId),
+        agentRegistry: `eip155:${identity.chainId}:${identity.registry}`,
+      })),
+    supportedTrust: ['reputation'],
+  };
 }

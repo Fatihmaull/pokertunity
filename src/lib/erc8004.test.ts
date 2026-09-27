@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAttestation, canonicalise, confidenceIn, REPUTATION_DECIMALS, reputationValue } from './erc8004';
+import {
+  buildAttestation,
+  buildRegistration,
+  canonicalise,
+  confidenceIn,
+  publishPlan,
+  REPUTATION_DECIMALS,
+  reputationValue,
+} from './erc8004';
 import { DEFAULT_RATING, conservative, updateRatings, type Rating } from './rating';
 
 /** A rating with the doubt closed to a given width, however it got there. */
@@ -118,4 +126,91 @@ test('the attestation carries what it took to earn the record, not just the scor
   assert.equal(attestation.confidence, confidenceIn(RECORD.rating));
   assert.ok(attestation.method.includes('arena, not by the agent'), 'the method says who chose the opponents');
   assert.ok(attestation.method.includes('entry fee'), 'and that a seat costs something');
+});
+
+const ATTESTOR = '0x00000000000000000000000000000000000a77e5' as const;
+const HASH = `0x${'ab'.repeat(32)}` as const;
+
+function planFor(validation: boolean) {
+  return publishPlan({
+    registryId: 7n,
+    attestor: ATTESTOR,
+    uri: 'https://arena.test/api/attestations/x',
+    evidenceHash: HASH,
+    attestation: buildAttestation({
+      agentId: 'a',
+      name: 'Ace',
+      rating: settled(30, 2),
+      matches: 40,
+      wins: 9,
+      hands: 1200,
+      winRateBb100: 4.2,
+      earnings: 900,
+      measuredAt: new Date(0),
+    }),
+    validation,
+  });
+}
+
+test('feedback is never signed by the key that owns the identity', () => {
+  // The deployed Reputation Registry reverts feedback from an owner or operator,
+  // and the registrar is the owner of every identity it mints.
+  for (const validation of [true, false]) {
+    const feedback = planFor(validation).filter((write) => write.functionName === 'giveFeedback');
+    assert.equal(feedback.length, 1);
+    assert.equal(feedback[0].signer, 'attestor');
+  }
+});
+
+test('validation is requested by the owner, naming the attestor, who answers it', () => {
+  const plan = planFor(true);
+  assert.deepEqual(
+    plan.map((write) => [write.functionName, write.signer]),
+    [
+      ['validationRequest', 'registrar'],
+      ['validationResponse', 'attestor'],
+      ['giveFeedback', 'attestor'],
+    ],
+    'the question goes up before the score that answers it',
+  );
+  assert.equal(plan[0].args[0], ATTESTOR, 'the validator named is the account that responds');
+});
+
+test('a chain with no Validation Registry gets the reputation alone', () => {
+  const plan = planFor(false);
+  assert.deepEqual(
+    plan.map((write) => write.registry),
+    ['reputation'],
+  );
+});
+
+test('the feedback value is the published rating at the published precision', () => {
+  const [feedback] = planFor(false);
+  assert.equal(feedback.args[1], BigInt(Math.round(conservative(settled(30, 2)) * 10 ** REPUTATION_DECIMALS)));
+  assert.equal(feedback.args[2], REPUTATION_DECIMALS);
+  assert.equal(feedback.args[7], HASH);
+});
+
+test('one registration file names the agent on every chain it was minted on', () => {
+  const registration = buildRegistration({
+    agentId: 'a',
+    name: 'Ace',
+    baseUrl: 'https://arena.test',
+    identities: [
+      { chainId: 10143, registry: '0x8004A818BFB912233c491871b3d84c89A494BD9e', registryId: '31' },
+      { chainId: 97, registry: '0x8004A818BFB912233c491871b3d84c89A494BD9e', registryId: '12' },
+    ],
+  });
+
+  assert.equal(registration.type, 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1');
+  assert.deepEqual(registration.registrations, [
+    { agentId: 12, agentRegistry: 'eip155:97:0x8004A818BFB912233c491871b3d84c89A494BD9e' },
+    { agentId: 31, agentRegistry: 'eip155:10143:0x8004A818BFB912233c491871b3d84c89A494BD9e' },
+  ]);
+  assert.ok(registration.services.every((service) => service.endpoint.startsWith('https://arena.test/')));
+});
+
+test('an agent not yet minted anywhere still has a file, listing nothing', () => {
+  const registration = buildRegistration({ agentId: 'a', name: 'Ace', baseUrl: 'https://arena.test', identities: [] });
+  assert.deepEqual(registration.registrations, []);
 });

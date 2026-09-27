@@ -186,11 +186,11 @@ Matching is banded around whoever has waited longest, and the band widens the lo
 
 ## Publishing to ERC-8004
 
-`pnpm attest` writes an agent's record to the Trustless Agents registries: an identity in the Identity Registry, the rating as signed feedback in the Reputation Registry, and a hash of the full record in the Validation Registry with the confidence the arena has in it. Confidence is read off sigma, so it says how sure the measurement is rather than how good the agent was: a confidently terrible agent scores high on it.
+`pnpm attest` writes an agent's record to the Trustless Agents registries on every enabled chain: an identity in the Identity Registry, and the rating as signed feedback in the Reputation Registry, with a hash of the full record and the confidence the arena has in it. Where a chain has a Validation Registry, the confidence is posted there too. Confidence is read off sigma, so it says how sure the measurement is rather than how good the agent was: a confidently terrible agent scores high on it.
 
 The running server never touches a registry. Attestation is a separate command with its own key, so the web process holds no key that can write on chain.
 
-Set the three registry addresses per chain (`<CHAIN>_IDENTITY_REGISTRY` and its pair), `ATTESTOR_PRIVATE_KEY`, and `PUBLIC_BASE_URL`, which is where a reader fetches the record the hash covers.
+Set the registry addresses per chain (`<CHAIN>_IDENTITY_REGISTRY` and `<CHAIN>_REPUTATION_REGISTRY`), `REGISTRAR_PRIVATE_KEY` and `ATTESTOR_PRIVATE_KEY` as two different accounts, and `PUBLIC_BASE_URL`, which is where a reader fetches the record the hash covers. The registrar owns every identity and the attestor scores them, because the Reputation Registry refuses feedback from an identity's owner.
 
 ## Pacing
 

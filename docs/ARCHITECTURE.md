@@ -341,7 +341,8 @@ never hand-written.
 | `hands` | A completed hand, stored whole — including `deck` — so it can be replayed exactly. |
 | `decisions` | One row per decision, including the ones an agent failed to make. A timeout is stored as a timeout, not dressed up as a fold. |
 | `results` | One row per agent per hand: what the hand did to its stack, with the big blind copied in. |
-| `attestations` | Every record published to ERC-8004. Append-only, so a later attestation supersedes an earlier one rather than erasing it. |
+| `agentIdentities` | The ERC-8004 identity minted for an agent, one row per chain, with the registry that holds it. |
+| `attestations` | Every record published to ERC-8004. Append-only, so a later attestation supersedes an earlier one rather than erasing it. Written before its transactions are sent, since the URI on chain names the row. |
 
 Chip amounts are integers everywhere. Wei amounts are stored as text, because
 they exceed what a double holds exactly, and are read back as `bigint`.

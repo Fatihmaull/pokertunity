@@ -15,7 +15,7 @@ and two environment variables; nothing here changes.
 - [5 · Check it came up](#5--check-it-came-up)
 - [6 · The field service](#6--the-field-service)
 - [7 · Other people's agents](#7--other-peoples-agents)
-- [8 · ERC-8004, optionally](#8--erc-8004-optionally)
+- [8 · ERC-8004](#8--erc-8004)
 - [Adding a second chain](#adding-a-second-chain)
 - [Things that will bite](#things-that-will-bite)
 
@@ -340,29 +340,54 @@ Point anyone writing their own at [PROTOCOL.md](PROTOCOL.md). An agent in any
 language that does the six things listed there is a first-class entrant and
 needs nothing special from you.
 
-## 8 · ERC-8004, optionally
+## 8 · ERC-8004
 
-`pnpm attest` publishes an agent's record to the Trustless Agents registries: an
-identity in the Identity Registry, the rating as signed feedback in the
-Reputation Registry, and a hash of the full record in the Validation Registry.
+`pnpm attest` publishes an agent's record to the Trustless Agents registries on
+every enabled chain: an identity in the Identity Registry, and the rating as
+signed feedback in the Reputation Registry whose hash covers the full record.
+Where a chain has a Validation Registry configured, the confidence goes there
+too; no chain has a canonical one yet.
 
 ```bash
-pnpm attest                     # every eligible agent, on the first enabled chain
-pnpm attest bnb-testnet         # the same, on a named chain
-pnpm attest bnb-testnet <id>    # one agent
+pnpm attest                     # every eligible agent, on every enabled chain
+pnpm attest bnb-testnet         # the same, on one chain
+pnpm attest bnb-testnet <id>    # one agent, on one chain
+pnpm attest all <id>            # one agent, on every enabled chain
 ```
 
 An agent with fewer than 200 hands is skipped rather than published with a
 confidence of zero. A registry full of scores that mean nothing is the exact
 problem this integration exists to be better than.
 
-Needs the three registry addresses for the chain
-(`BNB_TESTNET_IDENTITY_REGISTRY` and its pair), `ATTESTOR_PRIVATE_KEY`, and
-`PUBLIC_BASE_URL` — where a reader fetches the record the hash covers, so it has
-to be reachable from outside.
+Needs, per chain, `<CHAIN>_IDENTITY_REGISTRY` and `<CHAIN>_REPUTATION_REGISTRY`
+(the ERC-8004 team's singletons, in `.env.example`), plus
+`REGISTRAR_PRIVATE_KEY`, `ATTESTOR_PRIVATE_KEY` and `PUBLIC_BASE_URL`, where a
+reader fetches the record the hash covers, so it has to be reachable from
+outside.
+
+The two keys must be different accounts, each funded on every chain. The
+registrar mints and owns every identity. The attestor writes the feedback, and
+the Reputation Registry reverts feedback from an identity's owner, so one key
+doing both fails every record; the command refuses to start in that case.
+Each run prints both addresses and their balances per chain before sending
+anything.
+
+Every identity on every chain points at one registration file,
+`/api/agents/<id>/registration`, which lists all of them. Every record points at
+its own evidence, `/api/attestations/<id>`, which never changes after it is
+written, so an old record's hash still checks after newer ones are posted.
+
+Before the first real run, run it against a fork. It exercises the deployed
+registries without spending anything or writing anything permanent:
+
+```bash
+anvil --fork-url https://data-seed-prebsc-1-s1.bnbchain.org:8545
+BNB_TESTNET_RPC_URL=http://127.0.0.1:8545 pnpm attest bnb-testnet <id>
+```
 
 **The running server never touches a registry.** Attestation is a separate
-command with its own key. Do not move it into the server to make it automatic.
+command with its own keys. To run it on a schedule, give it its own cron service
+and give only that service the keys; do not move it into the server.
 
 ## Adding a second chain
 
