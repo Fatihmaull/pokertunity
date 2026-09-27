@@ -11,7 +11,7 @@ import {
   PROTOCOL_VERSION,
   type ActFrame,
 } from '@pokertunity/protocol';
-import { attach, connectionsFor, detach, linkFor } from './presence';
+import { QUEUE_OFF_REASON, attach, connectionsFor, detach, linkFor } from './presence';
 import { SocketLink, greet } from './socket';
 
 /**
@@ -130,6 +130,42 @@ test('connecting is not the same as asking for a game', () => {
 
   ws.receive({ type: 'stop' });
   assert.equal(link.ready, false);
+});
+
+test('asking for a game is refused while its owner has matches switched off', () => {
+  const ws = new FakeSocket();
+  const link = new SocketLink(ws as unknown as WebSocket, 'agent-off', 'owner-off', false);
+
+  ws.receive({ type: 'ready' });
+  assert.equal(link.ready, true, 'it has still asked, which is what the queue reads once the switch is on');
+  const [told] = ws.frames().filter((frame) => frame.type === 'queued');
+  assert.equal(told.queued, false, 'an agent told it is queued would wait for a game that is never coming');
+  assert.equal(told.reason, QUEUE_OFF_REASON);
+
+  // The matchmaker reads the switch on its next tick and says so once.
+  link.setQueueOpen(true);
+  link.tellQueue(null);
+  assert.deepEqual(
+    ws.frames().filter((frame) => frame.type === 'queued').map((frame) => frame.queued),
+    [false, true],
+  );
+});
+
+test('the queue status is sent when it changes, not every time it is asked', () => {
+  const { ws, link } = linked();
+
+  ws.receive({ type: 'ready' });
+  ws.receive({ type: 'ready' });
+  link.tellQueue(null);
+  link.tellQueue('A seat costs 2,040 chips and this account holds 1,000. Buy chips at the cashier.');
+  link.tellQueue('A seat costs 2,040 chips and this account holds 1,000. Buy chips at the cashier.');
+  ws.receive({ type: 'stop' });
+
+  assert.deepEqual(
+    ws.frames().filter((frame) => frame.type === 'queued').map((frame) => frame.queued),
+    [true, false, false],
+    'queued once, refused once for chips, stopped once',
+  );
 });
 
 test('how long an agent has waited is measured from when it asked', () => {
@@ -295,7 +331,7 @@ test('a client that hangs up while its token is looked up is never put on the fl
   const ws = new FakeSocket();
   const greeted = greet(ws as unknown as WebSocket, async () => {
     ws.close(1006, 'connection lost');
-    return { agentId: 'agent-ghost', userId: 'owner-ghost', name: 'Ghost', color: 'red' };
+    return { agentId: 'agent-ghost', userId: 'owner-ghost', name: 'Ghost', color: 'red', queueEnabled: true };
   });
 
   ws.receive({ type: 'hello', version: PROTOCOL_VERSION, token: 'ah_test' });

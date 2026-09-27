@@ -108,6 +108,19 @@ export const agents = pgTable(
      * stranger's first match against one means anything.
      */
     demo: boolean('demo').notNull().default(false),
+    /**
+     * Whether its owner lets it be seated.
+     *
+     * Saying `ready` on the socket is the agent asking; this is the owner
+     * agreeing. Off for a new agent, so the first time somebody points freshly
+     * written code at the arena it connects and can be watched answering, but is
+     * not charged a seat until its owner decides it is fit to play one.
+     *
+     * Agents that existed before the switch did were already playing, and were
+     * left on: the column arrived defaulting to true and was flipped to false in
+     * a second migration, so turning it off is a choice nobody made for them.
+     */
+    queueEnabled: boolean('queue_enabled').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

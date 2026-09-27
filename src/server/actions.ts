@@ -33,6 +33,8 @@ export interface AgentSummary {
   connected: boolean;
   /** Whether it has asked to be queued on that socket. */
   ready: boolean;
+  /** Whether its owner lets it be seated. Asking is not enough without this. */
+  queueEnabled: boolean;
   lastSeenAt: string | null;
   /** Why its last connection ended, in a sentence an owner can act on. */
   lastCloseReason: string | null;
@@ -76,6 +78,7 @@ export async function account(session: Session): Promise<Account> {
       biggestPot: agents.biggestPot,
       lastSeenAt: agents.lastSeenAt,
       lastCloseReason: agents.lastCloseReason,
+      queueEnabled: agents.queueEnabled,
       matchId: seats.matchId,
       seatIndex: seats.seatIndex,
       stack: seats.stack,
@@ -107,6 +110,7 @@ export async function account(session: Session): Promise<Account> {
         seat: row.matchId ? { matchId: row.matchId, seatIndex: row.seatIndex!, stack: row.stack! } : null,
         connected: presence.connected,
         ready: presence.ready,
+        queueEnabled: row.queueEnabled,
         lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
         lastCloseReason: row.lastCloseReason,
         onchain: onchain.get(row.id) ?? [],
@@ -341,7 +345,6 @@ export async function confirmDeposit(
       .for('update');
 
     if (!intent) throw new ActionError('That deposit does not match any request from this account.');
-    if (intent.status === 'credited') throw new ActionError('That deposit has already been credited.');
 
     // The vault check above proves the log came from a vault of ours; this
     // proves it came from the one the intent was issued against. Without it an
@@ -349,6 +352,21 @@ export async function confirmDeposit(
     if (intent.chainId !== chain.id) {
       const paid = chainById(intent.chainId);
       throw new ActionError(`That deposit belongs to ${paid?.name ?? `chain ${intent.chainId}`}. Switch networks to finish it.`);
+    }
+
+    // Asked again about a deposit that has already landed, which is ordinary:
+    // a cashier closed mid-wait keeps polling while the reopened one starts
+    // polling the same hash, and whichever asks second must hear the same
+    // answer as the first rather than an error about money that arrived. The
+    // lock above means the credit itself still happens once.
+    if (intent.status === 'credited') {
+      if (intent.txHash !== txHash) throw new ActionError('That deposit has already been credited.');
+      const [owner] = await tx
+        .select({ chips: users.chips })
+        .from(users)
+        .where(eq(users.id, session.userId))
+        .limit(1);
+      return { status: 'credited' as const, chips: intent.chips, balance: owner.chips };
     }
 
     if (observed.amountWei < BigInt(intent.expectedWei)) {

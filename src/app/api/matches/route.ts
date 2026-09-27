@@ -46,7 +46,10 @@ export async function GET(request: Request): Promise<Response> {
           name: seat.name,
           color: seat.color,
           stack: seat.stack,
-          busted: seat.status === 'empty' && seat.name !== null,
+          // Read off the seat row, which is written in the same transaction as
+          // the hand that knocked it out. The live view has no notion of out:
+          // a seat that busted still has an occupant, so it never reads empty.
+          busted: row.seats.find((entry) => entry.index === seat.index)?.busted ?? false,
           isMine: seat.agentId !== null && myAgentIds.has(seat.agentId),
         }))
       : Array.from({ length: row.seatCount }, (_, index) => {

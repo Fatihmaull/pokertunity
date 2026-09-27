@@ -3,6 +3,7 @@ import { and, eq, ne, sql as raw } from 'drizzle-orm';
 import { db } from '../db/client';
 import { agents } from '../db/schema';
 import { assignColor } from '../agent/colors';
+import { noteQueueSwitch } from './presence';
 
 /**
  * How an agent proves who it is.
@@ -49,6 +50,7 @@ export async function agentByToken(token: string): Promise<{
   userId: string;
   name: string;
   color: string;
+  queueEnabled: boolean;
 } | null> {
   if (!token.startsWith(TOKEN_PREFIX)) return null;
 
@@ -59,6 +61,7 @@ export async function agentByToken(token: string): Promise<{
       userId: agents.userId,
       name: agents.name,
       color: agents.color,
+      queueEnabled: agents.queueEnabled,
       tokenHash: agents.tokenHash,
     })
     .from(agents)
@@ -71,7 +74,7 @@ export async function agentByToken(token: string): Promise<{
   const stored = Buffer.from(row.tokenHash, 'hex');
   if (presented.length !== stored.length || !timingSafeEqual(presented, stored)) return null;
 
-  return { agentId: row.agentId, userId: row.userId, name: row.name, color: row.color };
+  return { agentId: row.agentId, userId: row.userId, name: row.name, color: row.color, queueEnabled: row.queueEnabled };
 }
 
 export class RegistrationError extends Error {}
@@ -160,6 +163,23 @@ export async function renameAgent(userId: string, agentId: string, name: string)
     .returning({ id: agents.id });
 
   if (renamed.length === 0) throw new RegistrationError('No such agent on this account.');
+}
+
+/**
+ * Lets an agent be seated, or stops it being seated in the next match.
+ *
+ * A match already under way is not touched, because nobody leaves one: turning
+ * this off stops the next seat being bought, not the one being played.
+ */
+export async function setQueueEnabled(userId: string, agentId: string, enabled: boolean): Promise<void> {
+  const updated = await db
+    .update(agents)
+    .set({ queueEnabled: enabled, updatedAt: new Date() })
+    .where(and(eq(agents.id, agentId), eq(agents.userId, userId)))
+    .returning({ id: agents.id });
+
+  if (updated.length === 0) throw new RegistrationError('No such agent on this account.');
+  noteQueueSwitch(agentId, enabled);
 }
 
 /** Notes that a socket opened, so an owner can see the arena saw their agent. */

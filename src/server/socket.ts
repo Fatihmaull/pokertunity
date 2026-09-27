@@ -16,7 +16,7 @@ import {
 } from '@pokertunity/protocol';
 import { SEAT_COST } from '../lib/economy';
 import { MAX_AGENTS_PER_ACCOUNT, agentByToken, markClosed, markSeen } from './credentials';
-import { attach, connectionsFor, detach, linkFor, type AgentLink } from './presence';
+import { QUEUE_OFF_REASON, attach, connectionsFor, detach, linkFor, type AgentLink } from './presence';
 import { balanceOf } from './store';
 
 /**
@@ -162,7 +162,7 @@ export async function greet(
   // lookup above is a database round trip, and a frame arriving in that gap
   // with no listener is dropped by the socket library and never seen again.
   ws.off('message', collect);
-  const link = new SocketLink(ws, agent.agentId, agent.userId);
+  const link = new SocketLink(ws, agent.agentId, agent.userId, agent.queueEnabled);
 
   // The newer connection wins. An older one is nearly always a socket the far
   // end has already forgotten, and an agent that really did open two would
@@ -224,11 +224,15 @@ export class SocketLink implements AgentLink {
   private closed = false;
   /** Whether the far end answered the last ping. */
   private answered = true;
+  /** The last queue status this connection was sent: null for queued, undefined before any. */
+  private told: string | null | undefined = undefined;
 
   constructor(
     private readonly ws: WebSocket,
     readonly agentId: string,
     readonly ownerId: string,
+    /** Its owner's switch as it stood at the handshake. See `setQueueOpen`. */
+    private queueOpen = true,
   ) {
     ws.on('message', (data) => this.receive(data.toString()));
     ws.on('close', (code, reason) => this.ended(code, reason.toString()));
@@ -267,6 +271,16 @@ export class SocketLink implements AgentLink {
 
   requeue(now: number): void {
     if (this.ready) this.readySince = now;
+  }
+
+  setQueueOpen(open: boolean): void {
+    this.queueOpen = open;
+  }
+
+  tellQueue(reason: string | null): void {
+    if (this.told === reason) return;
+    this.told = reason;
+    this.send(reason === null ? { type: 'queued', queued: true, reason: null } : { type: 'queued', queued: false, reason });
   }
 
   /**
@@ -342,7 +356,10 @@ export class SocketLink implements AgentLink {
         // of its own queue, so the clock it has been waiting on keeps running.
         this.readySince ??= Date.now();
         this.ready = true;
-        this.send({ type: 'queued', queued: true, reason: null });
+        // Asking is not enough on its own: its owner has to have switched
+        // matches on too, and an agent told it is queued when it is not waits
+        // for a game that is never coming.
+        this.tellQueue(this.queueOpen ? null : QUEUE_OFF_REASON);
         return;
 
       case 'stop':
@@ -350,7 +367,7 @@ export class SocketLink implements AgentLink {
         this.readySince = null;
         // Never interrupts a match. A match cannot be walked out of, so this
         // stops the next one rather than the one being played.
-        this.send({ type: 'queued', queued: false, reason: 'You asked to stop.' });
+        this.tellQueue('You asked to stop.');
         return;
 
       case 'reasoning': {

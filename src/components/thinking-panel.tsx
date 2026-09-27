@@ -80,7 +80,12 @@ export function ThinkingPanel({
               <span className="truncate text-sm font-semibold text-ink">
                 {brain.seatName}
               </span>
-              <span className="shrink-0 text-sm text-muted">is deciding</span>
+              {/* Only while no action has landed. After one it is a record of
+                  what was decided, and "is deciding" above "It decided: Fold"
+                  contradicts itself, most of all on a replay. */}
+              <span className="shrink-0 text-sm text-muted">
+                {brain.action ? "decided" : "is deciding"}
+              </span>
               <Badge className="ml-auto capitalize">{brain.street}</Badge>
             </>
           ) : (

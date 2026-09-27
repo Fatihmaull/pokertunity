@@ -58,11 +58,19 @@ async function main(): Promise<void> {
     void upgrade(request, socket, head);
   });
 
-  server.listen(port, () => {
-    console.log(`[server] listening on :${port} (${dev ? 'development' : 'production'})`);
+  // A port that cannot be bound is fatal. Next installs an uncaught-exception
+  // handler that logs this and carries on, which left a process serving nothing
+  // while it took the engine lock and dealt matches no agent could reach.
+  server.on('error', (error) => {
+    console.error('[server] cannot listen', error);
+    process.exit(1);
   });
 
-  bootEngine();
+  // The engine starts once the port is ours, for the same reason.
+  server.listen(port, () => {
+    console.log(`[server] listening on :${port} (${dev ? 'development' : 'production'})`);
+    bootEngine();
+  });
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => {

@@ -24,6 +24,8 @@ export interface AccountAgent {
   connected: boolean;
   /** Whether it has asked to be queued on that socket. */
   ready: boolean;
+  /** Whether its owner lets it be seated. Asking is not enough without this. */
+  queueEnabled: boolean;
   lastSeenAt: string | null;
   /** Why its last connection ended, in a sentence an owner can act on. */
   lastCloseReason: string | null;

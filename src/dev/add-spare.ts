@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   if (!first) throw new Error('seed some agents first');
 
   const { token, agentId } = await registerAgent(first.userId, 'Spare (dev)');
-  await db.update(agents).set({ demo: true }).where(eq(agents.id, agentId));
+  await db.update(agents).set({ demo: true, queueEnabled: true }).where(eq(agents.id, agentId));
   const field = JSON.parse(readFileSync(path, 'utf8')) as unknown[];
   field.push({ name: 'Spare (dev)', token, brain: 'heuristic' });
   writeFileSync(path, `${JSON.stringify(field, null, 2)}\n`);

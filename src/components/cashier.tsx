@@ -56,9 +56,16 @@ export function Cashier({ onClose }: { onClose: () => void }) {
 
   // A deposit paid for in an earlier visit and never credited is picked up
   // here, so closing the tab while it confirmed does not cost the player money.
+  //
+  // Keyed on the wallet, not on the account object. The account is replaced
+  // every time the balance is refreshed, and a deposit this dialog is finishing
+  // may be credited by another poll still running from the dialog closed a
+  // moment ago, whose refresh would cancel this one mid-wait and leave the
+  // dialog on "Waiting for the network" with every package disabled.
+  const wallet = account?.address ?? null;
   useEffect(() => {
     let cancelled = false;
-    if (!account) return;
+    if (!wallet) return;
 
     void (async () => {
       try {
@@ -91,7 +98,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [account, refresh]);
+  }, [wallet, refresh]);
 
   async function buy(packageId: string) {
     if (!account || !chain) return;
@@ -174,10 +181,10 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         // than relying on the page to make room for it.
         className="scroll-y max-h-full w-full max-w-3xl rounded-card border border-line bg-surface shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] outline-none"
       >
-        <div className="flex items-baseline gap-4 border-b border-line px-6 py-5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-6 py-5">
           <h2 className="text-2xl text-ink">Cashier</h2>
           <p className="mono text-xs text-faint">1 chip = 0.00001 {symbol || 'native token'}</p>
-          {chain ? <p className="text-xs text-faint">on {chain.name}</p> : null}
+          {chain ? <NetworkPicker disabled={busy} /> : null}
           <button
             type="button"
             onClick={onClose}
@@ -238,8 +245,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         {chain && !settles ? (
           <div className="border-t border-line px-6 py-4">
             <p className="text-sm text-muted">
-              No vault has been deployed on {chain.name} yet, so chips cannot be bought here. Switch networks in the
-              header to use the cashier.
+              No vault has been deployed on {chain.name} yet, so chips cannot be bought here. Pick another network
+              above to use the cashier.
             </p>
           </div>
         ) : null}
@@ -255,6 +262,45 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Which network the deposit is paid on, and the way to change it.
+ *
+ * Here as well as in the header because the header's menu only fits on a wide
+ * screen, and this is the one place the choice actually matters: on a phone it
+ * was otherwise impossible to leave a network that has no vault.
+ */
+function NetworkPicker({ disabled }: { disabled: boolean }) {
+  const { chains, chain, switching, switchChain } = useChain();
+  const [failure, setFailure] = useState<string | null>(null);
+  if (!chain) return null;
+  if (chains.length < 2) return <p className="text-xs text-faint">on {chain.name}</p>;
+
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-faint">
+      on
+      <select
+        value={chain.key}
+        disabled={disabled || switching}
+        aria-label="Network"
+        onChange={(event) => {
+          setFailure(null);
+          switchChain(event.target.value).catch((error: unknown) =>
+            setFailure(error instanceof Error ? error.message : 'That network is unavailable.'),
+          );
+        }}
+        className="h-7 rounded-control border border-line bg-surface-2 px-1.5 text-xs text-ink disabled:opacity-50"
+      >
+        {chains.map((entry) => (
+          <option key={entry.key} value={entry.key}>
+            {entry.name}
+          </option>
+        ))}
+      </select>
+      {failure ? <span className="text-danger">{failure}</span> : null}
+    </label>
   );
 }
 
