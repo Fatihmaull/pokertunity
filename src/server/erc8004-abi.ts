@@ -37,6 +37,20 @@ export const identityRegistryAbi = [
     outputs: [{ name: '', type: 'address' }],
   },
   {
+    // The plain transfer, not the safe one: the receiver is an operator's own
+    // wallet, and the safe variant would refuse any account with code on it,
+    // which is every account carrying an EIP-7702 delegation.
+    type: 'function',
+    name: 'transferFrom',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'tokenId', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
     type: 'event',
     name: 'Registered',
     inputs: [

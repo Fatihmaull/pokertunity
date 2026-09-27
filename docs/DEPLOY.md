@@ -372,6 +372,11 @@ doing both fails every record; the command refuses to start in that case.
 Each run prints both addresses and their balances per chain before sending
 anything.
 
+Set `IDENTITY_OWNER` to an operator's own wallet and each identity is handed to
+it right after it is minted, so the registrar key ends up holding nothing and
+losing it costs nothing. The handover is checked on chain every run, so a run
+that died between mint and handover finishes it next time.
+
 Every identity on every chain points at one registration file,
 `/api/agents/<id>/registration`, which lists all of them. Every record points at
 its own evidence, `/api/attestations/<id>`, which never changes after it is

@@ -74,11 +74,15 @@ async function attestOn(
   for (const [role, account] of Object.entries(ready.accounts)) {
     console.log(`      ${role.padEnd(9)} ${account.address}  ${formatEther(account.balance)} ${chain.nativeCurrency.symbol}`);
   }
+  if (ready.identityOwner) console.log(`      identities handed to ${ready.identityOwner}`);
   if (!ready.registries.validation) console.log('      no Validation Registry here, publishing reputation only');
+  else if (ready.identityOwner) console.log('      the registrar will not own identities, so validation is skipped');
 
   const empty = Object.entries(ready.accounts).filter(([, account]) => account.balance === 0n);
   if (empty.length > 0) {
-    throw new NotConfigured(`${empty.map(([role]) => role).join(' and ')} has no ${chain.nativeCurrency.symbol} for gas. Fund it from ${chain.faucetUrl}`);
+    throw new NotConfigured(
+      `${empty.map(([role]) => role).join(' and ')} ${empty.length > 1 ? 'have' : 'has'} no ${chain.nativeCurrency.symbol} for gas. Fund from ${chain.faucetUrl}`,
+    );
   }
 
   for (const agent of owned) {
@@ -94,6 +98,9 @@ async function attestOn(
       const identity = await registerIdentity(chain, agent.id, baseUrl);
       if (identity.txHash) {
         console.log(`mint  ${record!.name}: agent ${identity.registryId}  ${txUrl(chain, identity.txHash)}`);
+      }
+      if (identity.transferTx) {
+        console.log(`give  ${record!.name}: agent ${identity.registryId} to its owner  ${txUrl(chain, identity.transferTx)}`);
       }
 
       const published = await publishRecord(chain, agent.id, baseUrl);

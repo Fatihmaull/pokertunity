@@ -88,6 +88,20 @@ function registriesFor(chain: DeployedChain): Registries {
 
 type Signing = WalletClient & { account: Account };
 
+/**
+ * The wallet every identity is handed to once minted, if one is configured.
+ *
+ * The registrar is a hot key sitting in an environment file, and whoever holds
+ * an identity is who can repoint it. Handing each one to an operator's own
+ * wallet leaves the registrar nothing worth stealing and nothing lost with it.
+ * The price is the validation request, which the standard only takes from the
+ * owner or an operator, so a chain with a Validation Registry publishes
+ * reputation alone while this is set.
+ */
+function identityOwner(): Address | null {
+  return addressFrom('IDENTITY_OWNER');
+}
+
 const KEY_VARS: Record<Signer, string> = {
   registrar: 'REGISTRAR_PRIVATE_KEY',
   attestor: 'ATTESTOR_PRIVATE_KEY',
@@ -123,6 +137,11 @@ function signers(chain: DeployedChain): Record<Signer, Signing> {
       'REGISTRAR_PRIVATE_KEY and ATTESTOR_PRIVATE_KEY are the same account. The registrar owns every identity, and the Reputation Registry refuses feedback from an owner.',
     );
   }
+  if (identityOwner()?.toLowerCase() === attestor.account.address.toLowerCase()) {
+    throw new NotConfigured(
+      'IDENTITY_OWNER is the attestor. Identities are handed to that wallet, and the Reputation Registry refuses feedback from an owner.',
+    );
+  }
   return { registrar, attestor };
 }
 
@@ -135,6 +154,7 @@ async function mined(chain: DeployedChain, hash: Hash, what: string): Promise<vo
 export interface Readiness {
   registries: Registries;
   accounts: Record<Signer, { address: Address; balance: bigint }>;
+  identityOwner: Address | null;
 }
 
 /**
@@ -154,7 +174,7 @@ export async function readiness(chain: DeployedChain): Promise<Readiness> {
     }),
   );
 
-  return { registries, accounts: { registrar, attestor } };
+  return { registries, accounts: { registrar, attestor }, identityOwner: identityOwner() };
 }
 
 /**
@@ -169,19 +189,24 @@ export async function registerIdentity(
   chain: DeployedChain,
   agentId: string,
   baseUrl: string,
-): Promise<{ registryId: string; txHash: Hash | null }> {
+): Promise<{ registryId: string; txHash: Hash | null; transferTx: Hash | null }> {
   const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId)).limit(1);
   if (!agent) throw new NotConfigured(`no agent ${agentId}`);
+
+  const registries = registriesFor(chain);
+  const { registrar } = signers(chain);
 
   const [existing] = await db
     .select({ registryId: agentIdentities.registryId })
     .from(agentIdentities)
     .where(and(eq(agentIdentities.agentId, agentId), eq(agentIdentities.chainId, chain.id)))
     .limit(1);
-  if (existing) return { registryId: existing.registryId, txHash: null };
-
-  const registries = registriesFor(chain);
-  const { registrar } = signers(chain);
+  if (existing) {
+    // Asked again of an identity already minted, so a run that died between
+    // the mint and the handover finishes the handover rather than leaving it.
+    const transferTx = await handOver(chain, registries, registrar, existing.registryId);
+    return { registryId: existing.registryId, txHash: null, transferTx };
+  }
 
   const txHash = await registrar.writeContract({
     address: registries.identity,
@@ -225,7 +250,48 @@ export async function registerIdentity(
     registerTx: txHash,
   });
 
-  return { registryId, txHash };
+  const transferTx = await handOver(chain, registries, registrar, registryId);
+  return { registryId, txHash, transferTx };
+}
+
+/**
+ * Moves a freshly minted identity from the registrar to `IDENTITY_OWNER`.
+ *
+ * Read from the chain rather than remembered, so it is safe to call on every
+ * run: an identity already handed over costs one read and sends nothing. One
+ * held by some third account is refused loudly, since that is not a state this
+ * arena can produce by itself.
+ */
+async function handOver(
+  chain: DeployedChain,
+  registries: Registries,
+  registrar: Signing,
+  registryId: string,
+): Promise<Hash | null> {
+  const owner = identityOwner();
+  if (!owner) return null;
+
+  const current = await publicClientFor(chain).readContract({
+    address: registries.identity,
+    abi: identityRegistryAbi,
+    functionName: 'ownerOf',
+    args: [BigInt(registryId)],
+  });
+  if (current.toLowerCase() === owner.toLowerCase()) return null;
+  if (current.toLowerCase() !== registrar.account.address.toLowerCase()) {
+    throw new Error(`identity ${registryId} on ${chain.name} is held by ${current}, neither the registrar nor IDENTITY_OWNER`);
+  }
+
+  const hash = await registrar.writeContract({
+    address: registries.identity,
+    abi: identityRegistryAbi,
+    functionName: 'transferFrom',
+    args: [registrar.account.address, owner, BigInt(registryId)],
+    account: registrar.account,
+    chain: chainDefinition(chain),
+  });
+  await mined(chain, hash, 'identity handover');
+  return hash;
 }
 
 export interface Published {
@@ -305,7 +371,9 @@ export async function publishRecord(chain: DeployedChain, agentId: string, baseU
     uri,
     evidenceHash,
     attestation,
-    validation: registries.validation !== null,
+    // The request must come from the identity's owner, which is no longer the
+    // registrar once identities are handed over.
+    validation: registries.validation !== null && identityOwner() === null,
   });
 
   const sent: Partial<Record<(typeof plan)[number]['column'], Hash>> = {};
