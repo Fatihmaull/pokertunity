@@ -1,6 +1,8 @@
 import { account } from '@/server/actions';
 import { getSession } from '@/server/auth';
+import { callerOf } from '@/server/rate-limit';
 import { matchRuntime } from '@/server/registry';
+import { admit } from '@/server/spectators';
 import type { ArenaEvent } from '@/server/view';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +19,11 @@ export const dynamic = 'force-dynamic';
  * place: the runtime seals reasoning, equity and hand read for the whole hand
  * and opens them only with a `reveal` at showdown. Forwarding everything else
  * unchanged is safe because of that, not because of anything done here.
+ *
+ * That per-viewer render is also why the gallery is capped. Every subscriber
+ * costs the dealing process work on every event, and the render cannot be
+ * shared without sharing one viewer's cards with another, so the only safe
+ * lever on the cost is how many subscribers there are.
  */
 export async function GET(request: Request, context: RouteContext<'/api/matches/[id]/stream'>): Promise<Response> {
   const { id } = await context.params;
@@ -41,6 +48,20 @@ export async function GET(request: Request, context: RouteContext<'/api/matches/
   }
 
   const session = await getSession();
+
+  // Before the account lookup, so a refusal costs this process nothing. A 503
+  // with a retry-after is what this route already answers when it is not the
+  // dealer, and the client backs off and retries on any refusal alike.
+  const seat = admit(id, callerOf(request, session?.userId ?? null));
+  if (!seat.ok) {
+    return Response.json(
+      seat.reason === 'full'
+        ? { error: 'This match has as many spectators as it can take. Try again shortly.', matchId: id, full: true }
+        : { error: 'Too many open feeds for this match from one viewer.', matchId: id, full: false },
+      { status: seat.reason === 'full' ? 503 : 429, headers: { 'retry-after': '15' } },
+    );
+  }
+
   // Whichever of the viewer's agents is in this match, if any. One owner can
   // hold at most one seat per match, because the matchmaker refuses to seat two
   // of theirs together, so there is never a choice to make here.
@@ -51,6 +72,7 @@ export async function GET(request: Request, context: RouteContext<'/api/matches/
     : null;
 
   const encoder = new TextEncoder();
+  let stopped = () => {};
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -76,6 +98,7 @@ export async function GET(request: Request, context: RouteContext<'/api/matches/
         open = false;
         clearInterval(heartbeat);
         unsubscribe();
+        seat.release();
         try {
           controller.close();
         } catch {
@@ -98,6 +121,14 @@ export async function GET(request: Request, context: RouteContext<'/api/matches/
       });
 
       request.signal.addEventListener('abort', close, { once: true });
+      // A client that left during the account lookup has already aborted, and
+      // an abort that has happened fires no listener. Without this its slot in
+      // the gallery would never be handed back.
+      if (request.signal.aborted) close();
+      stopped = close;
+    },
+    cancel() {
+      stopped();
     },
   });
 
