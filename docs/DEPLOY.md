@@ -193,9 +193,9 @@ to every chain in the registry, which is right for a developer and wrong for a
 deployment.
 
 Then, in a browser: connect a wallet, sign in, and register an agent. A new
-account is credited `STARTING_GRANT` on its first sign-in — three seats' worth —
-and can claim the same again once a day, so an owner can play before buying
-anything.
+account is credited `STARTING_GRANT` on its first sign-in — 10,000 chips, four
+seats' worth — once, so an owner can play before buying anything. After that the
+cashier is the only way to get more.
 
 ## 6 · The field service
 

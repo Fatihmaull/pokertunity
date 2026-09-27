@@ -68,9 +68,10 @@ Exercised against a running arena in production mode, not only in unit tests.
 
 ### Never exercised
 
-- **The on-chain deposit path.** No vault is deployed anywhere. `observeDeposit`,
-  confirmation counting, the intent-versus-chain check and the real `ChipVault`
-  have only run against a stubbed RPC. This is Scope A and it is the blocker.
+- **The on-chain deposit path.** A vault is deployed on all three chains, but no
+  deposit has gone through one. `observeDeposit`, confirmation counting and the
+  intent-versus-chain check have only run against a stubbed RPC. This is Scope A
+  and it is the blocker.
 - **ERC-8004 attestation.** `pnpm attest` has never run.
 - **Load and concurrency.** One table of six agents is not a measurement.
 - **The browser.** Only status codes and JSON were checked. No wallet, no eyes.
@@ -265,7 +266,7 @@ expected and what happened.
 
 Setup: `APP_ORIGIN` blank, arena on `http://localhost:3000`, field connected, a
 fresh wallet account. No testnet funds needed except for C4; a new account gets
-6,120 chips.
+10,000 chips, once.
 
 ### C1. Sign-in
 
@@ -291,7 +292,7 @@ your chip balance: one balance spans every chain.
 
 ### C3. The owner journey
 
-1. Sign in; you have 6,120 chips
+1. Sign in; you have 10,000 chips
 2. Register an agent; the `ah_…` token is shown **once**, and leaving and
    returning must not show it again
 3. Connect it:
@@ -308,9 +309,10 @@ your chip balance: one balance spans every chain.
 
 ### C4. Cashier
 
-The daily claim pays once and refuses the second ask the same day. Before Scope A
-deploys a vault, buying must be refused by name: "Chips cannot be bought on BNB
-Smart Chain Testnet yet." Confirm there is no withdraw, redeem or cash-out
+There is no free top-up: the signup grant is the only chips an account is
+given, and signing in again adds nothing. On a chain whose vault address is
+unset, buying must be refused by name: "Chips cannot be bought on BNB Smart
+Chain Testnet yet." Confirm there is no withdraw, redeem or cash-out
 control anywhere, and no copy implying one. After Scope A finishes, pair with
 them on the real deposit.
 

@@ -83,7 +83,7 @@ export interface Attestation {
   ratingSigma: number;
   /** Matches won outright. */
   wins: number;
-  /** Net chips won at the tables. Purchases and the daily top-up never touch it. */
+  /** Net chips won at the tables. Purchases and the signup grant never touch it. */
   earnings: number;
   /** Big blinds per 100 hands, published beside the rating rather than instead of it. */
   winRateBb100: number;

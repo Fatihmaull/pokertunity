@@ -2,7 +2,7 @@ import { and, eq, inArray, isNotNull, sql as raw } from 'drizzle-orm';
 import { db } from '../db/client';
 import { agents, depositIntents, ledgerEntries, seats, users } from '../db/schema';
 import { conservative } from '../lib/rating';
-import { STARTING_GRANT, chipsToWei, packageById, weiToChips } from '../lib/economy';
+import { chipsToWei, packageById, weiToChips } from '../lib/economy';
 import { chainById } from '../lib/chains';
 import { REQUIRED_CONFIRMATIONS, observeDeposit } from './chain';
 import { UnknownChain, requireChain, vaultAddress, type DeployedChain } from './chains';
@@ -40,8 +40,6 @@ export interface Account {
   address: string;
   chips: number;
   agents: AgentSummary[];
-  /** Whether the daily claim is available, and when it comes back if not. */
-  claim: { available: boolean; nextAt: string | null };
 }
 
 /**
@@ -53,7 +51,7 @@ export interface Account {
  */
 export async function account(session: Session): Promise<Account> {
   const [owner] = await db
-    .select({ address: users.address, chips: users.chips, lastClaimAt: users.lastClaimAt })
+    .select({ address: users.address, chips: users.chips })
     .from(users)
     .where(eq(users.id, session.userId))
     .limit(1);
@@ -86,7 +84,6 @@ export async function account(session: Session): Promise<Account> {
   return {
     address: owner.address,
     chips: owner.chips,
-    claim: claimStatus(owner.lastClaimAt),
     agents: rows.map((row) => {
       const presence = presenceOf(row.id);
       return {
@@ -110,56 +107,6 @@ export async function account(session: Session): Promise<Account> {
     }),
   };
 }
-
-/**
- * Tops an account back up, at most once a day.
- *
- * Chips buy a seat and nothing else, and an owner whose agents have all busted
- * has nothing to learn from waiting. Buying chips on chain is still worth doing
- * because it lands immediately and is not capped at one grant a day.
- */
-export async function claimChips(session: Session): Promise<{ chips: number; claimed: number }> {
-  return db.transaction(async (tx) => {
-    const [owner] = await tx
-      .select({ chips: users.chips, lastClaimAt: users.lastClaimAt })
-      .from(users)
-      .where(eq(users.id, session.userId))
-      .for('update')
-      .limit(1);
-
-    if (!owner) throw new ActionError('That account no longer exists.');
-    if (!claimStatus(owner.lastClaimAt).available) {
-      throw new ActionError('The daily claim has already been taken. Try again tomorrow.');
-    }
-
-    const [updated] = await tx
-      .update(users)
-      .set({ chips: raw`${users.chips} + ${STARTING_GRANT}`, lastClaimAt: new Date() })
-      .where(eq(users.id, session.userId))
-      .returning({ chips: users.chips });
-
-    await tx.insert(ledgerEntries).values({
-      userId: session.userId,
-      delta: STARTING_GRANT,
-      balanceAfter: updated.chips,
-      reason: 'grant',
-      reference: 'daily-claim',
-    });
-
-    return { chips: updated.chips, claimed: STARTING_GRANT };
-  });
-}
-
-function claimStatus(lastClaimAt: Date | null): { available: boolean; nextAt: string | null } {
-  if (!lastClaimAt) return { available: true, nextAt: null };
-
-  const next = lastClaimAt.getTime() + CLAIM_INTERVAL_MS;
-  return next <= Date.now()
-    ? { available: true, nextAt: null }
-    : { available: false, nextAt: new Date(next).toISOString() };
-}
-
-const CLAIM_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The chain a request asked to settle on.

@@ -32,8 +32,6 @@ interface AccountState {
   address: string;
   chips: number;
   agents: AccountAgent[];
-  /** Whether the daily chip claim is available, and when it returns if not. */
-  claim: { available: boolean; nextAt: string | null };
 }
 
 interface AccountContextValue {

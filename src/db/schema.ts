@@ -47,15 +47,6 @@ export const users = pgTable(
     /** Lowercase checksum-stripped address. One account per wallet. */
     address: text('address').notNull(),
     chips: integer('chips').notNull().default(0),
-    /**
-     * When this account last took the daily chip claim.
-     *
-     * On the account rather than derived from the ledger, because the check
-     * runs on every claim and scanning a growing ledger to answer "was it
-     * today" would get slower for no reason. The ledger still records the
-     * movement; this only records when.
-     */
-    lastClaimAt: timestamp('last_claim_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex('users_address_idx').on(table.address)],

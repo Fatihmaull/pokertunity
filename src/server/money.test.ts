@@ -18,10 +18,10 @@ import {
   users,
 } from '../db/schema';
 import type { DecisionRecord } from '../agent/decide';
-import { ENTRY_FEE, MATCH, SEAT_COST, STARTING_GRANT, chipsToWei } from '../lib/economy';
+import { ENTRY_FEE, MATCH, SEAT_COST, chipsToWei } from '../lib/economy';
 import { DEFAULT_RATING, conservative, type Rating } from '../lib/rating';
 import { applyAction, startHand, totalPot } from '../poker/engine';
-import { ActionError, claimChips, confirmDeposit, startDeposit, type DepositResult } from './actions';
+import { confirmDeposit, startDeposit, type DepositResult } from './actions';
 import type { Session } from './auth';
 import type { observeDeposit } from './chain';
 import { shuffledDeck } from './deck';
@@ -63,31 +63,6 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     await db.execute(
       raw`truncate table users, agents, deposit_intents, attestations, ledger_entries, matches, match_results, seats, hands, decisions, results restart identity cascade`,
     );
-  });
-
-  /* ------------------------------------------------------------------------ */
-  /* The daily claim                                                          */
-  /* ------------------------------------------------------------------------ */
-
-  test('the daily claim pays once and refuses the second ask', async () => {
-    const me = await owner(0);
-
-    const first = await claimChips(me);
-    assert.equal(first.chips, STARTING_GRANT);
-
-    await assert.rejects(claimChips(me), ActionError);
-    assert.equal(await balance(me.userId), STARTING_GRANT, 'the refusal moved nothing');
-    await ledgerAgrees(me.userId, 0);
-  });
-
-  test('two claims racing each other pay once', async () => {
-    const me = await owner(0);
-
-    const outcomes = await Promise.allSettled([claimChips(me), claimChips(me)]);
-
-    assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled').length, 1);
-    assert.equal(await balance(me.userId), STARTING_GRANT);
-    await ledgerAgrees(me.userId, 0);
   });
 
   /* ------------------------------------------------------------------------ */
