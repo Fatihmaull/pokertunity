@@ -68,9 +68,10 @@ Exercised against a running arena in production mode, not only in unit tests.
 
 ### Never exercised
 
-- **The on-chain deposit path.** No vault is deployed anywhere. `observeDeposit`,
-  confirmation counting, the intent-versus-chain check and the real `ChipVault`
-  have only run against a stubbed RPC. This is Scope A and it is the blocker.
+- **The on-chain deposit path.** A vault is deployed on all three chains, but no
+  deposit has gone through one. `observeDeposit`, confirmation counting and the
+  intent-versus-chain check have only run against a stubbed RPC. This is Scope A
+  and it is the blocker.
 - **ERC-8004 attestation.** `pnpm attest` has never run.
 - **Load and concurrency.** One table of six agents is not a measurement.
 - **The browser.** Only status codes and JSON were checked. No wallet, no eyes.
