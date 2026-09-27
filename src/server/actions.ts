@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql as raw } from 'drizzle-orm';
+import { and, eq, isNotNull, sql as raw } from 'drizzle-orm';
 import { db } from '../db/client';
 import { agents, depositIntents, ledgerEntries, seats, users } from '../db/schema';
 import { conservative } from '../lib/rating';
@@ -206,32 +206,19 @@ export async function noteDepositTx(session: Session, intentId: string, txHash: 
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new ActionError('That is not a transaction hash.');
   if (!/^[0-9a-f-]{36}$/i.test(intentId)) throw new ActionError('That is not a deposit.');
 
-  try {
-    await db
-      .update(depositIntents)
-      .set({ txHash })
-      .where(
-        and(
-          eq(depositIntents.id, intentId),
-          eq(depositIntents.userId, session.userId),
-          eq(depositIntents.status, 'pending'),
-        ),
-      );
-  } catch (error) {
-    // A hash is unique per chain, so writing one that is already on another
-    // intent fails here. That is a client repeating itself, not a fault: the
-    // hash is already on record against the intent that actually paid it, and
-    // that is the row confirmation will find. Anything else is a real failure,
-    // and swallowing it would let a player believe a deposit was saved to be
-    // finished later when it was not.
-    if (!isUniqueViolation(error)) throw error;
-  }
-}
-
-/** Postgres's unique violation, whether the driver's error arrives bare or wrapped by drizzle. */
-function isUniqueViolation(error: unknown): boolean {
-  const failure = error as { code?: unknown; cause?: { code?: unknown } } | null;
-  return failure?.code === '23505' || failure?.cause?.code === '23505';
+  // Several intents may note one hash, because one transaction can pay several
+  // of them. The uniqueness that matters is per deposit event and is enforced
+  // when the log is known, at confirmation; a noted row has no log yet.
+  await db
+    .update(depositIntents)
+    .set({ txHash })
+    .where(
+      and(
+        eq(depositIntents.id, intentId),
+        eq(depositIntents.userId, session.userId),
+        eq(depositIntents.status, 'pending'),
+      ),
+    );
 }
 
 /**
@@ -270,9 +257,11 @@ export async function unsettledDeposits(
  * the credit only applies to a row that is still pending, so two requests
  * racing on the same hash cannot both pay out.
  *
- * A transaction may carry more than one deposit, so the first one still owed to
- * this account is the one credited. Calling again finishes the next, which is
- * how a client that made several in one call gets all of them.
+ * A transaction may carry more than one deposit, from a wallet that batches
+ * calls. Every one of them owed to this account is credited in the same call,
+ * each against its own log, because nothing else would ever come back for the
+ * rest: the cashier stops asking at the first credit, and a batch made outside
+ * it was never noted anywhere.
  */
 export async function confirmDeposit(
   session: Session,
@@ -316,96 +305,104 @@ export async function confirmDeposit(
   });
   if (candidates.length === 0) throw new ActionError('That deposit does not match any request from this account.');
 
-  const pending = await db
-    .select({ id: depositIntents.id })
-    .from(depositIntents)
-    .where(
-      and(
-        eq(depositIntents.userId, session.userId),
-        eq(depositIntents.status, 'pending'),
-        inArray(
-          depositIntents.id,
-          candidates.map((row) => row.intentId),
-        ),
-      ),
-    );
-
-  const observed = candidates.find((row) => pending.some((intent) => intent.id === row.intentId)) ?? candidates[0];
-  const intentId = observed.intentId;
-
   return db.transaction(async (tx) => {
-    // Locked for the length of the transaction. A second request for the same
-    // hash waits here rather than reading a pending row that is about to be
-    // credited out from under it.
-    const [intent] = await tx
-      .select()
-      .from(depositIntents)
-      .where(and(eq(depositIntents.id, intentId), eq(depositIntents.userId, session.userId)))
-      .limit(1)
-      .for('update');
+    let credited = 0;
+    let already = 0;
+    let balance: number | null = null;
+    let refusal: string | null = null;
 
-    if (!intent) throw new ActionError('That deposit does not match any request from this account.');
+    // In the order the logs appear, so two requests for the same hash take
+    // their locks in the same order and wait on each other instead of
+    // deadlocking.
+    for (const observed of candidates) {
+      // Locked for the length of the transaction. A second request for the
+      // same hash waits here rather than reading a pending row that is about
+      // to be credited out from under it.
+      const [intent] = await tx
+        .select()
+        .from(depositIntents)
+        .where(and(eq(depositIntents.id, observed.intentId), eq(depositIntents.userId, session.userId)))
+        .limit(1)
+        .for('update');
 
-    // The vault check above proves the log came from a vault of ours; this
-    // proves it came from the one the intent was issued against. Without it an
-    // intent could be paid on a cheaper chain than the one it was priced on.
-    if (intent.chainId !== chain.id) {
-      const paid = chainById(intent.chainId);
-      throw new ActionError(`That deposit belongs to ${paid?.name ?? `chain ${intent.chainId}`}. Switch networks to finish it.`);
-    }
+      // Not an intent of this account's, or not one that exists.
+      if (!intent) continue;
 
-    // Asked again about a deposit that has already landed, which is ordinary:
-    // a cashier closed mid-wait keeps polling while the reopened one starts
-    // polling the same hash, and whichever asks second must hear the same
-    // answer as the first rather than an error about money that arrived. The
-    // lock above means the credit itself still happens once.
-    if (intent.status === 'credited') {
-      if (intent.txHash !== txHash) throw new ActionError('That deposit has already been credited.');
-      const [owner] = await tx
-        .select({ chips: users.chips })
-        .from(users)
+      // The vault check above proves the log came from a vault of ours; this
+      // proves it came from the one the intent was issued against. Without it
+      // an intent could be paid on a cheaper chain than the one it was priced
+      // on.
+      if (intent.chainId !== chain.id) {
+        const paid = chainById(intent.chainId);
+        throw new ActionError(
+          `That deposit belongs to ${paid?.name ?? `chain ${intent.chainId}`}. Switch networks to finish it.`,
+        );
+      }
+
+      // Asked again about a deposit that has already landed, which is
+      // ordinary: a cashier closed mid-wait keeps polling while the reopened
+      // one polls the same hash, and whichever asks second must hear the same
+      // answer as the first rather than an error about money that arrived. The
+      // lock above means the credit itself still happens once.
+      if (intent.status === 'credited') {
+        if (intent.txHash === txHash) already += intent.chips;
+        else refusal ??= 'That deposit has already been credited.';
+        continue;
+      }
+
+      // One short deposit does not hold up the others the same call paid for.
+      if (observed.amountWei < BigInt(intent.expectedWei)) {
+        refusal ??= 'That deposit was smaller than the package it was for.';
+        continue;
+      }
+
+      // Anything sent above the package price still buys chips at the same peg.
+      const chips = Math.max(intent.chips, weiToChips(observed.amountWei));
+
+      // The status is part of the condition, not just of the payload, so the
+      // credit cannot apply twice even if the lock above is ever lost; and the
+      // log is recorded, so one deposit event can never credit two intents.
+      const settled = await tx
+        .update(depositIntents)
+        .set({
+          status: 'credited',
+          txHash,
+          blockNumber: Number(observed.blockNumber),
+          logIndex: observed.logIndex,
+          chips,
+          creditedAt: new Date(),
+        })
+        .where(and(eq(depositIntents.id, intent.id), eq(depositIntents.status, 'pending')))
+        .returning({ id: depositIntents.id });
+      if (settled.length === 0) continue;
+
+      const [updated] = await tx
+        .update(users)
+        .set({ chips: raw`${users.chips} + ${chips}` })
         .where(eq(users.id, session.userId))
-        .limit(1);
-      return { status: 'credited' as const, chips: intent.chips, balance: owner.chips };
+        .returning({ chips: users.chips });
+
+      await tx.insert(ledgerEntries).values({
+        userId: session.userId,
+        delta: chips,
+        balanceAfter: updated.chips,
+        reason: 'deposit',
+        reference: txHash,
+      });
+
+      credited += chips;
+      balance = updated.chips;
     }
 
-    if (observed.amountWei < BigInt(intent.expectedWei)) {
-      throw new ActionError('That deposit was smaller than the package it was for.');
+    if (credited === 0 && already === 0) {
+      throw new ActionError(refusal ?? 'That deposit does not match any request from this account.');
     }
 
-    // Anything sent above the package price still buys chips at the same peg.
-    const chips = Math.max(intent.chips, weiToChips(observed.amountWei));
+    if (balance === null) {
+      const [owner] = await tx.select({ chips: users.chips }).from(users).where(eq(users.id, session.userId)).limit(1);
+      balance = owner.chips;
+    }
 
-    // The status is part of the condition, not just of the payload, so the
-    // credit cannot apply twice even if the lock above is ever lost.
-    const credited = await tx
-      .update(depositIntents)
-      .set({
-        status: 'credited',
-        txHash,
-        blockNumber: Number(observed.blockNumber),
-        chips,
-        creditedAt: new Date(),
-      })
-      .where(and(eq(depositIntents.id, intentId), eq(depositIntents.status, 'pending')))
-      .returning({ id: depositIntents.id });
-
-    if (credited.length === 0) throw new ActionError('That deposit has already been credited.');
-
-    const [updated] = await tx
-      .update(users)
-      .set({ chips: raw`${users.chips} + ${chips}` })
-      .where(eq(users.id, session.userId))
-      .returning({ chips: users.chips });
-
-    await tx.insert(ledgerEntries).values({
-      userId: session.userId,
-      delta: chips,
-      balanceAfter: updated.chips,
-      reason: 'deposit',
-      reference: txHash,
-    });
-
-    return { status: 'credited' as const, chips, balance: updated.chips };
+    return { status: 'credited' as const, chips: credited > 0 ? credited : already, balance };
   });
 }

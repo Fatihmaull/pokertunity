@@ -151,14 +151,25 @@ export const depositIntents = pgTable(
     /** Set once the on-chain event has been read back and credited. */
     txHash: text('tx_hash'),
     blockNumber: bigint('block_number', { mode: 'number' }),
+    /**
+     * Which of the transaction's logs paid this intent. Null until credited:
+     * the hash is written the moment the wallet returns it, the log only once
+     * the receipt has been read.
+     */
+    logIndex: integer('log_index'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     creditedAt: timestamp('credited_at', { withTimezone: true }),
   },
   (table) => [
-    // One credit per transaction, enforced by the database rather than by
+    // One credit per deposit event, enforced by the database rather than by
     // whatever the indexer believes it has already seen. Scoped to the chain
-    // because a hash is only unique within one.
-    uniqueIndex('deposit_intents_tx_idx').on(table.chainId, table.txHash),
+    // because a hash is only unique within one, and to the log because one
+    // transaction can carry several deposits: keyed on the hash alone, the
+    // second intent a batching wallet paid in the same call could never be
+    // credited, and the player's money sat in the vault against nothing.
+    // Rows noted before confirmation have no log yet, and Postgres counts
+    // those nulls as distinct, so noting a hash never collides.
+    uniqueIndex('deposit_intents_tx_idx').on(table.chainId, table.txHash, table.logIndex),
     index('deposit_intents_status_idx').on(table.status),
   ],
 );

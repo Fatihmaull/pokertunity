@@ -410,6 +410,48 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(deposits.length, 1);
   });
 
+  test('one transaction paying two packages credits both, once each', async () => {
+    const me = await owner(0);
+    const first = await startDeposit(me, 'starter', CHAIN);
+    const second = await startDeposit(me, 'regular', CHAIN);
+    const observe = paidTogether(me.address, [
+      { intentId: first.bytes32, amountWei: BigInt(first.valueWei) },
+      { intentId: second.bytes32, amountWei: BigInt(second.valueWei) },
+    ]);
+
+    // Both at once. The cashier stops asking at the first credit, and a batch
+    // made outside it was never noted, so nothing would come back for the rest.
+    const result = credited(await confirmDeposit(me, TX, CHAIN, observe));
+    assert.equal(result.chips, first.chips + second.chips);
+    assert.equal(result.balance, first.chips + second.chips);
+
+    const again = credited(await confirmDeposit(me, TX, CHAIN, observe));
+    assert.equal(again.chips, first.chips + second.chips, 'asked again, it describes what already landed');
+    assert.equal(await balance(me.userId), first.chips + second.chips);
+    await ledgerAgrees(me.userId, 0);
+
+    const rows = await db.select().from(depositIntents).where(eq(depositIntents.userId, me.userId));
+    assert.deepEqual(
+      rows.map((row) => `${row.status} ${row.txHash === TX} ${row.logIndex}`).sort(),
+      ['credited true 0', 'credited true 1'],
+    );
+  });
+
+  test('a short deposit in a batch does not hold up the others it was paid with', async () => {
+    const me = await owner(0);
+    const short = await startDeposit(me, 'starter', CHAIN);
+    const full = await startDeposit(me, 'starter', CHAIN);
+    const observe = paidTogether(me.address, [
+      { intentId: short.bytes32, amountWei: BigInt(short.valueWei) - 1n },
+      { intentId: full.bytes32, amountWei: BigInt(full.valueWei) },
+    ]);
+
+    const result = credited(await confirmDeposit(me, TX, CHAIN, observe));
+    assert.equal(result.chips, full.chips);
+    assert.equal(await balance(me.userId), full.chips);
+    await ledgerAgrees(me.userId, 0);
+  });
+
   test('a deposit not mined yet is pending, not refused', async () => {
     // The first ask after a wallet hands back a hash nearly always lands here,
     // and treating it as a failure used to end the cashier's wait on its first poll.
@@ -736,7 +778,21 @@ function paid(
       intentId,
       amountWei,
       blockNumber: 100n,
+      logIndex: 0,
       confirmations,
     },
   ];
+}
+
+/** One transaction paying several intents, as a wallet that batches calls sends it. */
+function paidTogether(payer: string, deposits: Array<{ intentId: `0x${string}`; amountWei: bigint }>): typeof observeDeposit {
+  return async () =>
+    deposits.map((deposit, logIndex) => ({
+      payer: payer as `0x${string}`,
+      intentId: deposit.intentId,
+      amountWei: deposit.amountWei,
+      blockNumber: 100n,
+      logIndex,
+      confirmations: 3n,
+    }));
 }

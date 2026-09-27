@@ -48,9 +48,6 @@ const AXES: Array<{ key: keyof Axes; label: string; asks: string; format: (value
 /** How long a measurement is reused before it is asked for again. */
 const KEEP_MS = 5 * 60_000;
 
-/** Refusals waited out before the card says it could not load. About a minute at the route's rate. */
-const RETRIES = 8;
-
 function recall(agentId: string): Axes | null {
   try {
     const raw = sessionStorage.getItem(`axes:${agentId}`);
@@ -89,11 +86,15 @@ export function AxesCard({ agentId, name }: { agentId: string; name?: string }) 
     // page into its own limit by the third. A recent answer is reused instead.
     if (recall(agentId)) return;
 
-    // Told to wait, it waits as long as it was told and asks again, rather than
-    // reporting a refusal as though the agent had not played. The cards of one
-    // console are told the same wait, so each adds a little of its own or they
-    // all come back on the same instant and are refused together again.
-    const load = (attempt: number) => {
+    // Told to wait, it waits as long as it was told and asks again, for as long
+    // as the card is on screen, rather than reporting a refusal as though the
+    // agent had not played. Giving up after a fixed number of tries lost the
+    // race whenever more cards were waiting than the limit refills in that
+    // time; asking again costs nothing, since the limit refuses before any
+    // measuring is done. The cards of one console are told the same wait, so
+    // each adds a little of its own or they all return on the same instant and
+    // are refused together again.
+    const load = () => {
       fetch(`/api/agents/${agentId}/axes`, { cache: 'no-store' })
         .then(async (response) => {
           if (!live) return;
@@ -105,8 +106,9 @@ export function AxesCard({ agentId, name }: { agentId: string; name?: string }) 
             return;
           }
           const wait = Number(response.headers.get('retry-after'));
-          if (response.status === 429 && attempt < RETRIES && Number.isFinite(wait)) {
-            retry = setTimeout(() => load(attempt + 1), Math.max(1, wait) * 1000 + Math.random() * 4_000);
+          if (response.status === 429) {
+            const seconds = Number.isFinite(wait) && wait > 0 ? wait : 6;
+            retry = setTimeout(load, seconds * 1000 + Math.random() * 4_000);
             return;
           }
           setUnavailable(true);
@@ -115,7 +117,7 @@ export function AxesCard({ agentId, name }: { agentId: string; name?: string }) 
           if (live) setUnavailable(true);
         });
     };
-    load(0);
+    load();
 
     return () => {
       live = false;
