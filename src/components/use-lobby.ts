@@ -67,9 +67,13 @@ export function useLobby(): Lobby {
 
     const poll = () => {
       fetch('/api/matches', { cache: 'no-store' })
-        .then((response) => response.json() as Promise<{ matches: LobbyMatch[]; mine: string[]; queued: boolean }>)
+        .then((response) =>
+          // A refusal is not an empty floor. Keeping what is on screen until the
+          // next poll is honest; replacing it with the error body is not.
+          response.ok ? (response.json() as Promise<{ matches: LobbyMatch[]; mine: string[]; queued: boolean }>) : null,
+        )
         .then((body) => {
-          if (cancelled) return;
+          if (cancelled || !body) return;
           setMatches(body.matches);
           setMine(body.mine);
           setQueued(body.queued);

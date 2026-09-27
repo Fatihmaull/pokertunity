@@ -1,6 +1,7 @@
 import { stakesLabel } from '@/lib/economy';
 import { getSession } from '@/server/auth';
 import { account } from '@/server/actions';
+import { callerOf, take, tooMany } from '@/server/rate-limit';
 import { allMatches } from '@/server/registry';
 import { storedMatches } from '@/server/store';
 
@@ -16,8 +17,11 @@ import { storedMatches } from '@/server/store';
  * The dealing instance then overlays what only it can know: the pot in the
  * middle right now, and whose turn it is.
  */
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   const session = await getSession();
+  const allowed = take('matches', callerOf(request, session?.userId ?? null));
+  if (!allowed.ok) return tooMany(allowed.retryAfterMs);
+
   const mine = session ? await account(session).catch(() => null) : null;
 
   // One owner can hold at most one seat in any match, so a set of their agent

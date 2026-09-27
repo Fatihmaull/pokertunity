@@ -1,6 +1,8 @@
 import { attestationFor } from '@/server/attestation';
 import { canonicalise } from '@/lib/erc8004';
 import { isUuid } from '@/lib/ids';
+import { getSession } from '@/server/auth';
+import { callerOf, take, tooMany } from '@/server/rate-limit';
 
 /**
  * The evidence behind this agent's ERC-8004 score.
@@ -14,9 +16,12 @@ import { isUuid } from '@/lib/ids';
  * check is not an attestation.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: RouteContext<'/api/agents/[id]/attestation'>,
 ): Promise<Response> {
+  const allowed = take('attestation', callerOf(request, (await getSession())?.userId ?? null));
+  if (!allowed.ok) return tooMany(allowed.retryAfterMs);
+
   const { id } = await context.params;
   if (!isUuid(id)) return Response.json({ error: 'No such agent.' }, { status: 404 });
   const found = await attestationFor(id);

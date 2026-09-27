@@ -1,5 +1,7 @@
 import { decisionsForHand, latestHand } from '@/server/store';
 import { allMatches } from '@/server/registry';
+import { getSession } from '@/server/auth';
+import { callerOf, take, tooMany } from '@/server/rate-limit';
 
 /**
  * Feeds the landing page. If a table is dealing right now the hero watches it
@@ -14,7 +16,10 @@ import { allMatches } from '@/server/registry';
  * agent. What each agent did is public. What it was holding when
  * it declined to show is not.
  */
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
+  const allowed = take('hands-latest', callerOf(request, (await getSession())?.userId ?? null));
+  if (!allowed.ok) return tooMany(allowed.retryAfterMs);
+
   const live = allMatches().find((match) => {
     const view = match.view(null);
     return view.toAct !== null || view.street !== 'idle';
