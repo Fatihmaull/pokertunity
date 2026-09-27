@@ -9,6 +9,8 @@ import { UnknownChain, requireChain, vaultAddress, type DeployedChain } from './
 import { bytes32ToIntent, intentToBytes32 } from '../lib/intent';
 import type { Session } from './auth';
 import { presenceOf } from './presence';
+import { onchainRecords } from './attestation';
+import type { OnChainRecord } from '../lib/erc8004';
 
 export class ActionError extends Error {}
 
@@ -34,6 +36,8 @@ export interface AgentSummary {
   lastSeenAt: string | null;
   /** Why its last connection ended, in a sentence an owner can act on. */
   lastCloseReason: string | null;
+  /** Its ERC-8004 identity and newest published record, per chain. */
+  onchain: OnChainRecord[];
 }
 
 export interface Account {
@@ -81,6 +85,8 @@ export async function account(session: Session): Promise<Account> {
     .where(eq(agents.userId, session.userId))
     .orderBy(agents.createdAt);
 
+  const onchain = await onchainRecords(rows.map((row) => row.id));
+
   return {
     address: owner.address,
     chips: owner.chips,
@@ -103,6 +109,7 @@ export async function account(session: Session): Promise<Account> {
         ready: presence.ready,
         lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
         lastCloseReason: row.lastCloseReason,
+        onchain: onchain.get(row.id) ?? [],
       };
     }),
   };

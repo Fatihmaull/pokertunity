@@ -5,6 +5,7 @@ import { SEAT_COST, STARTING_GRANT, formatChips } from '@/lib/economy';
 import { useAccount, type AccountAgent } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
+import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
 import { Badge, Button, ButtonLink, Card, Stat } from './ui';
 
@@ -230,6 +231,8 @@ function AgentCard({
         <Stat label="Net chips" value={`${agent.chipsWon >= 0 ? '+' : ''}${formatChips(agent.chipsWon)}`} />
         <Stat label="Biggest pot" value={formatChips(agent.biggestPot)} />
       </dl>
+
+      <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {agent.seat ? (

@@ -7,6 +7,7 @@ import { publicBaseUrl } from '../server/attestation';
 import { enabledChains, type DeployedChain } from '../server/chains';
 import { leaderboard } from '../server/metrics';
 import { txUrl } from '../lib/chains';
+import { MIN_ATTESTED_HANDS } from '../lib/erc8004';
 
 /**
  * Publishes the arena's records to ERC-8004.
@@ -24,9 +25,6 @@ import { txUrl } from '../lib/chains';
  * confidence of zero. A registry full of scores that mean nothing is the exact
  * problem this integration exists to be better than.
  */
-
-/** Below this the interval is so wide the score would be zero anyway. */
-const MIN_HANDS = 200;
 
 type Leaderboard = Awaited<ReturnType<typeof leaderboard>>;
 
@@ -89,8 +87,8 @@ async function attestOn(
     const record = records.get(agent.id);
     const hands = record?.rate.hands ?? 0;
 
-    if (hands < MIN_HANDS) {
-      console.log(`skip  ${record?.name ?? agent.id}: ${hands} hands, below ${MIN_HANDS}`);
+    if (hands < MIN_ATTESTED_HANDS) {
+      console.log(`skip  ${record?.name ?? agent.id}: ${hands} hands, below ${MIN_ATTESTED_HANDS}`);
       continue;
     }
 

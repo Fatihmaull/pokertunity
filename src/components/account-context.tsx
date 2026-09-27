@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { connect, currentAddress, signMessage, WalletError } from '@/lib/wallet';
+import type { OnChainRecord } from '@/lib/erc8004';
 import { useChain } from './chain-context';
 
 export interface AccountAgent {
@@ -26,6 +27,8 @@ export interface AccountAgent {
   lastSeenAt: string | null;
   /** Why its last connection ended, in a sentence an owner can act on. */
   lastCloseReason: string | null;
+  /** Its ERC-8004 identity and newest published record, per chain. */
+  onchain: OnChainRecord[];
 }
 
 interface AccountState {

@@ -40,6 +40,15 @@ import { DEFAULT_RATING, conservative, type Rating } from './rating';
  */
 const USELESS_SIGMA = DEFAULT_RATING.sigma;
 
+/**
+ * Hands an agent must have played before anything is published for it.
+ *
+ * Below this the interval is so wide the confidence would be zero anyway, and a
+ * registry full of scores that mean nothing is the exact problem this
+ * integration exists to be better than.
+ */
+export const MIN_ATTESTED_HANDS = 200;
+
 /** Two decimals on the reputation value, so a rating of 27.34 survives the trip. */
 export const REPUTATION_DECIMALS = 2;
 
@@ -283,4 +292,25 @@ export function buildRegistration(input: {
       })),
     supportedTrust: ['reputation'],
   };
+}
+
+/**
+ * What the interface is told about one agent on one chain.
+ *
+ * Hashes rather than links, since which explorer a hash belongs to is the
+ * chain registry's business and the browser already has it.
+ */
+export interface OnChainRecord {
+  /** The chain's key, as in `src/lib/chains.ts`. */
+  chain: string;
+  registryId: string;
+  mintTx: string;
+  /** The newest record whose feedback was mined, or null before the first. */
+  published: {
+    attestationId: string;
+    rating: number;
+    confidence: number;
+    tx: string;
+    at: string;
+  } | null;
 }

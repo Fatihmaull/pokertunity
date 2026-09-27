@@ -1,7 +1,15 @@
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client';
 import { agentIdentities, agents, attestations } from '../db/schema';
-import { buildAttestation, buildRegistration, type Attestation, type Registration } from '../lib/erc8004';
+import { chainById } from '../lib/chains';
+import {
+  buildAttestation,
+  buildRegistration,
+  REPUTATION_DECIMALS,
+  type Attestation,
+  type OnChainRecord,
+  type Registration,
+} from '../lib/erc8004';
 import { leaderboard } from './metrics';
 
 /**
@@ -102,4 +110,72 @@ export async function registrationFor(agentId: string, baseUrl: string): Promise
 export function publicBaseUrl(): string | null {
   const configured = process.env.PUBLIC_BASE_URL?.trim() || process.env.APP_ORIGIN?.trim();
   return configured ? configured.replace(/\/$/, '') : null;
+}
+
+/**
+ * Each agent's identity and newest published record, on every chain.
+ *
+ * Every chain rather than the caller's, so switching networks in the interface
+ * is instant and cannot disagree with a poll still in flight. Two queries for
+ * the whole page rather than two per agent.
+ */
+export async function onchainRecords(agentIds: string[]): Promise<Map<string, OnChainRecord[]>> {
+  const found = new Map<string, OnChainRecord[]>();
+  if (agentIds.length === 0) return found;
+
+  const identities = await db
+    .select({
+      agentId: agentIdentities.agentId,
+      chainId: agentIdentities.chainId,
+      registryId: agentIdentities.registryId,
+      registerTx: agentIdentities.registerTx,
+    })
+    .from(agentIdentities)
+    .where(inArray(agentIdentities.agentId, agentIds));
+  if (identities.length === 0) return found;
+
+  // The newest mined record per agent and chain, which is what DISTINCT ON
+  // keeps when the rows are ordered newest first within each pair.
+  const latest = await db
+    .selectDistinctOn([attestations.agentId, attestations.chainId], {
+      id: attestations.id,
+      agentId: attestations.agentId,
+      chainId: attestations.chainId,
+      rating: attestations.rating,
+      confidence: attestations.confidence,
+      reputationTx: attestations.reputationTx,
+      createdAt: attestations.createdAt,
+    })
+    .from(attestations)
+    .where(and(inArray(attestations.agentId, agentIds), isNotNull(attestations.reputationTx)))
+    .orderBy(asc(attestations.agentId), asc(attestations.chainId), desc(attestations.createdAt));
+
+  const published = new Map(latest.map((row) => [`${row.agentId}:${row.chainId}`, row]));
+
+  for (const identity of identities) {
+    // A chain dropped from the registry since the mint has no explorer to link
+    // to, so it is left out rather than shown half-described.
+    const chain = chainById(identity.chainId);
+    if (!chain) continue;
+
+    const record = published.get(`${identity.agentId}:${identity.chainId}`);
+    const list = found.get(identity.agentId) ?? [];
+    list.push({
+      chain: chain.key,
+      registryId: identity.registryId,
+      mintTx: identity.registerTx,
+      published: record
+        ? {
+            attestationId: record.id,
+            rating: record.rating / 10 ** REPUTATION_DECIMALS,
+            confidence: record.confidence,
+            tx: record.reputationTx!,
+            at: record.createdAt.toISOString(),
+          }
+        : null,
+    });
+    found.set(identity.agentId, list);
+  }
+
+  return found;
 }

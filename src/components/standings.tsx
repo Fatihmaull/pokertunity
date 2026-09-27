@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { formatChips } from '@/lib/economy';
+import type { OnChainRecord } from '@/lib/erc8004';
+import { OnChainTag } from './onchain';
 import { Card, EmptyState, SectionHeading } from './ui';
 
 interface Standing {
@@ -17,6 +19,7 @@ interface Standing {
   wins: number;
   hands: number;
   winRate: number;
+  onchain: OnChainRecord[];
 }
 
 /**
@@ -88,7 +91,10 @@ export function Standings() {
                 className="grid grid-cols-2 items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3.5 last:border-b-0 sm:px-5 lg:grid-cols-[2.5rem_minmax(9rem,1.4fr)_6rem_7rem_6rem_7rem_7rem] lg:gap-4"
               >
                 <span className="mono text-sm text-faint tabular-nums">{index + 1}</span>
-                <span className="truncate text-[0.9375rem] font-semibold text-ink">{row.name}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[0.9375rem] font-semibold text-ink">{row.name}</span>
+                  <OnChainTag records={row.onchain} />
+                </span>
                 {/* The ranked number. An agent nobody has watched publishes
                     nothing rather than an average, which is a different claim
                     from being rated average and is shown as one. */}
