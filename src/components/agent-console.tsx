@@ -8,7 +8,7 @@ import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
 import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
-import { Badge, Button, ButtonLink, Card, Disclosure, Stat, useDismissed } from './ui';
+import { Badge, Button, ButtonLink, Card, Disclosure, Stat } from './ui';
 
 /**
  * An operations page, not an editor.
@@ -195,57 +195,60 @@ function AgentCard({
   return (
     <Card className="p-5">
       {/* Who it is and when it was last heard from on the left; what it is
-          doing and the one switch that changes that on the right. The menu
-          sits outside the part that wraps, so on a phone it stays in the
-          corner beside the name instead of trailing the switch. */}
-      <div className="flex items-start gap-2 md:items-center">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <ChipDot color={agent.color} size={22} />
-            <div className="min-w-0">
-              <input
-                value={name}
-                onChange={(event) => setDraft(event.target.value)}
-                onBlur={() => {
-                  if (draft !== null && draft.trim() && draft !== agent.name) onRename(draft.trim());
-                  setDraft(null);
-                }}
-                // Enter is what everyone presses to finish typing a name, and
-                // leaving the field is what saves it.
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur();
-                }}
-                maxLength={24}
-                aria-label="Agent name"
-                className="-ml-2 h-8 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
-              />
-              {/* History, for an agent that has dropped: the badge says what it
-                  is doing now, this says why it stopped. Connected, or never
-                  connected, there is nothing here the badge has not said. */}
-              {!agent.connected && agent.lastSeenAt ? (
-                <p className="text-xs text-faint">
-                  {agent.lastCloseReason
-                    ? `Last disconnect: ${agent.lastCloseReason}`
-                    : `Last connected ${new Date(agent.lastSeenAt).toLocaleString('en-US')}`}
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Status agent={agent} affordable={affordable} />
-            <QueueSwitch agent={agent} disabled={busy} onChange={onQueue} />
+          doing and the one switch that changes that on the right. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <ChipDot color={agent.color} size={22} />
+          <div className="min-w-0">
+            <input
+              value={name}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={() => {
+                if (draft !== null && draft.trim() && draft !== agent.name) onRename(draft.trim());
+                setDraft(null);
+              }}
+              // Enter is what everyone presses to finish typing a name, and
+              // leaving the field is what saves it.
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+              maxLength={24}
+              aria-label="Agent name"
+              className="-ml-2 h-8 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
+            />
+            {/* History, for an agent that has dropped: the badge says what it
+                is doing now, this says why it stopped. Connected, or never
+                connected, there is nothing here the badge has not said. */}
+            {!agent.connected && agent.lastSeenAt ? (
+              <p className="text-xs text-faint">
+                {agent.lastCloseReason
+                  ? `Last disconnect: ${agent.lastCloseReason}`
+                  : `Last connected ${new Date(agent.lastSeenAt).toLocaleString('en-US')}`}
+              </p>
+            ) : null}
           </div>
         </div>
-        <AgentMenu name={agent.name} disabled={busy} onRotate={onRotate} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Status agent={agent} affordable={affordable} />
+          <QueueSwitch agent={agent} disabled={busy} onChange={onQueue} />
+        </div>
       </div>
 
-      {/*
-        Shown once, immediately after minting. Only the hash is stored, so this
-        is the only moment the token exists anywhere we can show it. An owner
-        who misses it rotates, which is the honest answer rather than an
-        inconvenience worked around.
-      */}
-      {token ? <FreshToken token={token} /> : null}
+      {/* The token belongs to the agent named just above it, so it sits under
+          that name, lined up with its text, rather than among the figures.
+          A phone drops the indent, as it does for the badge row. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 sm:pl-[2.125rem]">
+        <Button size="sm" onClick={onRotate} disabled={busy}>
+          Rotate token
+        </Button>
+        {/*
+          Shown once, immediately after minting, beside the button that mints
+          it. Only the hash is stored, so this is the only moment the token
+          exists anywhere we can show it. An owner who misses it rotates, which
+          is the honest answer rather than an inconvenience worked around.
+        */}
+        {token ? <FreshToken token={token} /> : null}
+      </div>
 
       {/*
         Rotation refuses the old token on the next connection and leaves the one
@@ -255,7 +258,7 @@ function AgentCard({
         an agent replaces the first and the seat belongs to the agent.
       */}
       {token && agent.connected ? (
-        <p className="mt-2 text-xs text-muted">
+        <p className="mt-2 text-xs text-muted sm:pl-[2.125rem]">
           The open connection still uses the old token. Restart your agent with this one to close it.
         </p>
       ) : null}
@@ -360,10 +363,10 @@ function FreshToken({ token }: { token: string }) {
     }
   }
 
-  // Directly under the name of the agent it belongs to, since the menu that
-  // mints it closes as it does and leaves nothing on screen to sit beside.
+  // Beside Rotate token where there is width, under it on a phone, with the
+  // field and its Copy button kept together either way.
   return (
-    <div className="mt-4 flex items-center gap-2">
+    <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
       <input
         ref={field}
         readOnly
@@ -375,59 +378,6 @@ function FreshToken({ token }: { token: string }) {
       <Button size="sm" tone="primary" onClick={copy}>
         {copied ? 'Copied' : 'Copy'}
       </Button>
-    </div>
-  );
-}
-
-/**
- * The actions an owner takes rarely, behind one click.
- *
- * Rotating is the only one today. It sat in the card as a button of the same
- * weight as Watch it play, beside the figures, for something done once when a
- * token leaks or is lost, and a click on it breaks the agent's next connection.
- * Behind a menu it takes a deliberate second click and leaves the card to the
- * things read every visit.
- */
-function AgentMenu({ name, disabled, onRotate }: { name: string; disabled: boolean; onRotate: () => void }) {
-  const [open, setOpen] = useState(false);
-  const wrapper = useDismissed(open, setOpen);
-
-  return (
-    <div ref={wrapper} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-label={`More actions for ${name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="grid h-8 w-8 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-      >
-        <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor">
-          <circle cx="3" cy="8" r="1.4" />
-          <circle cx="8" cy="8" r="1.4" />
-          <circle cx="13" cy="8" r="1.4" />
-        </svg>
-      </button>
-
-      {open ? (
-        <div
-          role="menu"
-          className="entering absolute right-0 z-30 mt-1 w-44 rounded-card border border-line bg-surface p-1.5 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)]"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            disabled={disabled}
-            onClick={() => {
-              setOpen(false);
-              onRotate();
-            }}
-            className="w-full rounded-[0.375rem] px-2.5 py-2 text-left text-sm text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
-          >
-            Rotate token
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
