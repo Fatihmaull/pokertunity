@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SEAT_COST, formatChips } from '@/lib/economy';
 import { useAccount, type AccountAgent } from './account-context';
 import { ChipDot } from './table-art';
@@ -231,14 +231,6 @@ function AgentCard({
         </div>
       </div>
 
-      {/*
-        Shown once, immediately after minting. Only the hash is stored, so this
-        is the only moment the token exists anywhere we can show it. An owner
-        who misses it rotates, which is the honest answer rather than an
-        inconvenience worked around.
-      */}
-      {token ? <FreshToken token={token} connected={agent.connected} /> : null}
-
       <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
         <Stat
           label="Rating"
@@ -259,7 +251,27 @@ function AgentCard({
         <Button size="sm" onClick={onRotate} disabled={busy}>
           Rotate token
         </Button>
+        {/*
+          Shown once, immediately after minting, beside the button that mints
+          it. Only the hash is stored, so this is the only moment the token
+          exists anywhere we can show it. An owner who misses it rotates, which
+          is the honest answer rather than an inconvenience worked around.
+        */}
+        {token ? <FreshToken token={token} /> : null}
       </div>
+
+      {/*
+        Rotation refuses the old token on the next connection and leaves the one
+        already open alone. Whoever rotated because the token leaked needs to
+        hear that here, or they walk away believing the leak is closed. The
+        remedy is connecting on the new token, because a second connection for
+        an agent replaces the first and the seat belongs to the agent.
+      */}
+      {token && agent.connected ? (
+        <p className="mt-2 text-xs text-muted">
+          The open connection still uses the old token. Restart your agent with this one to close it.
+        </p>
+      ) : null}
 
       {/* Measured over thousands of hands, so it says little early on and
           changes slowly after that: worth a look now and then, not a place on
@@ -287,8 +299,17 @@ function AgentCard({
  * not see — and when it is, a real field the player can select from is the
  * difference between an inconvenience and a lost token.
  */
-function FreshToken({ token, connected }: { token: string; connected: boolean }) {
+function FreshToken({ token }: { token: string }) {
   const [copied, setCopied] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+
+  // A new agent's card is added at the foot of the list, often below the fold
+  // of the button that made it. Brought into view and selected, the token is
+  // one Ctrl+C away wherever the owner clicked from.
+  useEffect(() => {
+    field.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    field.current?.focus({ preventScroll: true });
+  }, [token]);
 
   async function copy() {
     try {
@@ -300,38 +321,21 @@ function FreshToken({ token, connected }: { token: string; connected: boolean })
     }
   }
 
+  // Beside Rotate token where there is width, under it on a phone, with the
+  // field and its Copy button kept together either way.
   return (
-    <div className="mt-4 rounded-control border border-accent/40 bg-accent/5 p-2.5">
-      {/* One row where there is width for it: the warning, the token and the
-          button read as a single instruction. A phone breaks it after the
-          warning and keeps the field and its button together. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <p className="text-xs font-medium text-ink">New token, shown once</p>
-        <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
-          <input
-            readOnly
-            value={token}
-            aria-label="Agent token"
-            onFocus={(event) => event.currentTarget.select()}
-            className="mono h-8 min-w-0 flex-1 rounded-control border border-line bg-surface-2 px-2 text-xs text-accent"
-          />
-          <Button size="sm" tone="primary" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-        </div>
-      </div>
-      {/*
-        Rotation refuses the old token on the next connection and leaves the one
-        already open alone. Whoever rotated because the token leaked needs to
-        hear that here, or they walk away believing the leak is closed. The
-        remedy is connecting on the new token, because a second connection for
-        an agent replaces the first and the seat belongs to the agent.
-      */}
-      {connected ? (
-        <p className="mt-2 text-xs text-muted">
-          The open connection still uses the old token. Restart your agent with this one to close it.
-        </p>
-      ) : null}
+    <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
+      <input
+        ref={field}
+        readOnly
+        value={token}
+        aria-label="New agent token"
+        onFocus={(event) => event.currentTarget.select()}
+        className="mono h-8 min-w-0 flex-1 rounded-control border border-accent/40 bg-accent/5 px-2 text-xs text-accent"
+      />
+      <Button size="sm" tone="primary" onClick={copy}>
+        {copied ? 'Copied' : 'Copy'}
+      </Button>
     </div>
   );
 }
