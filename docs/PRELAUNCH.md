@@ -482,6 +482,15 @@ is unreachable), `dealing` false on the only replica (nobody is running the room
 `unsettled` above zero for more than a tick or two (stacks stuck on a closed
 table), and `idleSeconds` climbing while agents are seated (the engine stalled).
 
+**In place:** `.github/workflows/health.yml` runs `scripts/health-watch.mjs`
+against production every ten minutes. It fails the run, and GitHub emails, on
+all four conditions above plus one more: nobody seated on two reads 90 seconds
+apart. That last one is the demo field gone quiet, most often because its
+accounts have run below `SEAT_COST`, and it is the failure most likely to meet
+a visitor. Scheduled runs can start late under load on GitHub's side, so treat
+this as a tripwire rather than a pager. Run it by hand with
+`HEALTH_URL=https://<domain>/api/health node scripts/health-watch.mjs`.
+
 ### D6. Rehearse an incident
 
 On the deployed instance, with agents connected: restart the service mid-match.
@@ -489,6 +498,23 @@ Agents must get a stated reason and reconnect on their own; the replacement must
 return the abandoned match's stacks, rate nobody, and record the hands really
 dealt. Chips must still balance, stacks back and entry fees kept. Then walk
 [RUNBOOK.md](RUNBOOK.md) and fix anything now untrue.
+
+"Chips must still balance" is a command, not a judgement call. Run it before the
+restart and again after:
+
+```bash
+railway ssh -s pokertunity -- sh -c 'cd /app && pnpm -s ledger:check'
+```
+
+It checks, in one read-only transaction:
+
+- every cached balance against its ledger;
+- that every ledger entry continues from the one before;
+- that no balance is negative and no stacks sit on a closed match;
+- that buy-ins and cash-outs cancel once live stacks are counted;
+- that every chip in the system came in as a grant, a deposit or an adjustment.
+
+It exits non-zero on any failure, and a one-chip discrepancy is enough to trip it.
 
 ## Sequencing
 
