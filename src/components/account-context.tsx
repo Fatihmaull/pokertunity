@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { connect, currentAddress, signMessage, WalletError } from '@/lib/wallet';
+import { connect, currentAddress, ensureChain, signMessage, watchWallet, WalletError } from '@/lib/wallet';
 import { useChain } from './chain-context';
 
 export interface AccountAgent {
@@ -87,7 +87,15 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       // Signing in puts the wallet on the network the server will name in the
       // message, so the two do not disagree on the first transaction.
       if (!chain) throw new Error('Still loading the available networks. Try again in a moment.');
-      const address = (await currentAddress()) ?? (await connect(chain));
+
+      // The network is settled whichever way the address arrives. `connect()`
+      // does it on the way in, but a wallet that has approved this origin
+      // before never goes through it, and every sign-in after the first would
+      // otherwise complete with the wallet on whatever network it was already
+      // on — while the message it just signed names ours.
+      const existing = await currentAddress();
+      const address = existing ?? (await connect(chain));
+      if (existing) await ensureChain(chain);
 
       const nonceResponse = await fetch(`/api/auth/nonce?address=${address}`, { cache: 'no-store' });
       const nonceBody = (await nonceResponse.json()) as { message?: string; error?: string };
@@ -121,6 +129,27 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     await fetch('/api/auth/logout', { method: 'POST' });
     setAccount(null);
   }, []);
+
+  /**
+   * The session names one address. When the wallet stops pointing at it, the
+   * honest thing is to stop claiming it.
+   *
+   * Signing out rather than quietly refreshing, because the session is not
+   * the new account's and cannot be made into it without a fresh signature.
+   * Staying signed in would show somebody another person's chips and agents
+   * while their own wallet is the one on screen.
+   */
+  useEffect(() => {
+    const signedInAs = account?.address;
+    if (!signedInAs) return;
+
+    return watchWallet('accountsChanged', (...args) => {
+      const [accounts] = args as [string[] | undefined];
+      const now = accounts?.[0];
+      if (now && now.toLowerCase() === signedInAs.toLowerCase()) return;
+      void signOut();
+    });
+  }, [account?.address, signOut]);
 
   const value = useMemo<AccountContextValue>(
     () => ({

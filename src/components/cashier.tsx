@@ -12,7 +12,7 @@ type Stage = 'idle' | 'signing' | 'confirming' | 'done';
 
 export function Cashier({ onClose }: { onClose: () => void }) {
   const { account, refresh } = useAccount();
-  const { chain } = useChain();
+  const { chain, chains } = useChain();
   const [stage, setStage] = useState<Stage>('idle');
   const [status, setStatus] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -156,6 +156,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   // A chain can be switched on before its vault exists. Watching still works;
   // buying does not, and the dialog says so rather than failing at the wallet.
   const settles = Boolean(chain?.vault);
+  /** Whether switching would reach a cashier that works, or only the same message again. */
+  const settlesSomewhere = chains.some((entry) => entry.vault);
 
   return (
     <div
@@ -237,9 +239,14 @@ export function Cashier({ onClose }: { onClose: () => void }) {
 
         {chain && !settles ? (
           <div className="border-t border-line px-6 py-4">
+            {/* Advice worth following, or none. Before the first vault exists
+                every network is in this same state, and sending the player
+                round the header to read the identical sentence three times is
+                worse than telling them plainly that there is nowhere to go. */}
             <p className="text-sm text-muted">
-              No vault has been deployed on {chain.name} yet, so chips cannot be bought here. Switch networks in the
-              header to use the cashier.
+              {settlesSomewhere
+                ? `No vault has been deployed on ${chain.name} yet, so chips cannot be bought here. Switch networks in the header to use the cashier.`
+                : 'No vault has been deployed on any network yet, so chips cannot be bought. Your account was granted chips when it was created.'}
             </p>
           </div>
         ) : null}
