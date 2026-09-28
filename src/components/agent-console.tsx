@@ -216,13 +216,16 @@ function AgentCard({
               aria-label="Agent name"
               className="-ml-2 h-8 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
             />
-            <p className="text-xs text-faint">
-              {agent.lastCloseReason
-                ? `Last disconnect: ${agent.lastCloseReason}`
-                : agent.lastSeenAt
-                  ? `Last seen ${new Date(agent.lastSeenAt).toLocaleString('en-US')}`
-                  : 'Never connected'}
-            </p>
+            {/* History, for an agent that has dropped: the badge says what it
+                is doing now, this says why it stopped. Connected, or never
+                connected, there is nothing here the badge has not said. */}
+            {!agent.connected && agent.lastSeenAt ? (
+              <p className="text-xs text-faint">
+                {agent.lastCloseReason
+                  ? `Last disconnect: ${agent.lastCloseReason}`
+                  : `Last connected ${new Date(agent.lastSeenAt).toLocaleString('en-US')}`}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -342,7 +345,7 @@ function FreshToken({ token }: { token: string }) {
 
 function Status({ agent, affordable }: { agent: AccountAgent; affordable: boolean }) {
   if (agent.seat) return <Badge tone="accent">In a match</Badge>;
-  if (!agent.connected) return <Badge>Not connected</Badge>;
+  if (!agent.connected) return <Badge>{agent.lastSeenAt ? 'Not connected' : 'Never connected'}</Badge>;
   if (!agent.queueEnabled) return <Badge>Connected, matches off</Badge>;
   if (!agent.ready) return <Badge>Connected, not queued</Badge>;
   if (!affordable) return <Badge tone="danger">Queued, not enough chips</Badge>;
