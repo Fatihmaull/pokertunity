@@ -368,12 +368,14 @@ function TokenField({ token }: { token: string | null }) {
   }
 
   // Beside Rotate token where there is width, under it on a phone, with the
-  // field and its Copy button kept together either way.
+  // field and its Copy button kept together either way. Disabled until there
+  // is a token, so the empty box takes no focus and no caret.
   return (
     <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
       <input
         ref={field}
         readOnly
+        disabled={!token}
         value={token ?? ''}
         placeholder="Rotate to see a new token"
         aria-label={token ? 'New agent token' : 'Agent token, hidden'}
