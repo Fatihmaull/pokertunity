@@ -71,6 +71,19 @@ export async function currentAddress(): Promise<string | null> {
 }
 
 /**
+ * The network the wallet is on, without asking the player anything.
+ *
+ * Read on load, because the wallet events only cover what happens while a tab
+ * is open: a player who switched networks with the site closed comes back to a
+ * header still naming the old one.
+ */
+export async function currentChainId(): Promise<number | null> {
+  if (!hasWallet()) return null;
+  const id = (await wallet().request({ method: 'eth_chainId' })) as string | undefined;
+  return id ? Number(id) : null;
+}
+
+/**
  * Moves the wallet to a network, describing it first if the wallet has never
  * heard of it. The description comes from the chain registry, so a network the
  * wallet does not ship with is added rather than refused.
@@ -126,8 +139,13 @@ async function onChain(target: string): Promise<boolean> {
  * and report `-32603` with the original nested underneath. Monad is the one
  * chain in the registry that no wallet ships with, so this branch is the only
  * thing standing between a player on another wallet and a raw provider error.
+ *
+ * Some wallets go further and answer `-32603` with only a sentence, no code
+ * anywhere in the chain. The sentence is matched as a last resort: guessing
+ * wrong costs one add-network prompt the player can decline, while missing it
+ * costs them the network.
  */
-function isUnknownChain(error: unknown): boolean {
+export function isUnknownChain(error: unknown): boolean {
   const seen = new Set<unknown>();
   let node: unknown = error;
 
@@ -135,11 +153,15 @@ function isUnknownChain(error: unknown): boolean {
     seen.add(node);
     const shape = node as { code?: number; data?: unknown; originalError?: unknown; cause?: unknown };
     if (shape.code === 4902) return true;
+    const said = (node as { message?: unknown }).message;
+    if (typeof said === 'string' && UNKNOWN_CHAIN_MESSAGE.test(said)) return true;
     node = shape.originalError ?? shape.cause ?? (shape.data as { originalError?: unknown })?.originalError ?? shape.data;
   }
 
   return false;
 }
+
+const UNKNOWN_CHAIN_MESSAGE = /unrecognized chain|unknown chain|chain .*(?:has not been added|not been added|not added)|try adding the chain/i;
 
 export async function signMessage(address: string, message: string): Promise<string> {
   return (await wallet().request({ method: 'personal_sign', params: [message, address] })) as string;

@@ -1,8 +1,8 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { PublicChain } from '@/lib/chains';
-import { ensureChain, hasWallet, watchWallet } from '@/lib/wallet';
+import { currentChainId, ensureChain, hasWallet, watchWallet } from '@/lib/wallet';
 
 /**
  * Which network the player is on, for the whole interface.
@@ -92,12 +92,9 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
    * left alone: there is no cookie value that describes it, and the cashier
    * already refuses anything it cannot price.
    */
-  useEffect(() => {
-    if (chains.length === 0) return;
-
-    return watchWallet('chainChanged', (...args) => {
-      const [id] = args as [string | undefined];
-      const moved = chains.find((entry) => entry.id === Number(id));
+  const follow = useCallback(
+    (id: number | null) => {
+      const moved = chains.find((entry) => entry.id === id);
       if (!moved || moved.key === active) return;
 
       setActive(moved.key);
@@ -110,8 +107,30 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
         // follow is re-sent by the next switch, and every money path resolves
         // the chain again on the server anyway.
       });
+    },
+    [chains, active],
+  );
+
+  useEffect(() => {
+    if (chains.length === 0) return;
+    return watchWallet('chainChanged', (...args) => {
+      const [id] = args as [string | undefined];
+      follow(id ? Number(id) : null);
     });
-  }, [chains, active]);
+  }, [chains, follow]);
+
+  // The events above only see changes made while a tab is open. A player who
+  // switched with the site closed comes back to a cookie naming the old
+  // network, so the wallet is asked once on load, silently: `eth_chainId`
+  // opens no prompt and works before any account is connected.
+  const reconciled = useRef(false);
+  useEffect(() => {
+    if (reconciled.current || chains.length === 0 || active === null || !hasWallet()) return;
+    reconciled.current = true;
+    currentChainId()
+      .then(follow)
+      .catch(() => {});
+  }, [chains, active, follow]);
 
   const value = useMemo<ChainContextValue>(() => {
     const current = chains.find((entry) => entry.key === active) ?? null;

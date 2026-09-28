@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { connect, currentAddress, ensureChain, signMessage, watchWallet, WalletError } from '@/lib/wallet';
 import type { OnChainRecord } from '@/lib/erc8004';
 import { useChain } from './chain-context';
@@ -154,6 +154,24 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       if (now && now.toLowerCase() === signedInAs.toLowerCase()) return;
       void signOut();
     });
+  }, [account?.address, signOut]);
+
+  // The listener above only hears changes made while a tab is open. A player
+  // who switched accounts with the site closed comes back signed in as the old
+  // one, so the wallet is asked once, silently: `eth_accounts` opens no prompt.
+  // A wallet that reports no account at all is locked, not changed, and is left
+  // alone; signing out every locked wallet would sign people out for stepping
+  // away.
+  const checkedAccount = useRef(false);
+  useEffect(() => {
+    const signedInAs = account?.address;
+    if (checkedAccount.current || !signedInAs) return;
+    checkedAccount.current = true;
+    currentAddress()
+      .then((now) => {
+        if (now && now.toLowerCase() !== signedInAs.toLowerCase()) void signOut();
+      })
+      .catch(() => {});
   }, [account?.address, signOut]);
 
   const value = useMemo<AccountContextValue>(
