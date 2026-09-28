@@ -61,6 +61,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     const response = await fetch('/api/account', { cache: 'no-store' });
+    // A route that throws answers 500 with no body at all, and parsing that
+    // surfaced as "Unexpected end of JSON input" in place of a sign-in error.
+    if (!response.ok) throw new Error('Your account could not be loaded. Try again in a moment.');
     const body = (await response.json()) as { session: unknown; account?: AccountState };
     setAccount(body.session && body.account ? body.account : null);
     setLoading(false);
@@ -71,7 +74,10 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     fetch('/api/account', { cache: 'no-store' })
-      .then((response) => response.json() as Promise<{ session: unknown; account?: AccountState }>)
+      .then((response) => {
+        if (!response.ok) throw new Error(`account ${response.status}`);
+        return response.json() as Promise<{ session: unknown; account?: AccountState }>;
+      })
       .then((body) => {
         if (cancelled) return;
         setAccount(body.session && body.account ? body.account : null);
@@ -103,7 +109,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       if (existing) await ensureChain(chain);
 
       const nonceResponse = await fetch(`/api/auth/nonce?address=${address}`, { cache: 'no-store' });
-      const nonceBody = (await nonceResponse.json()) as { message?: string; error?: string };
+      const nonceBody = (await nonceResponse.json().catch(() => ({}))) as { message?: string; error?: string };
       if (!nonceResponse.ok || !nonceBody.message) throw new Error(nonceBody.error ?? 'Could not start sign-in.');
 
       // Signed exactly as the server wrote it. Nothing here edits the message,
@@ -118,7 +124,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!verify.ok) {
-        const body = (await verify.json()) as { error?: string };
+        const body = (await verify.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? 'Sign-in failed.');
       }
 
