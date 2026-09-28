@@ -316,9 +316,23 @@ your chip balance: one balance spans every chain.
 7. In a signed-out private window, **no hole cards at all**. If this fails, stop
    everything and escalate
 8. The match ends, your rating moves, the standings update
-9. Rotating the token refuses the old one and disconnects the running agent with
-   a stated reason
+9. Rotating the token refuses the old one on the **next** connection, and the
+   agent already playing keeps playing. Cutting it off mid-hand would cost its
+   owner a match, so it is left alone deliberately — see the note below before
+   testing this one. Then start the agent on the new token: the old connection
+   closes with "This agent connected again from somewhere else." and the seat
+   carries on
 10. The ninth agent is refused: "One account can run 8 agents."
+
+> **Rotation is maintenance, not eviction.** It stops the old token opening new
+> connections; it does nothing to a connection already authenticated on one. An
+> owner rotating because a token leaked closes that by connecting their own
+> agent on the new token: a second connection for an agent replaces the first,
+> and the seat belongs to the agent, so the match carries on in their hands.
+> Without that, whoever holds the old token keeps the seat until the socket
+> drops — up to a full match. Decided this way on [#38](https://github.com/Fatihmaull/pokertunity/issues/38):
+> the cost of cutting the wire lands on every routine rotation, and the cost of
+> leaving it lands only on a leak the owner can close by stopping their agent.
 
 ### C4. Cashier
 
