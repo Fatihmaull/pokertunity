@@ -342,9 +342,13 @@ export async function confirmDeposit(
       // an intent could be paid on a cheaper chain than the one it was priced
       // on.
       if (intent.chainId !== chain.id) {
-        const paid = chainById(intent.chainId);
+        // Not a matter of switching: the money is in this chain's vault and
+        // the intent was priced on another, so no network will ever show a
+        // deposit that can finish it. Saying "switch" sent players to poll a
+        // chain that has no such transaction, for good.
+        const priced = chainById(intent.chainId);
         throw new ActionError(
-          `That deposit belongs to ${paid?.name ?? `chain ${intent.chainId}`}. Switch networks to finish it.`,
+          `That deposit was paid on ${chain.name}, but its purchase was priced on ${priced?.name ?? `chain ${intent.chainId}`}, so it cannot be credited.`,
         );
       }
 

@@ -56,7 +56,7 @@ export async function GET(request: Request, context: RouteContext<'/api/matches/
   if (!seat.ok) {
     return Response.json(
       seat.reason === 'full'
-        ? { error: 'This match has as many spectators as it can take. Try again shortly.', matchId: id, full: true }
+        ? { error: 'The arena cannot take more spectators on this match right now. Try again shortly.', matchId: id, full: true }
         : { error: 'Too many open feeds for this match from one viewer.', matchId: id, full: false },
       { status: seat.reason === 'full' ? 503 : 429, headers: { 'retry-after': '15' } },
     );

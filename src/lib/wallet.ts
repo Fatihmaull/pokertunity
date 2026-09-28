@@ -165,6 +165,13 @@ export async function sendDeposit(options: {
     method: 'eth_sendTransaction',
     params: [
       {
+        // Named even though ensureChain has just run, because the player can
+        // still switch networks while the prompt is open. A wallet refuses a
+        // transaction whose chainId is not the one it is on, and that refusal
+        // is the only thing standing between a switch at the wrong moment and
+        // a deposit paid on a chain its intent was never priced for, which the
+        // server cannot credit.
+        chainId: numberToHex(options.chain.id),
         from: options.from,
         to: options.vault,
         value: numberToHex(BigInt(options.valueWei)),

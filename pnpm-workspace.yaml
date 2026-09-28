@@ -4,3 +4,11 @@ packages:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# drizzle-kit still pulls @esbuild-kit/core-utils, which pins an esbuild with
+# GHSA-67mh-4wv8-2f99. That advisory is in esbuild's dev server, which nothing
+# here starts, but the Docker image ships devDependencies and an accepted
+# advisory is one more thing every reader of an audit has to re-judge. The
+# loader only calls transform, which is the same API on the patched line.
+overrides:
+  '@esbuild-kit/core-utils>esbuild': ^0.25.0

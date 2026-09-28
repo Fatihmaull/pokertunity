@@ -49,8 +49,17 @@ test('an account is counted as itself, and a stranger by address', () => {
   });
 
   assert.equal(callerOf(request, 'user-1'), 'user:user-1', 'an account outlives its address');
-  assert.equal(callerOf(request, null), 'ip:203.0.113.7', 'the client, not the proxies behind it');
+  assert.equal(callerOf(request, null), 'ip:70.41.3.18', 'the address the edge appended');
   assert.equal(callerOf(new Request('https://example.test/'), null), 'ip:unknown');
+});
+
+test('a stranger cannot pick their own bucket by writing the header', () => {
+  // What the edge hands on when a caller sends x-forwarded-for themselves: the
+  // forged value first, the connection it really came from appended after it.
+  const forged = (claim: string) =>
+    new Request('https://example.test/', { headers: { 'x-forwarded-for': `${claim}, 198.51.100.4` } });
+
+  assert.equal(callerOf(forged('10.0.0.1'), null), callerOf(forged('10.0.0.2'), null));
 });
 
 test('the wait it quotes is long enough to actually succeed', async () => {

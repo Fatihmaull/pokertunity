@@ -54,7 +54,7 @@ Exercised against a running arena in production mode, not only in unit tests.
 
 | Area | Evidence |
 | --- | --- |
-| Four gates | lint clean, 185/185 tests, build ok, `tsc` clean, green on `main` in CI |
+| Four gates | lint clean, 213/213 tests, build ok, `tsc` clean |
 | Contracts | 12/12 Foundry tests, including `test_NoPayoutPathExists` |
 | Full match | Six-handed, dealt to the hand cap, settled, ratings rewritten |
 | Chip conservation | 6 × 2,000 in, exactly 12,000 out |
@@ -65,29 +65,48 @@ Exercised against a running arena in production mode, not only in unit tests.
 | Crash recovery | Dealer killed mid-match: stacks returned, hand count kept, nobody rated |
 | Sign-in | Real signature over SIWE, session issued, agent registered, token connected |
 | Socket refusals | Bad token 4001, wrong version 4002, each with a sentence |
+| Deposit path, local chains | Every A4 check, see below |
+| Spectator load | Four live tables to 8,000 streams, see B3 |
+
+**The deposit rehearsal.** Two local chains carrying the production chain ids
+(97 and 421614), each with the current `ChipVault`, and the arena reading
+receipts over its own RPC exactly as it would a testnet. From a real SIWE
+session: a Starter deposit credited 10,000 chips once; confirming it again
+credited nothing; an intent priced on Arbitrum and paid on BNB was refused;
+another wallet paying the intent credited neither account; half the price was
+refused; and a deposit stayed pending until its third confirmation. From the
+owner key, `payout(address,uint256,bytes32)` and a bare transfer both reverted
+while the vault held 0.7. What this does not prove is a public testnet: its
+RPC, its finality and a wallet driven by a person. That is still A4.
 
 ### Never exercised
 
-- **The on-chain deposit path.** A vault is deployed on all three chains, but no
-  deposit has gone through one. `observeDeposit`, confirmation counting and the
-  intent-versus-chain check have only run against a stubbed RPC. This is Scope A
-  and it is the blocker.
-- **ERC-8004 attestation.** `pnpm attest` has never run.
-- **Load and concurrency.** One table of six agents is not a measurement.
+- **A deposit on a public testnet.** The logic is rehearsed (above); the
+  network is not.
+- **The deployed vaults.** Recorded as deployed on all three chains, but no
+  address is written down anywhere in this repository: every `<CHAIN>_VAULT_ADDRESS`
+  in the local `.env` is empty, and the only forge broadcast on disk names
+  transactions no chain has. Until the addresses are recovered and put in A2,
+  A3, A5 and D2 have nothing to point at.
+- **ERC-8004 attestation.** `pnpm attest` has run against forks of all three
+  testnets, never against the testnets themselves.
 - **The browser.** Only status codes and JSON were checked. No wallet, no eyes.
+- **Production hardware.** Every capacity number here is from a developer
+  machine.
 
-### Known, not yet fixed
+### Closed since this list was first written
 
-Capacity and abuse surfaces rather than bugs. All belong to Scope B.
-
-1. `/api/agents/[id]/axes` is public, unauthenticated, and scans up to 5,000 rows
-   of `results` per request.
-2. No cap on concurrent SSE subscribers. Redaction re-renders per viewer per
-   event, so the cost is O(N) on the one process that must keep dealing.
-3. `/api/leaderboard` and `/api/hands/latest` are heavy aggregate reads with no
-   limit.
-4. `esbuild` moderate advisory via `drizzle-kit`: a devDependency path, so
-   production is unaffected, and no patch is available.
+1. The read routes are rate limited (B1), and strangers are now counted by the
+   address Railway's edge appended rather than the first entry of
+   `x-forwarded-for`, which the caller writes. Before that, a random header
+   walked past every signed-out limit.
+2. Spectators are capped per match, per caller and per process (B2, B3).
+3. The esbuild advisory is patched, not accepted (B4).
+4. Rotation's effect on a live socket is decided and documented (C3 step 9).
+5. A deposit paid on the wrong chain is told the truth: it cannot be credited,
+   rather than to switch networks and poll a transaction that is not there.
+   The deposit transaction now names its `chainId`, so a wallet switched
+   while the prompt was open refuses it instead of paying the wrong vault.
 
 ## The four scopes
 
@@ -141,6 +160,16 @@ link all come from one place. It writes `BNB_TESTNET_VAULT_ADDRESS` back into
 
 **Done when:** `pnpm abi` produces no diff, so the committed ABI matches the
 deployed contract.
+
+Write the addresses here as well as in the environment. An address that lives
+only in somebody's `.env` is how this document came to say "deployed" about
+vaults nobody else could find.
+
+| Chain | Vault | Deploy transaction |
+| --- | --- | --- |
+| `bnb-testnet` | | |
+| `arbitrum-sepolia` | | |
+| `monad-testnet` | | |
 
 ### A3. Verify on the explorer
 
@@ -209,6 +238,10 @@ Every mutating and authentication route is rate limited. No read route is, and
 there is no global middleware. Read `src/server/rate-limit.ts` first: the pattern
 you need exists and is already tested.
 
+**Status: done.** B1, B2 and B4 merged; B3 measured and a process ceiling
+added from it. What is left for this scope is re-measuring on the hardware it
+will run on, once D1 exists.
+
 ### B1. Rate limit the read routes
 
 | Route | Why it matters |
@@ -248,6 +281,26 @@ is the shape to stop.
 > one viewer's hole cards in another viewer's stream.
 
 ### B3. Measure the ceiling before choosing it
+
+Done on a developer machine: four live six-seat tables, streams from distinct
+addresses, two minutes a step, the load generator on the same machine.
+
+| Streams | Hand p50 / p90 | Event loop p99 / max | CPU | RSS |
+| --- | --- | --- | --- | --- |
+| 0 | 64s | 34 / 36ms | 2% | 94MB |
+| 1,000 | 74 / 80s | 63 / 135ms | 6% | 170MB |
+| 2,000 | 67 / 83s | 62 / 76ms | 8% | 173MB |
+| 4,000 | 69 / 74s | 94 / 123ms | 12% | 294MB |
+| 8,000 | 74 / 82s | 380 / 439ms | 21% | 560MB |
+
+Hand times are pacing and never moved. The event loop did, between 4,000 and
+8,000. `PROCESS_SPECTATOR_CAP` is 2,000, half the last flat point; the match
+ceiling stays 500. Event-loop figures are `/api/health` round trips, which is
+what a person loading a page would feel.
+
+Repeat this on the deployed instance before raising either number.
+
+What was originally asked:
 
 Open subscribers against one live match in steps of 10, 50, 100, 250. At each
 step record hand duration, `idleSeconds` from `/api/health`, and the dealing
@@ -470,8 +523,8 @@ One person signs this off, and not a scope owner: someone reading their work.
 - [ ] A real deposit has credited real chips, once, and a replay credited nothing
 - [ ] One-way is proven on deployed bytecode
 - [ ] One agent has an ERC-8004 identity and reputation record on every chain
-- [ ] The read routes are rate limited, `axes` above all
-- [ ] Spectators are capped per match, at a number measured rather than chosen
+- [x] The read routes are rate limited, `axes` above all
+- [x] Spectators are capped per match, at a number measured rather than chosen
 - [ ] A human has signed in with a wallet and played a match through to a rating
 - [ ] A signed-out viewer sees no hole cards on a live match, verified by eye
 - [ ] The four gates are green on `main` in CI
@@ -482,7 +535,7 @@ One person signs this off, and not a scope owner: someone reading their work.
 - [ ] The hand cap on the page matches the hand cap in the engine
 
 Nice to have and not blocking: contracts verified on the explorers that support
-it, vaults on all three chains, the esbuild advisory closed rather than accepted.
+it, vaults on all three chains. The esbuild advisory is closed.
 
 ### Irreversible once shipped
 

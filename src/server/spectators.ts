@@ -36,6 +36,20 @@ export const SPECTATOR_CAP = 500;
  */
 export const SPECTATORS_PER_CALLER = 8;
 
+/**
+ * The ceiling across every match on this process.
+ *
+ * The match ceiling alone let the total grow with the number of tables, and
+ * one process deals them all. Measured on four live tables at once: event-loop
+ * p99 held under 100ms to 4,000 spectators and reached 380ms at 8,000, while
+ * hand times, being pacing, never moved. Half the last flat point, by the same
+ * reasoning as the match ceiling, and the pull request that set it has the
+ * table.
+ */
+export const PROCESS_SPECTATOR_CAP = 2000;
+
+let watchingAll = 0;
+
 interface Watching {
   total: number;
   byCaller: Map<string, number>;
@@ -56,10 +70,11 @@ export function admit(matchId: string, who: string): Admission {
   const watching = matches.get(matchId) ?? { total: 0, byCaller: new Map<string, number>() };
   const mine = watching.byCaller.get(who) ?? 0;
 
-  if (watching.total >= SPECTATOR_CAP) return { ok: false, reason: 'full' };
+  if (watching.total >= SPECTATOR_CAP || watchingAll >= PROCESS_SPECTATOR_CAP) return { ok: false, reason: 'full' };
   if (mine >= SPECTATORS_PER_CALLER) return { ok: false, reason: 'caller' };
 
   watching.total += 1;
+  watchingAll += 1;
   watching.byCaller.set(who, mine + 1);
   matches.set(matchId, watching);
 
@@ -71,6 +86,7 @@ export function admit(matchId: string, who: string): Admission {
       released = true;
 
       watching.total -= 1;
+      watchingAll -= 1;
       const left = (watching.byCaller.get(who) ?? 1) - 1;
       if (left > 0) watching.byCaller.set(who, left);
       else watching.byCaller.delete(who);
