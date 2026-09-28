@@ -1,0 +1,1 @@
+ALTER TABLE "agents" ALTER COLUMN "queue_enabled" SET DEFAULT false;

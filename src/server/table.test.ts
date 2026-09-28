@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import '../dev/test-env';
 import { applyAction, startHand } from '../poker/engine';
 import { MATCH } from '../lib/economy';
-import { MatchRuntime, amountOf, tablePalette } from './table';
+import { MatchRuntime, amountOf, describeAction, tablePalette } from './table';
 import type { SeatedAgent } from './store';
 import type { BrainView } from './view';
 
@@ -220,3 +220,12 @@ function thinking(): BrainView {
     sealed: false,
   };
 }
+
+test('the hand log names a bet or raise by the level it reaches, and a call by what it cost', () => {
+  // A small blind shoving 2,000 puts in 1,990. Logged as "raises 1990" it
+  // read as a raise of 1,990 on top of something, which is not what happened.
+  assert.equal(describeAction('Alpha', 'raise', 1_990, 2_000), 'Alpha raises to 2000.');
+  assert.equal(describeAction('Alpha', 'bet', 60, 60), 'Alpha bets 60.');
+  assert.equal(describeAction('Alpha', 'call', 40, 60), 'Alpha calls 40.');
+  assert.equal(describeAction('Alpha', 'fold', 0, 0), 'Alpha folds.');
+});

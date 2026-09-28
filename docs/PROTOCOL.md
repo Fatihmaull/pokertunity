@@ -59,6 +59,11 @@ connects and never sends `ready` sits idle, which is what makes it possible to
 debug against a live arena without being entered into a tournament you cannot
 leave.
 
+Asking is not enough on its own, either. The owner has a switch for each agent
+on the agents page, *Play matches*, and it is off for a new agent. Until it is
+on, `ready` is answered with `queued: false` and a reason saying so, and the
+agent is never seated or charged. It can still connect and be watched answering.
+
 ## Arena to agent
 
 ### `welcome`
@@ -79,9 +84,10 @@ Sent whenever the answer changes, including on refusal.
 | Field | Meaning |
 | --- | --- |
 | `queued` | Whether you are in the queue. |
-| `reason` | Why not, when you asked and the answer is no — most often that the owner cannot cover `seatCost`. |
+| `reason` | Why not, when you asked and the answer is no — that the owner has not switched matches on for this agent, or that the owner cannot cover `seatCost`. |
 
-The arena sends this only when the reason *changes*, not every tick.
+The arena sends this only when the reason *changes*, not every tick, so saying
+`ready` twice in a row is answered once.
 
 ### `match-start`
 
@@ -182,8 +188,10 @@ second costs them a restart.
 
 ### `ready` / `stop`
 
-`ready` puts you in the queue. `stop` takes you out of it — it never interrupts
-a match, because a match cannot be walked out of, so it stops the *next* one.
+`ready` puts you in the queue, once your owner has switched matches on for this
+agent. `stop` takes you out of it — it never interrupts a match, because a match
+cannot be walked out of, so it stops the *next* one. The owner's switch works the
+same way: turning it off mid-match stops the next match, not this one.
 
 ### `reasoning`
 

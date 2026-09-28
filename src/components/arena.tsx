@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatChips } from "@/lib/economy";
 import type { TableView } from "@/server/view";
 import { useAccount } from "./account-context";
@@ -13,6 +14,15 @@ import { useLobby } from "./use-lobby";
 import { Badge, ButtonLink, Card, LiveBadge } from "./ui";
 
 type Tab = "thinking" | "players" | "log";
+
+/**
+ * How often, and how many times, a finished match asks for its result page.
+ * Settling is one transaction, so it lands well inside the first few; the
+ * limit only stops a page on an instance that never sees it from asking
+ * forever.
+ */
+const RESULT_CHECK_MS = 1_500;
+const RESULT_CHECKS = 10;
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "thinking", label: "Thinking" },
@@ -39,7 +49,23 @@ export function Arena({ matchId }: { matchId: string }) {
   } = useMatchStream(matchId);
   const { account } = useAccount();
   const lobby = useLobby();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("thinking");
+
+  // The match is over, and the result belongs on this page rather than behind
+  // a reload. The page decides which of the two it renders from the match row,
+  // which flips once the chips have gone back — a moment after the feed says
+  // it is over, not at the same instant — so it is asked again until it does.
+  useEffect(() => {
+    if (!idleReason) return;
+    let asked = 0;
+    const timer = setInterval(() => {
+      asked += 1;
+      router.refresh();
+      if (asked >= RESULT_CHECKS) clearInterval(timer);
+    }, RESULT_CHECK_MS);
+    return () => clearInterval(timer);
+  }, [idleReason, router]);
   // Every agent this viewer owns. Only one of them can be at any given table,
   // because the matchmaker refuses to seat two of an owner's agents together.
   const myAgentIds = new Set((account?.agents ?? []).map((agent) => agent.id));
@@ -111,6 +137,7 @@ export function Arena({ matchId }: { matchId: string }) {
         table={table}
         matchId={matchId}
         connected={connected}
+        finished={idleReason !== null}
         seatedHere={lobby.mine.includes(matchId)}
       />
 
@@ -191,11 +218,13 @@ function TableBar({
   table,
   matchId,
   connected,
+  finished,
   seatedHere,
 }: {
   table: TableView | null;
   matchId: string;
   connected: boolean;
+  finished: boolean;
   seatedHere: boolean;
 }) {
   return (
@@ -217,7 +246,9 @@ function TableBar({
             <h1 className="text-xl text-ink sm:text-2xl">
               {table?.label ?? "Loading match…"}
             </h1>
-            {connected ? (
+            {finished ? (
+              <Badge>Finished</Badge>
+            ) : connected ? (
               <LiveBadge
                 label={table && table.street !== "idle" ? "Live" : "Connected"}
               />

@@ -108,6 +108,19 @@ export const agents = pgTable(
      * stranger's first match against one means anything.
      */
     demo: boolean('demo').notNull().default(false),
+    /**
+     * Whether its owner lets it be seated.
+     *
+     * Saying `ready` on the socket is the agent asking; this is the owner
+     * agreeing. Off for a new agent, so the first time somebody points freshly
+     * written code at the arena it connects and can be watched answering, but is
+     * not charged a seat until its owner decides it is fit to play one.
+     *
+     * Agents that existed before the switch did were already playing, and were
+     * left on: the column arrived defaulting to true and was flipped to false in
+     * a second migration, so turning it off is a choice nobody made for them.
+     */
+    queueEnabled: boolean('queue_enabled').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -138,14 +151,25 @@ export const depositIntents = pgTable(
     /** Set once the on-chain event has been read back and credited. */
     txHash: text('tx_hash'),
     blockNumber: bigint('block_number', { mode: 'number' }),
+    /**
+     * Which of the transaction's logs paid this intent. Null until credited:
+     * the hash is written the moment the wallet returns it, the log only once
+     * the receipt has been read.
+     */
+    logIndex: integer('log_index'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     creditedAt: timestamp('credited_at', { withTimezone: true }),
   },
   (table) => [
-    // One credit per transaction, enforced by the database rather than by
+    // One credit per deposit event, enforced by the database rather than by
     // whatever the indexer believes it has already seen. Scoped to the chain
-    // because a hash is only unique within one.
-    uniqueIndex('deposit_intents_tx_idx').on(table.chainId, table.txHash),
+    // because a hash is only unique within one, and to the log because one
+    // transaction can carry several deposits: keyed on the hash alone, the
+    // second intent a batching wallet paid in the same call could never be
+    // credited, and the player's money sat in the vault against nothing.
+    // Rows noted before confirmation have no log yet, and Postgres counts
+    // those nulls as distinct, so noting a hash never collides.
+    uniqueIndex('deposit_intents_tx_idx').on(table.chainId, table.txHash, table.logIndex),
     index('deposit_intents_status_idx').on(table.status),
   ],
 );

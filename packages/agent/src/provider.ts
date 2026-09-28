@@ -35,9 +35,19 @@ export class ProviderError extends Error {}
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-/** Thinking budget to request, or null to leave the model's default alone. */
-const thinkingBudget: number | null =
-  process.env.GEMINI_THINKING_BUDGET === undefined ? null : Number(process.env.GEMINI_THINKING_BUDGET);
+/**
+ * Thinking budget to request, or null to leave the model's default alone.
+ *
+ * Read when a request is made, not when this module loads. `pnpm agent` loads
+ * `agents/.env` in its own body, which runs after its imports, so a value read
+ * at load time was always the one from before that file was read: setting it
+ * there, as the error below tells people to, silently did nothing.
+ */
+export function thinkingBudget(raw = process.env.GEMINI_THINKING_BUDGET): number | null {
+  if (raw === undefined || raw.trim() === '') return null;
+  const budget = Number(raw);
+  return Number.isInteger(budget) ? budget : null;
+}
 
 class GeminiProvider implements ModelProvider {
   readonly name = 'gemini';
@@ -45,6 +55,7 @@ class GeminiProvider implements ModelProvider {
   constructor(private readonly model: string) {}
 
   async *stream(request: ModelRequest, apiKey: string, signal: AbortSignal): AsyncIterable<string> {
+    const budget = thinkingBudget();
     const response = await fetch(
       `${GEMINI_ENDPOINT}/${encodeURIComponent(this.model)}:streamGenerateContent?alt=sse`,
       {
@@ -61,7 +72,7 @@ class GeminiProvider implements ModelProvider {
             // no text at all, which reaches the table as a silent fold. Set
             // GEMINI_THINKING_BUDGET to bound or disable that when the model in
             // use supports it; unset, the model's own default stands.
-            ...(thinkingBudget === null ? {} : { thinkingConfig: { thinkingBudget } }),
+            ...(budget === null ? {} : { thinkingConfig: { thinkingBudget: budget } }),
           },
         }),
       },

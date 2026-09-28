@@ -43,6 +43,27 @@
       "when": 1790500080736,
       "tag": "0005_mature_wendell_vaughn",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790508164133,
+      "tag": "0006_regular_champions",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790508174625,
+      "tag": "0007_new_agent_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790509860927,
+      "tag": "0008_premium_landau",
+      "breakpoints": true
     }
   ]
 }

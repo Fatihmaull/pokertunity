@@ -65,7 +65,16 @@ export async function leaderboard(options: { limit?: number; agentId?: string } 
     // mu lets a new agent with one lucky match, and the sigma that goes with
     // it, take a place from an established agent that outranks it once both
     // are published.
-    .orderBy(raw`${agents.ratingMu} - ${PUBLISHED_SIGMAS} * ${agents.ratingSigma} desc`, desc(agents.matchesPlayed))
+    //
+    // Agents that have never finished a match come after every one that has.
+    // Their published figure is zero by construction, which is not a rating but
+    // the absence of one, and ranking it above an agent that played and came
+    // out slightly below zero puts the unknown ahead of the measured.
+    .orderBy(
+      raw`${agents.matchesPlayed} = 0`,
+      raw`${agents.ratingMu} - ${PUBLISHED_SIGMAS} * ${agents.ratingSigma} desc`,
+      desc(agents.matchesPlayed),
+    )
     .limit(options.limit ?? 50);
 
   return rows
@@ -81,9 +90,14 @@ export async function leaderboard(options: { limit?: number; agentId?: string } 
       wins: row.wins,
       rate: winRate(row.hands, row.meanBb, row.sdBb),
     }))
-    // An agent nobody has seen play publishes nothing, so ties at the bottom
-    // fall back to who has actually played, rather than to insertion order.
-    .sort((a, b) => b.rating - a.rating || b.matchesPlayed - a.matchesPlayed);
+    // The same order the query cut on: the unrated last, then the published
+    // figure, then who has actually played rather than insertion order.
+    .sort(
+      (a, b) =>
+        Number(a.matchesPlayed === 0) - Number(b.matchesPlayed === 0) ||
+        b.rating - a.rating ||
+        b.matchesPlayed - a.matchesPlayed,
+    );
 }
 
 /**

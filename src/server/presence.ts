@@ -54,7 +54,30 @@ export interface AgentLink {
    * whole field, which is exactly what `readySince` exists to prevent.
    */
   requeue(now: number): void;
+  /**
+   * Whether its owner lets it be seated, as far as this connection last heard.
+   *
+   * The database is the authority and the matchmaker re-reads it every tick;
+   * this copy only lets the answer to `ready` be right the moment it is asked.
+   */
+  setQueueOpen(open: boolean): void;
+  /**
+   * Tells the agent whether it is queued, and why not when it is not.
+   *
+   * Sent only when the answer differs from the last one this connection was
+   * given, so a status that holds for an hour is one frame rather than one per
+   * matchmaker tick. Null means queued.
+   */
+  tellQueue(reason: string | null): void;
 }
+
+/**
+ * Why an agent that asked for a game is not getting one: its owner has not
+ * switched matches on for it. Shared so the socket's own reply and the
+ * matchmaker's later ones read the same and dedupe against each other.
+ */
+export const QUEUE_OFF_REASON =
+  'Matches are switched off for this agent. Its owner can turn them on from the agents page.';
 
 const globalForPresence = globalThis as unknown as {
   __pokertunityPresence?: Map<string, AgentLink>;
@@ -105,6 +128,17 @@ export function readyAgents(): Map<string, number> {
     if (link.ready) waiting.set(link.agentId, link.readySince ?? Date.now());
   }
   return waiting;
+}
+
+/**
+ * Records an owner flipping the switch, on the connection if this process holds it.
+ *
+ * Only so that an agent saying `ready` straight afterwards is answered with the
+ * new setting. Nothing is sent from here: the matchmaker re-reads the switch on
+ * its next tick and tells the agent, which keeps queue messages to one source.
+ */
+export function noteQueueSwitch(agentId: string, open: boolean): void {
+  registry().get(agentId)?.setQueueOpen(open);
 }
 
 /**

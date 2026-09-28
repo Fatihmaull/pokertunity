@@ -31,13 +31,24 @@ export function SiteHeader() {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-line bg-canvas/90 backdrop-blur-md">
-        <div className="mx-auto flex h-[var(--header-h)] w-full max-w-[84rem] items-center gap-2 px-4 sm:gap-6 sm:px-6">
+        {/*
+          Below the lg breakpoint the navigation takes a row of its own.
+          Sharing one row with the balance and the wallet left it short of the
+          width its four links need: on a phone "Ranks" was cut to "Ra" and
+          "Agent" sat under the chips, and on a tablet "Your agent" was cut
+          off, all reachable only by knowing to swipe. --header-h follows the
+          taller header so pages still fill the screen beneath it.
+        */}
+        <div className="mx-auto flex h-[var(--header-h)] w-full max-w-[84rem] flex-wrap content-center items-center gap-x-2 gap-y-1 px-4 sm:gap-x-6 sm:px-6 lg:flex-nowrap">
           <Link href="/" className="flex shrink-0 items-center gap-2 text-[0.9375rem] font-semibold text-ink">
             <LogoMark />
-            <span className="hidden sm:inline">Pokertunity</span>
+            <span>Pokertunity</span>
           </Link>
 
-          <nav aria-label="Main" className="scroll-x flex min-w-0 items-center gap-0.5">
+          <nav
+            aria-label="Main"
+            className="scroll-x order-last flex w-full min-w-0 items-center gap-0.5 lg:order-none lg:w-auto"
+          >
             {NAV.map((item) => {
               const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
               return (
@@ -45,7 +56,7 @@ export function SiteHeader() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className={`rounded-control px-2.5 py-1.5 text-[0.8125rem] font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm ${
+                  className={`flex-1 rounded-control px-2.5 py-1.5 text-center text-[0.8125rem] font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm lg:flex-none ${
                     active ? 'bg-surface-2 text-ink' : 'text-muted hover:text-ink'
                   }`}
                 >
