@@ -109,15 +109,18 @@ export function Stat({
   label,
   value,
   hint,
+  title,
   className = '',
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
+  /** The longer explanation, for whoever hovers. */
+  title?: string;
   className?: string;
 }) {
   return (
-    <div className={className}>
+    <div className={className} title={title}>
       <dt className="label text-faint">{label}</dt>
       <dd className="mono mt-1 text-lg text-ink tabular-nums">{value}</dd>
       {hint ? <p className="mt-0.5 text-xs text-faint">{hint}</p> : null}

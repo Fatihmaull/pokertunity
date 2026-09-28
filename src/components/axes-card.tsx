@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Stat } from './ui';
 
 interface Axes {
   reading: number | null;
@@ -17,28 +18,40 @@ interface Axes {
  * harder than everyone else does. Published work on poker-playing models found those orderings
  * routinely disagree, which is the whole reason to show both.
  */
-const AXES: Array<{ key: keyof Axes; label: string; asks: string; format: (value: number) => string }> = [
+const AXES: Array<{
+  key: keyof Axes;
+  label: string;
+  /** Under the figure, so the tile says what it measures without a sentence. */
+  hint: string;
+  /** The whole question, on hover. */
+  asks: string;
+  format: (value: number) => string;
+}> = [
   {
     key: 'reading',
     label: 'Reading',
+    hint: 'loose vs tight opponents',
     asks: 'Does it play differently against loose opponents than tight ones?',
     format: (value) => `${value >= 0 ? '+' : ''}${(value * 100).toFixed(0)} pts`,
   },
   {
     key: 'deception',
     label: 'Deception',
+    hint: 'weak-hand bets that win',
     asks: 'How often does a bet made with a weak hand take the pot down?',
     format: (value) => `${(value * 100).toFixed(0)}%`,
   },
   {
     key: 'adaptation',
     label: 'Adaptation',
+    hint: 'late vs early in a stint',
     asks: 'Does it do better later in a stint than it did at the start of one?',
     format: (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)} bb/100`,
   },
   {
     key: 'exploitation',
     label: 'Exploitation',
+    hint: 'edge on the weakest',
     asks: 'Does it beat the weakest opponents harder than everyone else does?',
     format: (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)} bb/100`,
   },
@@ -124,33 +137,44 @@ export function AxesCard({ agentId }: { agentId: string }) {
     };
   }, [agentId]);
 
+  // Null is not zero. It means this agent has not played enough for the
+  // measurement to say anything, and a dash beats printing a figure that would
+  // read as a finding. Nor is a measurement not yet fetched a measurement of
+  // nothing, so the dash waits until the answer has arrived. Why a dash is
+  // there is said once under the tiles, not once per tile.
+  const unmeasured = axes !== null && AXES.some((axis) => axes[axis.key] === null);
+
   return (
-    <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-      {AXES.map((axis) => {
-        const value = axes?.[axis.key] ?? null;
-        return (
-          <div key={axis.key}>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-[0.8125rem] font-medium text-ink">{axis.label}</dt>
-              {/* Null is not zero. It means this agent has not played enough
-                  for the measurement to say anything, and saying so beats
-                  printing a figure that would read as a finding. Nor is a
-                  measurement not yet fetched a measurement of nothing, so
-                  "not enough hands" waits until the answer has arrived. */}
-              <dd className={`mono text-sm tabular-nums ${value === null ? 'text-faint' : 'text-ink'}`}>
-                {axes === null
-                  ? unavailable
-                    ? 'unavailable'
-                    : '…'
-                  : value === null
-                    ? 'not enough hands'
-                    : axis.format(value)}
-              </dd>
-            </div>
-            <p className="mt-0.5 text-xs text-faint">{axis.asks}</p>
-          </div>
-        );
-      })}
-    </dl>
+    <div>
+      {/* The same tiles as the record above it, so the profile reads as more
+          figures about the agent rather than as a questionnaire. */}
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+        {AXES.map((axis) => {
+          const value = axes?.[axis.key] ?? null;
+          return (
+            <Stat
+              key={axis.key}
+              label={axis.label}
+              title={axis.asks}
+              hint={axis.hint}
+              value={
+                axes === null ? (
+                  <span className="text-faint">{unavailable ? '—' : '…'}</span>
+                ) : value === null ? (
+                  <span className="text-faint">—</span>
+                ) : (
+                  axis.format(value)
+                )
+              }
+            />
+          );
+        })}
+      </dl>
+      {unavailable && axes === null ? (
+        <p className="mt-3 text-xs text-faint">The profile could not be loaded.</p>
+      ) : unmeasured ? (
+        <p className="mt-3 text-xs text-faint">— not enough hands yet to measure.</p>
+      ) : null}
+    </div>
   );
 }

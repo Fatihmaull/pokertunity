@@ -63,6 +63,7 @@ export function OnChainPanel({
   hands: number;
 }) {
   const { chains, chain: active } = useChain();
+  const counted = Math.min(hands, MIN_ATTESTED_HANDS);
 
   return (
     <section>
@@ -72,15 +73,34 @@ export function OnChainPanel({
           <span className="text-xs">
             <External href={`/api/agents/${agentId}/registration`}>Registration file</External>
           </span>
-        ) : null}
+        ) : (
+          <span className="mono text-xs text-muted tabular-nums">
+            {counted} / {MIN_ATTESTED_HANDS} hands
+          </span>
+        )}
       </div>
 
+      {/* Before the first record, the only question is how far off it is,
+          which a bar answers at a glance and a sentence has to be read for. */}
       {records.length === 0 ? (
-        <p className="mt-2 text-xs text-faint">
-          {hands < MIN_ATTESTED_HANDS
-            ? `Not on chain yet. ${MIN_ATTESTED_HANDS - hands} more hands to go.`
-            : 'Eligible. Published with the next batch.'}
-        </p>
+        <>
+          <div
+            role="progressbar"
+            aria-label="Hands until the on-chain record is published"
+            aria-valuemin={0}
+            aria-valuemax={MIN_ATTESTED_HANDS}
+            aria-valuenow={counted}
+            className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-3"
+          >
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${(counted / MIN_ATTESTED_HANDS) * 100}%` }}
+            />
+          </div>
+          {hands >= MIN_ATTESTED_HANDS ? (
+            <p className="mt-2 text-xs text-faint">Eligible. Published with the next batch.</p>
+          ) : null}
+        </>
       ) : (
         <ul className="mt-2 space-y-2">
           {chains.map((chain) => (
