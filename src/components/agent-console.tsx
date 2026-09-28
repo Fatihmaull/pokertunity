@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SEAT_COST, formatChips } from '@/lib/economy';
+import { formatSigned } from '@/lib/format';
 import { useAccount, type AccountAgent } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
@@ -190,7 +191,6 @@ function AgentCard({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const name = draft ?? agent.name;
-  const winRate = agent.handsPlayed > 0 ? `${Math.round((agent.handsWon / agent.handsPlayed) * 100)}%` : '—';
 
   return (
     <Card className="p-5">
@@ -234,16 +234,14 @@ function AgentCard({
         </div>
       </div>
 
-      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
-        <Stat
-          label="Rating"
-          value={agent.matchesPlayed > 0 ? agent.rating.toFixed(1) : '—'}
-          hint={`${agent.matchesPlayed} match${agent.matchesPlayed === 1 ? '' : 'es'}`}
-        />
-        <Stat label="Hands" value={agent.handsPlayed.toLocaleString('en-US')} hint={`${winRate} won`} />
-        <Stat label="Net chips" value={`${agent.chipsWon >= 0 ? '+' : ''}${formatChips(agent.chipsWon)}`} />
-        <Stat label="Biggest pot" value={formatChips(agent.biggestPot)} />
-      </dl>
+      <TableRecord
+        hands={agent.handsPlayed}
+        handsWon={agent.handsWon}
+        matches={agent.matchesPlayed}
+        rating={agent.rating}
+        net={agent.chipsWon}
+        biggestPot={agent.biggestPot}
+      />
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         {agent.seat ? (
@@ -286,6 +284,52 @@ function AgentCard({
         </div>
       </Disclosure>
     </Card>
+  );
+}
+
+/**
+ * What an agent has done at the table, under one rule for every figure.
+ *
+ * A count is a number, and zero is a real answer to it. A figure that does not
+ * exist yet, like a rating before any match has finished, is a dash, and its
+ * hint says what it is waiting for. A change carries a sign only when it is
+ * one. And an agent that has played nothing gets one line saying so, not a row
+ * of zeros and dashes that each have to be read to learn the same thing.
+ */
+function TableRecord({
+  hands,
+  handsWon,
+  matches,
+  rating,
+  net,
+  biggestPot,
+}: {
+  hands: number;
+  handsWon: number;
+  matches: number;
+  rating: number;
+  net: number;
+  biggestPot: number;
+}) {
+  if (hands === 0) {
+    return <p className="mt-5 border-t border-line pt-4 text-sm text-muted">No hands played yet.</p>;
+  }
+
+  return (
+    <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
+      <Stat
+        label="Rating"
+        value={matches > 0 ? rating.toFixed(1) : <span className="text-faint">—</span>}
+        hint={matches > 0 ? `${formatChips(matches)} match${matches === 1 ? '' : 'es'}` : 'after its first match'}
+      />
+      <Stat
+        label="Hands"
+        value={formatChips(hands)}
+        hint={`${Math.round((handsWon / hands) * 100)}% won`}
+      />
+      <Stat label="Net chips" value={<span className={net < 0 ? 'text-danger' : ''}>{formatSigned(net)}</span>} />
+      <Stat label="Biggest pot" value={formatChips(biggestPot)} />
+    </dl>
   );
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { formatChips } from '@/lib/economy';
+import { formatSigned } from '@/lib/format';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
 import { HeroPreview } from './hero-preview';
@@ -136,8 +137,11 @@ function AgentSummary() {
     }),
     { hands: 0, won: 0, chips: 0, matches: 0 },
   );
-  const winRate = totals.hands > 0 ? `${Math.round((totals.won / totals.hands) * 100)}%` : '—';
-  const best = [...account.agents].sort((a, b) => b.rating - a.rating)[0];
+  // Among agents that have a rating at all. An unrated agent's number is a
+  // prior, not a result, and it can sit above a real one.
+  const best = account.agents
+    .filter((agent) => agent.matchesPlayed > 0)
+    .sort((a, b) => b.rating - a.rating)[0];
 
   return (
     <section className="border-b border-line bg-surface/40">
@@ -182,16 +186,30 @@ function AgentSummary() {
             </div>
           </div>
 
-          <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5 sm:grid-cols-4">
-            <Stat
-              label="Best rating"
-              value={best && best.matchesPlayed > 0 ? best.rating.toFixed(1) : '—'}
-              hint={`${totals.matches.toLocaleString('en-US')} match${totals.matches === 1 ? '' : 'es'}`}
-            />
-            <Stat label="Hands played" value={totals.hands.toLocaleString('en-US')} />
-            <Stat label="Hands won" value={winRate} hint={`${totals.won.toLocaleString('en-US')} of them`} />
-            <Stat label="Net chips" value={`${totals.chips >= 0 ? '+' : ''}${formatChips(totals.chips)}`} />
-          </dl>
+          {/* The same rule as each agent's own record: counts are numbers, a
+              figure that does not exist yet is a dash with its reason, and
+              nothing played at all is one line rather than a row of zeros. */}
+          {account.agents.length === 0 ? null : totals.hands === 0 ? (
+            <p className="mt-6 border-t border-line pt-5 text-sm text-muted">No hands played yet.</p>
+          ) : (
+            <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5 sm:grid-cols-4">
+              <Stat
+                label="Best rating"
+                value={best ? best.rating.toFixed(1) : <span className="text-faint">—</span>}
+                hint={best ? best.name : 'after a first match'}
+              />
+              <Stat
+                label="Hands"
+                value={formatChips(totals.hands)}
+                hint={`${Math.round((totals.won / totals.hands) * 100)}% won`}
+              />
+              <Stat label="Matches" value={formatChips(totals.matches)} />
+              <Stat
+                label="Net chips"
+                value={<span className={totals.chips < 0 ? 'text-danger' : ''}>{formatSigned(totals.chips)}</span>}
+              />
+            </dl>
+          )}
         </Card>
       </div>
     </section>

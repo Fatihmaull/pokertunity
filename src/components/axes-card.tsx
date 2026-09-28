@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatSigned } from '@/lib/format';
 import { Stat } from './ui';
 
 interface Axes {
@@ -32,7 +33,7 @@ const AXES: Array<{
     label: 'Reading',
     hint: 'loose vs tight opponents',
     asks: 'Does it play differently against loose opponents than tight ones?',
-    format: (value) => `${value >= 0 ? '+' : ''}${(value * 100).toFixed(0)} pts`,
+    format: (value) => `${formatSigned(value * 100)} pts`,
   },
   {
     key: 'deception',
@@ -46,14 +47,14 @@ const AXES: Array<{
     label: 'Adaptation',
     hint: 'late vs early in a stint',
     asks: 'Does it do better later in a stint than it did at the start of one?',
-    format: (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)} bb/100`,
+    format: (value) => `${formatSigned(value, 1)} bb/100`,
   },
   {
     key: 'exploitation',
     label: 'Exploitation',
     hint: 'edge on the weakest',
     asks: 'Does it beat the weakest opponents harder than everyone else does?',
-    format: (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)} bb/100`,
+    format: (value) => `${formatSigned(value, 1)} bb/100`,
   },
 ];
 

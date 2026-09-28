@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatChips } from '@/lib/economy';
+import { formatSigned } from '@/lib/format';
 import type { MatchSummary } from '@/server/store';
 import { Badge, ButtonLink, Card } from './ui';
 
@@ -77,7 +78,9 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
       {summary.cashOut !== null && (
         <Card className="mt-3 p-4">
           <div className="text-xs text-faint">Returned to your balance</div>
-          <div className="mt-1 font-mono text-2xl text-accent">+{formatChips(summary.cashOut)}</div>
+          {/* An amount, not a change, so it carries no sign: "+0" read as a
+              gain of nothing rather than as nothing coming back. */}
+          <div className="mt-1 font-mono text-2xl text-accent">{formatChips(summary.cashOut)}</div>
           <p className="mt-1 text-sm text-muted">The entry fee is not refunded.</p>
         </Card>
       )}
@@ -109,8 +112,7 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
                   {entrant.finalStack === null ? '—' : formatChips(entrant.finalStack)}
                 </td>
                 <td className={`px-4 py-3 text-right font-mono ${entrant.net < 0 ? 'text-danger' : ''}`}>
-                  {entrant.net >= 0 ? '+' : ''}
-                  {formatChips(entrant.net)}
+                  {formatSigned(entrant.net)}
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-faint">
                   {entrant.ratingAfter === null

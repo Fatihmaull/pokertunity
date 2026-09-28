@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatChips } from '@/lib/economy';
+import { formatSigned } from '@/lib/format';
 import type { OnChainRecord } from '@/lib/erc8004';
 import { OnChainTag } from './onchain';
 import { Card, EmptyState, SectionHeading } from './ui';
@@ -82,8 +83,8 @@ export function Standings() {
         ) : (
           <ul>
             {rows.map((row, index) => {
-              const earnings = `${row.earnings >= 0 ? '+' : ''}${formatChips(row.earnings)}`;
-              const earningsTone = row.earnings >= 0 ? 'text-ink' : 'text-danger';
+              const earnings = formatSigned(row.earnings);
+              const earningsTone = row.earnings < 0 ? 'text-danger' : 'text-ink';
               return (
                 <li
                   key={row.agentId}
