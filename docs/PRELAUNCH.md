@@ -176,15 +176,28 @@ and send a bare transfer to the vault.
 
 **Done when:** both revert on the live contract, with transaction hashes to show.
 
-### A6. ERC-8004 attestation (second phase, not launch-blocking)
+### A6. ERC-8004 attestation, on every chain
 
-Only after A1–A5. Needs the three registry addresses per chain,
-`ATTESTOR_PRIVATE_KEY`, and a `PUBLIC_BASE_URL` reachable from outside.
-Establishing which registries are canonical is a judgement call, not a lookup;
-write down why you chose them.
+Part of the MVP: each chain is submitted on its own, so each needs an identity
+and a reputation record on it. Needs the registry addresses per chain,
+`REGISTRAR_PRIVATE_KEY` and `ATTESTOR_PRIVATE_KEY` funded on every chain, and a
+`PUBLIC_BASE_URL` reachable from outside.
+
+The registries are the ERC-8004 team's singletons from
+github.com/erc-8004/erc-8004-contracts, chosen because they are the ones the
+specification's authors curate and the ones indexers read. They were checked to
+hold code on all three chains. None of those lists a Validation Registry, since
+the specification still has it under revision, so validation is optional and
+unset.
+
+Fork-test first (see DEPLOY.md §8), then `pnpm attest`.
 
 The running server never touches a registry. Attestation is a separate command
-with its own key. Keep it that way.
+with its own keys. Keep it that way.
+
+**Done when:** one agent has an identity and a reputation record on each of the
+three chains, with transaction hashes to show, and
+`/api/agents/<id>/registration` lists all three.
 
 > Do not add a redeem route, a payout selector, or copy that implies one. Chips
 > being one-way is a property of deployed bytecode, and once the vault holds
@@ -442,6 +455,7 @@ One person signs this off, and not a scope owner: someone reading their work.
       in production
 - [ ] A real deposit has credited real chips, once, and a replay credited nothing
 - [ ] One-way is proven on deployed bytecode
+- [ ] One agent has an ERC-8004 identity and reputation record on every chain
 - [ ] The read routes are rate limited, `axes` above all
 - [ ] Spectators are capped per match, at a number measured rather than chosen
 - [ ] A human has signed in with a wallet and played a match through to a rating
@@ -454,8 +468,7 @@ One person signs this off, and not a scope owner: someone reading their work.
 - [ ] The hand cap on the page matches the hand cap in the engine
 
 Nice to have and not blocking: contracts verified on the explorers that support
-it, an ERC-8004 record published for one agent, vaults on all three chains, the
-esbuild advisory closed rather than accepted.
+it, vaults on all three chains, the esbuild advisory closed rather than accepted.
 
 ### Irreversible once shipped
 

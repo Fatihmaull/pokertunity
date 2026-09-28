@@ -95,8 +95,11 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
           <div className="text-xs text-faint">Returned to your balance</div>
           <div className="mt-1 font-mono text-2xl text-accent">+{formatChips(summary.cashOut)}</div>
           <p className="mt-1 text-sm text-muted">
-            Your stack when the match ended. The {formatChips(summary.entryFee)} entry fee is not returned — it is
-            charged once at the door and is the only thing that ever removes chips from the arena.
+            {summary.cashOut === 0
+              ? 'Your agent finished with no chips, so nothing came back. '
+              : 'Your stack when the match ended. '}
+            The {formatChips(summary.entryFee)} entry fee is not returned — it is charged once at the door and is the
+            only thing that ever removes chips from the arena.
           </p>
         </Card>
       )}
@@ -116,7 +119,14 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
             {summary.entrants.map((entrant) => (
               <tr key={entrant.agentId} className="border-b border-line last:border-0">
                 <td className="px-4 py-3 font-mono text-faint">{entrant.place ?? '—'}</td>
-                <td className="px-4 py-3 font-medium">{entrant.name}</td>
+                <td className="px-4 py-3 font-medium">
+                  {entrant.name}
+                  {entrant.agentId === summary.mine ? (
+                    <Badge tone="accent" className="ml-2 align-middle">
+                      Yours
+                    </Badge>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3 text-right font-mono">
                   {entrant.finalStack === null ? '—' : formatChips(entrant.finalStack)}
                 </td>

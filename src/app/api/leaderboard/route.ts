@@ -1,3 +1,4 @@
+import { onchainRecords } from '@/server/attestation';
 import { getSession } from '@/server/auth';
 import { leaderboard } from '@/server/metrics';
 import { callerOf, take, tooMany } from '@/server/rate-limit';
@@ -18,6 +19,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!allowed.ok) return tooMany(allowed.retryAfterMs);
 
   const rows = await leaderboard({ limit: 50 });
+  const onchain = await onchainRecords(rows.map((row) => row.agentId));
 
   return Response.json({
     agents: rows.map((row) => ({
@@ -42,6 +44,9 @@ export async function GET(request: Request): Promise<Response> {
       // good.
       winRate: row.rate.rate,
       winRateFloor: row.rate.floor,
+      // Its ERC-8004 identity and newest published record on each chain, so
+      // the standings can show what anyone can check without asking us.
+      onchain: onchain.get(row.agentId) ?? [],
     })),
   });
 }

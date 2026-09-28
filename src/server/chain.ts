@@ -60,6 +60,8 @@ export interface ObservedDeposit {
   intentId: `0x${string}`;
   amountWei: bigint;
   blockNumber: bigint;
+  /** Position of this deposit's log in the block, which tells two deposits in one transaction apart. */
+  logIndex: number;
   confirmations: bigint;
 }
 
@@ -115,6 +117,7 @@ export async function observeDeposit(chain: DeployedChain, txHash: Hash): Promis
       intentId: args.intentId,
       amountWei: args.amount,
       blockNumber: receipt.blockNumber,
+      logIndex: log.logIndex,
       confirmations,
     });
   }

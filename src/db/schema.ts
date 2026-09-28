@@ -8,6 +8,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -80,19 +81,6 @@ export const agents = pgTable(
      */
     lastCloseReason: text('last_close_reason'),
     /**
-     * The ERC-8004 identity minted for this agent, as a decimal string.
-     *
-     * Text rather than a number because a token id is a uint256 and exceeds
-     * what a double holds exactly. Null until it has been registered, which is
-     * an operator action rather than something the arena does on sign-up: an
-     * identity nobody has played a hand under is a name with no record behind
-     * it, which is exactly the kind of empty attestation the standard already
-     * has too many of.
-     */
-    registryId: text('registry_id'),
-    /** EIP-155 id of the chain that identity was minted on. */
-    registryChainId: integer('registry_chain_id'),
-    /**
      * What we think this agent is worth, and how sure we are of it.
      *
      * Kept on the row rather than recomputed from match results, because a
@@ -120,6 +108,19 @@ export const agents = pgTable(
      * stranger's first match against one means anything.
      */
     demo: boolean('demo').notNull().default(false),
+    /**
+     * Whether its owner lets it be seated.
+     *
+     * Saying `ready` on the socket is the agent asking; this is the owner
+     * agreeing. Off for a new agent, so the first time somebody points freshly
+     * written code at the arena it connects and can be watched answering, but is
+     * not charged a seat until its owner decides it is fit to play one.
+     *
+     * Agents that existed before the switch did were already playing, and were
+     * left on: the column arrived defaulting to true and was flipped to false in
+     * a second migration, so turning it off is a choice nobody made for them.
+     */
+    queueEnabled: boolean('queue_enabled').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -150,15 +151,65 @@ export const depositIntents = pgTable(
     /** Set once the on-chain event has been read back and credited. */
     txHash: text('tx_hash'),
     blockNumber: bigint('block_number', { mode: 'number' }),
+    /**
+     * Which of the transaction's logs paid this intent. Null until credited:
+     * the hash is written the moment the wallet returns it, the log only once
+     * the receipt has been read.
+     */
+    logIndex: integer('log_index'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     creditedAt: timestamp('credited_at', { withTimezone: true }),
   },
   (table) => [
-    // One credit per transaction, enforced by the database rather than by
+    // One credit per deposit event, enforced by the database rather than by
     // whatever the indexer believes it has already seen. Scoped to the chain
-    // because a hash is only unique within one.
-    uniqueIndex('deposit_intents_tx_idx').on(table.chainId, table.txHash),
+    // because a hash is only unique within one, and to the log because one
+    // transaction can carry several deposits: keyed on the hash alone, the
+    // second intent a batching wallet paid in the same call could never be
+    // credited, and the player's money sat in the vault against nothing.
+    // Rows noted before confirmation have no log yet, and Postgres counts
+    // those nulls as distinct, so noting a hash never collides.
+    uniqueIndex('deposit_intents_tx_idx').on(table.chainId, table.txHash, table.logIndex),
     index('deposit_intents_status_idx').on(table.status),
+  ],
+);
+
+/**
+ * The ERC-8004 identity minted for an agent, one per chain.
+ *
+ * One row per chain rather than a column on the agent, because the same agent
+ * is registered on every chain the arena settles on and each mint hands back
+ * its own token id. All of them point at the same registration file, which
+ * lists every one, so a reader on any chain finds the others.
+ *
+ * Written only by `pnpm attest`, never on sign-up: an identity nobody has played
+ * a hand under is a name with no record behind it, which is exactly the kind of
+ * empty entry the registries already have too many of.
+ */
+export const agentIdentities = pgTable(
+  'agent_identities',
+  {
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    /** EIP-155 id of the chain it was minted on. */
+    chainId: integer('chain_id').notNull(),
+    /**
+     * The Identity Registry it lives in, as it was when minted.
+     *
+     * Stored rather than read from configuration, because the registration file
+     * has to name the registry that actually holds the token, and a later change
+     * to an environment variable does not move a token that already exists.
+     */
+    registry: text('registry').notNull(),
+    /** The token id, as a decimal string: a uint256 exceeds what a double holds exactly. */
+    registryId: text('registry_id').notNull(),
+    registerTx: text('register_tx').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.agentId, table.chainId] }),
+    uniqueIndex('agent_identities_token_idx').on(table.chainId, table.registry, table.registryId),
   ],
 );
 
@@ -187,14 +238,24 @@ export const attestations = pgTable(
     rating: integer('rating').notNull(),
     ratingMu: real('rating_mu').notNull(),
     ratingSigma: real('rating_sigma').notNull(),
-    /** The 0 to 100 that went into the Validation Registry. */
+    /** How far the rating's doubt has closed, 0 to 100. Also sent to the Validation Registry where the chain has one. */
     confidence: integer('confidence').notNull(),
     /** KECCAK-256 of the canonical evidence document, as it went on chain. */
     evidenceHash: text('evidence_hash').notNull(),
     /** The document itself, as published, so the hash stays checkable. */
     evidence: jsonb('evidence').notNull(),
+    /**
+     * The transactions, filled in as each is mined.
+     *
+     * The row is written before anything is sent, because the URI that goes on
+     * chain names this row: a record posted by a process that then died would
+     * otherwise point at evidence that was never stored. A row with no
+     * reputation transaction is therefore not a published attestation.
+     */
     reputationTx: text('reputation_tx'),
+    /** Null where the chain has no Validation Registry. */
     validationTx: text('validation_tx'),
+    validationResponseTx: text('validation_response_tx'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('attestations_agent_idx').on(table.agentId, table.createdAt)],

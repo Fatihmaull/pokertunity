@@ -272,7 +272,8 @@ deploy to be seamless for anyone mid-match. `overlapSeconds: 0` in
 | `SESSION_SECRET` | Set a new one, redeploy. | Everybody is signed out. Agent tokens are unaffected — they are not sessions. |
 | An agent token | The owner rotates it from their account page. | That agent's current socket. It reconnects with the new token. |
 | `TREASURY_PRIVATE_KEY` | Only used by `pnpm deploy:vault`. The running server never loads it. | Nothing running. |
-| `ATTESTOR_PRIVATE_KEY` | Only used by `pnpm attest`. | Nothing running. |
+| `ATTESTOR_PRIVATE_KEY` | Only used by `pnpm attest`. Must differ from the registrar. | Nothing running. Later feedback comes from a new address. |
+| `REGISTRAR_PRIVATE_KEY` | Only used by `pnpm attest`. It owns every identity it minted, so transfer those tokens to the new account first. | Nothing running, but a new key cannot update identities the old one owns. |
 | A vault address | Deploy a new vault and set `<CHAIN>_VAULT_ADDRESS`. | Deposits to the old vault stop being recognised. Let pending ones settle first. |
 
 Neither on-chain key is loaded by the web process. That is the point of them

@@ -113,6 +113,12 @@ export async function selectChain(key: string): Promise<DeployedChain> {
   return chain;
 }
 
+/** Forgets the caller's choice, so they land on this deployment's default. */
+export async function clearChainChoice(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(CHAIN_COOKIE);
+}
+
 /**
  * A chain as the browser is told about it.
  *

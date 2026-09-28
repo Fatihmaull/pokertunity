@@ -64,7 +64,17 @@ function reduce(state: StreamState, action: Action): StreamState {
       };
 
     case 'idle':
-      return { ...state, idleReason: event.reason };
+      // The match is over. Nobody is deciding and no clock is running, and the
+      // feed closes behind this event, so nothing will come to say otherwise:
+      // left alone, the last seat to act reads as thinking forever under a
+      // badge that still says the feed is live.
+      return {
+        ...state,
+        idleReason: event.reason,
+        isStreaming: false,
+        connected: false,
+        table: table ? { ...table, toAct: null, deadline: null } : table,
+      };
 
     case 'to-act':
       if (!table) return state;

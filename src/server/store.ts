@@ -87,17 +87,22 @@ export async function balanceOf(userId: string): Promise<number> {
  */
 export async function seatingStatus(
   readyIds: readonly string[],
-): Promise<Array<{ agentId: string; chips: number; playing: boolean }>> {
+): Promise<Array<{ agentId: string; chips: number; playing: boolean; queueEnabled: boolean }>> {
   if (readyIds.length === 0) return [];
 
   const rows = await db
-    .select({ agentId: agents.id, chips: users.chips, seatId: seats.id })
+    .select({ agentId: agents.id, chips: users.chips, seatId: seats.id, queueEnabled: agents.queueEnabled })
     .from(agents)
     .innerJoin(users, eq(users.id, agents.userId))
     .leftJoin(seats, eq(seats.agentId, agents.id))
     .where(inArray(agents.id, [...readyIds]));
 
-  return rows.map((row) => ({ agentId: row.agentId, chips: row.chips, playing: row.seatId !== null }));
+  return rows.map((row) => ({
+    agentId: row.agentId,
+    chips: row.chips,
+    playing: row.seatId !== null,
+    queueEnabled: row.queueEnabled,
+  }));
 }
 
 export interface Candidate {
@@ -118,8 +123,9 @@ export interface Candidate {
  *
  * Readiness is not a column any more: an agent is looking for a game when it
  * has a socket open and has said so on it. The caller passes in who that is,
- * because only the process holding the sockets knows, and this adds the two
- * conditions the database owns: not already seated, and able to cover a seat.
+ * because only the process holding the sockets knows, and this adds the three
+ * conditions the database owns: its owner has switched matches on, it is not
+ * already seated, and it is able to cover a seat.
  *
  * How long each has waited is deliberately not answered here. A row's mtime is
  * whatever last touched it, and the only thing that knows when an agent asked
@@ -144,6 +150,7 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
     .where(
       and(
         inArray(agents.id, [...readyIds]),
+        eq(agents.queueEnabled, true),
         isNull(seats.id),
         raw`${users.chips} >= ${SEAT_COST}`,
       ),
@@ -638,54 +645,6 @@ export interface HandOutcome {
   opponentRating: number;
 }
 
-/**
- * Files a finished hand for everyone who was dealt into it.
- *
- * Two things happen here and they answer different questions. The counters on
- * the agent row are what a profile page reads without scanning anything. The
- * result rows are what every metric is computed from, including ones that do
- * not exist yet, over hands already played.
- */
-export async function recordResults(
-  hand: { handId: string; matchId: string; bigBlind: number },
-  outcomes: HandOutcome[],
-): Promise<void> {
-  if (outcomes.length === 0) return;
-  await db.transaction(async (tx) => {
-    await tx
-      .insert(results)
-      .values(
-        outcomes.map((outcome) => ({
-          handId: hand.handId,
-          agentId: outcome.agentId,
-          matchId: hand.matchId,
-          bigBlind: hand.bigBlind,
-          startingStack: outcome.startingStack,
-          net: outcome.net,
-          showdown: outcome.showdown,
-          opponents: outcome.opponents,
-          opponentRating: outcome.opponentRating,
-        })),
-      )
-      // A hand that somehow gets stored twice must not count twice. The rows
-      // are the measurement, so a duplicate would move every published number.
-      .onConflictDoNothing();
-
-    for (const outcome of outcomes) {
-      await tx
-        .update(agents)
-        .set({
-          handsPlayed: raw`${agents.handsPlayed} + 1`,
-          handsWon: raw`${agents.handsWon} + ${outcome.won ? 1 : 0}`,
-          chipsWon: raw`${agents.chipsWon} + ${outcome.net}`,
-          biggestPot: raw`GREATEST(${agents.biggestPot}, ${outcome.won ? outcome.potSize : 0})`,
-          updatedAt: new Date(),
-        })
-        .where(eq(agents.id, outcome.agentId));
-    }
-  });
-}
-
 /** The most recently completed hand anywhere, for the landing page replay. */
 export async function latestHand(): Promise<{
   id: string;
@@ -885,7 +844,13 @@ export interface MatchSummary {
   startedAt: Date | null;
   endedAt: Date | null;
   entrants: MatchEntrant[];
-  /** What the viewer's own account got back, if it had a seat here. */
+  /** The viewer's own agent among the entrants, if it had a seat here. */
+  mine: string | null;
+  /**
+   * What the viewer's own account got back, if it had a seat here. Zero rather
+   * than null for an agent that went out with nothing: no ledger row is written
+   * for a stack of nothing, but the owner is still owed being told so.
+   */
   cashOut: number | null;
 }
 
@@ -968,6 +933,7 @@ export async function matchSummary(matchId: string, viewerUserId: string | null)
   // so this is the record of what actually landed rather than a recomputation
   // of what should have.
   let cashOut: number | null = null;
+  let mine: string | null = null;
   if (viewerUserId) {
     const [entry] = await db
       .select({ delta: ledgerEntries.delta })
@@ -980,7 +946,13 @@ export async function matchSummary(matchId: string, viewerUserId: string | null)
         ),
       )
       .limit(1);
-    cashOut = entry?.delta ?? null;
+
+    // One owner holds at most one seat in a match, so this is one agent or none.
+    const owned = new Set(
+      (await db.select({ id: agents.id }).from(agents).where(eq(agents.userId, viewerUserId))).map((row) => row.id),
+    );
+    mine = entrants.find((entrant) => owned.has(entrant.agentId))?.agentId ?? null;
+    cashOut = entry?.delta ?? (mine !== null && row.status !== 'playing' ? 0 : null);
   }
 
   return {
@@ -996,6 +968,7 @@ export async function matchSummary(matchId: string, viewerUserId: string | null)
     startedAt: row.startedAt,
     endedAt: row.endedAt,
     entrants,
+    mine,
     cashOut,
   };
 }

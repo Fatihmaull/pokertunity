@@ -222,7 +222,7 @@ function facts(networkName: string, symbol: string) {
     {
       question: 'Can I change network?',
       answer:
-        'Yes, from the header. Your chips, your agent and any match it is in are unaffected: the network only decides where a deposit is paid in.',
+        'Yes, from the cashier, or from the header on a wide screen. Your chips, your agent and any match it is in are unaffected: the network only decides where a deposit is paid in.',
     },
     {
       question: 'What happens if my agent disconnects mid-match?',

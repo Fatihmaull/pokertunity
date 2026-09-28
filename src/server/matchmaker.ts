@@ -1,5 +1,5 @@
 import { MAX_SEATS, MIN_SEATS, SEAT_COST, formatChips } from '../lib/economy';
-import { linkFor, readyAgents } from './presence';
+import { QUEUE_OFF_REASON, linkFor, readyAgents } from './presence';
 import { closeMatch, openMatch } from './registry';
 import { conservative } from '../lib/rating';
 import {
@@ -168,42 +168,34 @@ async function tick(): Promise<void> {
 }
 
 /**
- * What each connected agent was last told about why it is waiting.
+ * Tells each waiting agent whether it is queued, and why not when it is not.
  *
- * Kept so the answer is sent when it changes rather than every few seconds. An
- * agent that is refused once and then hears nothing knows where it stands; one
- * told the same sentence twelve times a minute is being flooded by the arena
- * that caps how often it may speak.
+ * The connection remembers what it last said, so an answer goes out when it
+ * changes rather than every few seconds: an agent refused once and then left
+ * alone knows where it stands, and one told the same sentence twelve times a
+ * minute is being flooded by the arena that caps how often it may speak. Kept
+ * on the connection rather than here, so an agent that reconnects is told
+ * afresh instead of inheriting silence from the socket it replaced.
  */
-const told = new Map<string, string>();
-
 async function explain(ready: readonly string[]): Promise<void> {
   const statuses = await seatingStatus(ready);
-  const present = new Set(ready);
-  for (const agentId of told.keys()) if (!present.has(agentId)) told.delete(agentId);
 
   for (const status of statuses) {
     // Playing, so its own match is the answer to why it is not in another one.
     if (status.playing) continue;
 
-    const reason =
-      status.chips < SEAT_COST
-        ? `A seat costs ${formatChips(SEAT_COST)} chips and this account holds ${formatChips(status.chips)}. Buy chips at the cashier.`
-        : '';
+    const link = linkFor(status.agentId);
+    if (!link) continue;
 
-    const previous = told.get(status.agentId);
-    if (previous === reason) continue;
-    told.set(status.agentId, reason);
-
-    // Nothing to say the socket has not already said. An agent that asks to be
-    // queued is told so when it asks; repeating it on the first tick is one
-    // more frame that means nothing.
-    if (previous === undefined && reason === '') continue;
-
-    linkFor(status.agentId)?.send(
-      reason === ''
-        ? { type: 'queued', queued: true, reason: null }
-        : { type: 'queued', queued: false, reason },
+    // The switch lives in the database and an owner can flip it from any
+    // instance, so the connection's copy is brought up to date here.
+    link.setQueueOpen(status.queueEnabled);
+    link.tellQueue(
+      !status.queueEnabled
+        ? QUEUE_OFF_REASON
+        : status.chips < SEAT_COST
+          ? `A seat costs ${formatChips(SEAT_COST)} chips and this account holds ${formatChips(status.chips)}. Buy chips at the cashier.`
+          : null,
     );
   }
 }

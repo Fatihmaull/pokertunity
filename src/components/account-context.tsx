@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { connect, currentAddress, ensureChain, signMessage, watchWallet, WalletError } from '@/lib/wallet';
+import type { OnChainRecord } from '@/lib/erc8004';
 import { useChain } from './chain-context';
 
 export interface AccountAgent {
@@ -23,9 +24,13 @@ export interface AccountAgent {
   connected: boolean;
   /** Whether it has asked to be queued on that socket. */
   ready: boolean;
+  /** Whether its owner lets it be seated. Asking is not enough without this. */
+  queueEnabled: boolean;
   lastSeenAt: string | null;
   /** Why its last connection ended, in a sentence an owner can act on. */
   lastCloseReason: string | null;
+  /** Its ERC-8004 identity and newest published record, per chain. */
+  onchain: OnChainRecord[];
 }
 
 interface AccountState {

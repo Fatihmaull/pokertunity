@@ -5,12 +5,12 @@ import { getSession } from '@/server/auth';
 import { callerOf, take, tooMany } from '@/server/rate-limit';
 
 /**
- * The evidence behind this agent's ERC-8004 score.
+ * The evidence behind this agent's latest ERC-8004 score.
  *
- * The URI on chain points here, and the hash beside it is the KECCAK-256 of
- * exactly these bytes. So the body is the canonical serialisation rather than
- * whatever `Response.json` would produce: a reader hashes what it received and
- * compares, and any difference means the record moved after it was attested.
+ * The latest published one where there is one, and the live figures otherwise.
+ * Records on chain point at `/api/attestations/[id]` instead, which never moves;
+ * this is the address a person follows from the registration file. The body is
+ * still the canonical serialisation, so the newest record's hash checks here too.
  *
  * Public and unauthenticated on purpose. An attestation nobody outside can
  * check is not an attestation.

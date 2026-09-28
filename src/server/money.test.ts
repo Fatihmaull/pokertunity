@@ -31,12 +31,15 @@ import {
   createMatch,
   handsDealt,
   markInHand,
+  matchSummary,
+  queuedAgents,
   recordHand,
   settleMatch,
   storedMatches,
   type Candidate,
   type PersistedHand,
 } from './store';
+import { setQueueEnabled } from './credentials';
 
 /**
  * The paths that move chips, against a real database.
@@ -373,9 +376,15 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(result.chips, quote.chips);
     assert.equal(result.balance, quote.chips);
 
-    await assert.rejects(confirmDeposit(me, TX, CHAIN, observe), /already been credited/);
+    // Asking again is answered with the credit that already happened, not
+    // with a second one and not with an error about money that arrived.
+    const again = credited(await confirmDeposit(me, TX, CHAIN, observe));
+    assert.equal(again.chips, quote.chips);
+    assert.equal(again.balance, quote.chips);
     assert.equal(await balance(me.userId), quote.chips);
     await ledgerAgrees(me.userId, 0);
+    const deposits = await db.select().from(ledgerEntries).where(eq(ledgerEntries.reason, 'deposit'));
+    assert.equal(deposits.length, 1, 'one ledger row however often it is asked');
 
     const [intent] = await db.select().from(depositIntents).where(eq(depositIntents.id, quote.intentId));
     assert.equal(intent.status, 'credited');
@@ -387,13 +396,59 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     const quote = await startDeposit(me, 'starter', CHAIN);
     const observe = paid(quote.bytes32, me.address, BigInt(quote.valueWei));
 
-    const outcomes = await Promise.allSettled([
+    // Both are told it landed, which is what a cashier closed and reopened
+    // mid-wait does: two pollers on one hash. Only one of them credits it.
+    const outcomes = await Promise.all([
       confirmDeposit(me, TX, CHAIN, observe),
       confirmDeposit(me, TX, CHAIN, observe),
     ]);
 
-    assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled').length, 1);
+    assert.deepEqual(outcomes.map((outcome) => outcome.status), ['credited', 'credited']);
     assert.equal(await balance(me.userId), quote.chips);
+    await ledgerAgrees(me.userId, 0);
+    const deposits = await db.select().from(ledgerEntries).where(eq(ledgerEntries.reason, 'deposit'));
+    assert.equal(deposits.length, 1);
+  });
+
+  test('one transaction paying two packages credits both, once each', async () => {
+    const me = await owner(0);
+    const first = await startDeposit(me, 'starter', CHAIN);
+    const second = await startDeposit(me, 'regular', CHAIN);
+    const observe = paidTogether(me.address, [
+      { intentId: first.bytes32, amountWei: BigInt(first.valueWei) },
+      { intentId: second.bytes32, amountWei: BigInt(second.valueWei) },
+    ]);
+
+    // Both at once. The cashier stops asking at the first credit, and a batch
+    // made outside it was never noted, so nothing would come back for the rest.
+    const result = credited(await confirmDeposit(me, TX, CHAIN, observe));
+    assert.equal(result.chips, first.chips + second.chips);
+    assert.equal(result.balance, first.chips + second.chips);
+
+    const again = credited(await confirmDeposit(me, TX, CHAIN, observe));
+    assert.equal(again.chips, first.chips + second.chips, 'asked again, it describes what already landed');
+    assert.equal(await balance(me.userId), first.chips + second.chips);
+    await ledgerAgrees(me.userId, 0);
+
+    const rows = await db.select().from(depositIntents).where(eq(depositIntents.userId, me.userId));
+    assert.deepEqual(
+      rows.map((row) => `${row.status} ${row.txHash === TX} ${row.logIndex}`).sort(),
+      ['credited true 0', 'credited true 1'],
+    );
+  });
+
+  test('a short deposit in a batch does not hold up the others it was paid with', async () => {
+    const me = await owner(0);
+    const short = await startDeposit(me, 'starter', CHAIN);
+    const full = await startDeposit(me, 'starter', CHAIN);
+    const observe = paidTogether(me.address, [
+      { intentId: short.bytes32, amountWei: BigInt(short.valueWei) - 1n },
+      { intentId: full.bytes32, amountWei: BigInt(full.valueWei) },
+    ]);
+
+    const result = credited(await confirmDeposit(me, TX, CHAIN, observe));
+    assert.equal(result.chips, full.chips);
+    assert.equal(await balance(me.userId), full.chips);
     await ledgerAgrees(me.userId, 0);
   });
 
@@ -477,6 +532,63 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     const [top] = await leaderboard({ limit: 1 });
 
     assert.equal(top.name, 'Proven', 'published 27 outranks published 16, whatever mu says');
+  });
+
+  test('an agent nobody has seen finish a match ranks below every agent that has', async () => {
+    // Played once and came out a little below zero.
+    await candidate(0, 'Played', { mu: 20, sigma: 7 }, 1);
+    // Never played: published as exactly zero, which is no rating at all.
+    await candidate(0, 'Unseen');
+
+    const names = (await leaderboard()).map((row) => row.name);
+    assert.deepEqual(names, ['Played', 'Unseen']);
+  });
+
+  /* ------------------------------------------------------------------------ */
+  /* The owner's switch                                                       */
+  /* ------------------------------------------------------------------------ */
+
+  test('an agent is queued only once its owner has switched matches on', async () => {
+    const entrant = await candidate(SEAT_COST, 'Fresh');
+
+    assert.deepEqual(await queuedAgents([entrant.agentId]), [], 'a new agent starts with matches off');
+
+    await setQueueEnabled(entrant.ownerId, entrant.agentId, true);
+    assert.deepEqual((await queuedAgents([entrant.agentId])).map((row) => row.name), ['Fresh']);
+
+    await setQueueEnabled(entrant.ownerId, entrant.agentId, false);
+    assert.deepEqual(await queuedAgents([entrant.agentId]), []);
+  });
+
+  test('nobody can switch matches on for an agent they do not own', async () => {
+    const entrant = await candidate(SEAT_COST, 'Theirs');
+    const stranger = await owner(0);
+
+    await assert.rejects(setQueueEnabled(stranger.userId, entrant.agentId, true), /No such agent/);
+    assert.deepEqual(await queuedAgents([entrant.agentId]), []);
+  });
+
+  /* ------------------------------------------------------------------------ */
+  /* A finished match, as its entrants read it                                */
+  /* ------------------------------------------------------------------------ */
+
+  test('an owner whose agent went out with nothing is told so, not left out', async () => {
+    const field = [await candidate(SEAT_COST, 'Winner'), await candidate(SEAT_COST, 'Broke')];
+    const match = (await createMatch(field))!;
+    await setStacks(match.id, [{ stack: 4_000 }, { stack: 0, bustedAtHand: 3 }]);
+    await settleMatch(match.id, 'elimination', 3);
+
+    const broke = await matchSummary(match.id, field[1].ownerId);
+    assert.equal(broke?.mine, field[1].agentId);
+    assert.equal(broke?.cashOut, 0, 'no ledger row is written for nothing, but the owner still sees it');
+
+    const winner = await matchSummary(match.id, field[0].ownerId);
+    assert.equal(winner?.mine, field[0].agentId);
+    assert.equal(winner?.cashOut, 4_000);
+
+    const onlooker = await matchSummary(match.id, (await owner(0)).userId);
+    assert.equal(onlooker?.mine, null);
+    assert.equal(onlooker?.cashOut, null);
   });
 });
 
@@ -666,7 +778,21 @@ function paid(
       intentId,
       amountWei,
       blockNumber: 100n,
+      logIndex: 0,
       confirmations,
     },
   ];
+}
+
+/** One transaction paying several intents, as a wallet that batches calls sends it. */
+function paidTogether(payer: string, deposits: Array<{ intentId: `0x${string}`; amountWei: bigint }>): typeof observeDeposit {
+  return async () =>
+    deposits.map((deposit, logIndex) => ({
+      payer: payer as `0x${string}`,
+      intentId: deposit.intentId,
+      amountWei: deposit.amountWei,
+      blockNumber: 100n,
+      logIndex,
+      confirmations: 3n,
+    }));
 }

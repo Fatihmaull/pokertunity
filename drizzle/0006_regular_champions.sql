@@ -1,0 +1,1 @@
+ALTER TABLE "agents" ADD COLUMN "queue_enabled" boolean DEFAULT true NOT NULL;

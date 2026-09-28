@@ -50,6 +50,10 @@ interface Limit {
  *   polls it every fifteen seconds.
  * - `attestation` runs that same aggregate for one agent when nothing has been
  *   published for it yet. Verifiers fetch it after reading the chain, rarely.
+ *   A single published attestation by id shares the bucket.
+ * - `registration` is one agent row and its handful of mints, but it is what an
+ *   identity's URI resolves to, so ERC-8004 indexers crawl it. Looser than the
+ *   aggregates for that reason and because it is cheap.
  * - `hands-latest` reads a whole hand and its decisions when nothing is live.
  *   The landing page asks once per load.
  * - `matches` is a handful of rows, and every open lobby polls it every five
@@ -64,6 +68,7 @@ export const LIMITS = {
   axes: { perMinute: 10, burst: 16 },
   leaderboard: { perMinute: 20, burst: 10 },
   attestation: { perMinute: 20, burst: 10 },
+  registration: { perMinute: 60, burst: 20 },
   'hands-latest': { perMinute: 30, burst: 10 },
   matches: { perMinute: 120, burst: 30 },
 } as const satisfies Record<string, Limit>;

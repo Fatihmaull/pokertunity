@@ -527,7 +527,10 @@ export class MatchRuntime {
         pot: totalPot(state),
       });
 
-      this.note(describeAction(agent.name, applied?.action ?? record.action.type, applied?.amount ?? 0), chair);
+      this.note(
+        describeAction(agent.name, applied?.action ?? record.action.type, applied?.amount ?? 0, applied?.to ?? 0),
+        chair,
+      );
       // Stored hands are indexed by engine position, which is what the lineup
       // written alongside them is indexed by.
       recorded.push({ seatIndex: position, agentId: agent.agentId, record, street, amount: amountOf(state, eventCursor) });
@@ -784,7 +787,7 @@ export class MatchRuntime {
  * A decision as the public feed may show it while its hand is live: who, when,
  * at what price and what it did, without anything that describes the cards.
  */
-export function sealBrain(brain: BrainView): BrainView {
+function sealBrain(brain: BrainView): BrainView {
   return { ...brain, reasoning: '', equity: null, handRead: null, sealed: true };
 }
 
@@ -851,7 +854,14 @@ export function amountOf(state: HandState, from: number): number {
   return applied.action === 'bet' || applied.action === 'raise' ? applied.to : applied.amount;
 }
 
-function describeAction(name: string, action: string, amount: number): string {
+/**
+ * One line of the hand log.
+ *
+ * A call is the chips it put in; a bet or a raise is the level it put the seat
+ * at, which is how a table says it. "Raises 1990" for a blind shoving to 2,000
+ * reads as a raise of 1,990 on top of something, which is not what happened.
+ */
+export function describeAction(name: string, action: string, amount: number, to: number): string {
   switch (action) {
     case 'fold':
       return `${name} folds.`;
@@ -860,9 +870,9 @@ function describeAction(name: string, action: string, amount: number): string {
     case 'call':
       return `${name} calls ${amount}.`;
     case 'bet':
-      return `${name} bets ${amount}.`;
+      return `${name} bets ${to}.`;
     case 'raise':
-      return `${name} raises ${amount}.`;
+      return `${name} raises to ${to}.`;
     default:
       return `${name} acts.`;
   }

@@ -1,17 +1,26 @@
-import { createWalletClient, decodeEventLog, http, keccak256, toHex, type Hash, type WalletClient } from 'viem';
+import { randomUUID } from 'node:crypto';
+import {
+  createWalletClient,
+  decodeEventLog,
+  http,
+  keccak256,
+  toHex,
+  type Account,
+  type Hash,
+  type WalletClient,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { agents, attestations } from '../db/schema';
+import { agentIdentities, agents, attestations } from '../db/schema';
 import { envPrefix } from '../lib/chains';
 import {
   buildAttestation,
   canonicalise,
-  confidenceIn,
+  publishPlan,
   REPUTATION_DECIMALS,
-  REPUTATION_TAGS,
-  VALIDATION_TAG,
   type Attestation,
+  type Signer,
 } from '../lib/erc8004';
 import { chainDefinition, publicClientFor } from './chain';
 import type { DeployedChain } from './chains';
@@ -29,104 +38,188 @@ import { leaderboard } from './metrics';
  * it every hand would cost gas to say almost nothing new.
  *
  * The addresses are per-chain and come from the environment the same way vaults
- * do, named after the chain's own key: `MONAD_TESTNET_IDENTITY_REGISTRY` and
- * its reputation and validation siblings.
+ * do, named after the chain's own key: `MONAD_TESTNET_IDENTITY_REGISTRY` and its
+ * reputation sibling, plus a validation one where a chain has such a registry.
  */
 
 export class NotConfigured extends Error {}
 
+type Address = `0x${string}`;
+
 interface Registries {
-  identity: `0x${string}`;
-  reputation: `0x${string}`;
-  validation: `0x${string}`;
+  identity: Address;
+  reputation: Address;
+  /** Null on a chain with no Validation Registry, which today is every chain. */
+  validation: Address | null;
 }
 
-const REGISTRY_VARS = {
-  identity: 'IDENTITY_REGISTRY',
-  reputation: 'REPUTATION_REGISTRY',
-  validation: 'VALIDATION_REGISTRY',
-} as const;
+function addressFrom(name: string): Address | null {
+  const value = process.env[name]?.trim();
+  if (!value) return null;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(value)) throw new NotConfigured(`${name} is not an address: ${value}`);
+  return value as Address;
+}
 
-/** Where the three singletons live on this chain, or a refusal naming what is missing. */
+/** Where the singletons live on this chain, or a refusal naming what is missing. */
 function registriesFor(chain: DeployedChain): Registries {
   const prefix = envPrefix(chain.key);
-  const found: Partial<Registries> = {};
-  const missing: string[] = [];
+  const identity = addressFrom(`${prefix}_IDENTITY_REGISTRY`);
+  const reputation = addressFrom(`${prefix}_REPUTATION_REGISTRY`);
 
-  for (const [key, suffix] of Object.entries(REGISTRY_VARS) as Array<[keyof Registries, string]>) {
-    const name = `${prefix}_${suffix}`;
-    const value = process.env[name]?.trim();
-    if (!value) {
-      missing.push(name);
-      continue;
-    }
-    if (!/^0x[0-9a-fA-F]{40}$/.test(value)) throw new NotConfigured(`${name} is not an address: ${value}`);
-    found[key] = value as `0x${string}`;
-  }
-
+  const missing = [
+    identity ? null : `${prefix}_IDENTITY_REGISTRY`,
+    reputation ? null : `${prefix}_REPUTATION_REGISTRY`,
+  ].filter(Boolean);
   if (missing.length > 0) {
     throw new NotConfigured(
       `${chain.name} has no ERC-8004 registries configured. Set ${missing.join(', ')} to the singletons deployed there.`,
     );
   }
 
-  return found as Registries;
+  return {
+    identity: identity!,
+    reputation: reputation!,
+    // Optional rather than required: the specification still has this registry
+    // under revision and nobody has deployed a canonical one. Requiring it would
+    // mean no chain could be published to at all.
+    validation: addressFrom(`${prefix}_VALIDATION_REGISTRY`),
+  };
 }
 
+type Signing = WalletClient & { account: Account };
+
 /**
- * The key that signs attestations.
+ * The wallet every identity is handed to once minted, if one is configured.
  *
- * Separate from the treasury on purpose. This one only ever writes claims, so a
- * deployment can hand it out to whatever posts them without also handing over
- * the account that owns the vault.
+ * The registrar is a hot key sitting in an environment file, and whoever holds
+ * an identity is who can repoint it. Handing each one to an operator's own
+ * wallet leaves the registrar nothing worth stealing and nothing lost with it.
+ * The price is the validation request, which the standard only takes from the
+ * owner or an operator, so a chain with a Validation Registry publishes
+ * reputation alone while this is set.
  */
-function attestor(chain: DeployedChain): WalletClient {
-  const key = process.env.ATTESTOR_PRIVATE_KEY?.trim();
-  if (!key) {
-    throw new NotConfigured('ATTESTOR_PRIVATE_KEY is not set. Attestations are signed, so they need an account.');
-  }
+function identityOwner(): Address | null {
+  return addressFrom('IDENTITY_OWNER');
+}
+
+const KEY_VARS: Record<Signer, string> = {
+  registrar: 'REGISTRAR_PRIVATE_KEY',
+  attestor: 'ATTESTOR_PRIVATE_KEY',
+};
+
+function signerFor(chain: DeployedChain, role: Signer): Signing {
+  const name = KEY_VARS[role];
+  const key = process.env[name]?.trim();
+  if (!key) throw new NotConfigured(`${name} is not set. Attestations are signed, so they need both accounts.`);
 
   return createWalletClient({
-    account: privateKeyToAccount(key as `0x${string}`),
+    account: privateKeyToAccount(key as Address),
     chain: chainDefinition(chain),
     transport: http(chain.rpcUrl),
-  });
+  }) as Signing;
 }
 
 /**
- * Mints an ERC-8004 identity for an agent that does not have one.
+ * Both accounts, refused if they are the same one.
  *
- * The URI points back at this arena's own record for the agent, which is the
- * document every later attestation is measured against. Returns the existing id
- * unchanged if it already has one: a second identity for the same agent would
- * split its record in half, which is the shape a Sybil takes here.
+ * Both are separate from the treasury on purpose, since they only ever write
+ * claims and can be handed to whatever posts them without also handing over the
+ * account that owns the vault. They are separate from each other because the
+ * registrar owns every identity and the Reputation Registry refuses feedback
+ * from an owner. One key doing both would fail on chain, after paying for the
+ * mint, so it is refused here instead.
+ */
+function signers(chain: DeployedChain): Record<Signer, Signing> {
+  const registrar = signerFor(chain, 'registrar');
+  const attestor = signerFor(chain, 'attestor');
+  if (registrar.account.address.toLowerCase() === attestor.account.address.toLowerCase()) {
+    throw new NotConfigured(
+      'REGISTRAR_PRIVATE_KEY and ATTESTOR_PRIVATE_KEY are the same account. The registrar owns every identity, and the Reputation Registry refuses feedback from an owner.',
+    );
+  }
+  if (identityOwner()?.toLowerCase() === attestor.account.address.toLowerCase()) {
+    throw new NotConfigured(
+      'IDENTITY_OWNER is the attestor. Identities are handed to that wallet, and the Reputation Registry refuses feedback from an owner.',
+    );
+  }
+  return { registrar, attestor };
+}
+
+/** The one identity this agent holds on this chain, if it has been minted. */
+async function identityOn(chain: DeployedChain, agentId: string): Promise<{ registryId: string } | undefined> {
+  const [row] = await db
+    .select({ registryId: agentIdentities.registryId })
+    .from(agentIdentities)
+    .where(and(eq(agentIdentities.agentId, agentId), eq(agentIdentities.chainId, chain.id)))
+    .limit(1);
+  return row;
+}
+
+/** Waits for a write to be mined, and treats a revert as the failure it is. */
+async function mined(chain: DeployedChain, hash: Hash, what: string): Promise<void> {
+  const receipt = await publicClientFor(chain).waitForTransactionReceipt({ hash, confirmations: 1 });
+  if (receipt.status !== 'success') throw new Error(`${what} reverted: ${hash}`);
+}
+
+export interface Readiness {
+  registries: Registries;
+  accounts: Record<Signer, { address: Address; balance: bigint }>;
+  identityOwner: Address | null;
+}
+
+/**
+ * What a run on this chain would sign with, and whether either account is
+ * empty. Asked before anything is sent, so an unfunded key is one plain line
+ * rather than a failure per agent.
+ */
+export async function readiness(chain: DeployedChain): Promise<Readiness> {
+  const registries = registriesFor(chain);
+  const keys = signers(chain);
+  const client = publicClientFor(chain);
+
+  const [registrar, attestor] = await Promise.all(
+    (['registrar', 'attestor'] as const).map(async (role) => {
+      const address = keys[role].account.address;
+      return { address, balance: await client.getBalance({ address }) };
+    }),
+  );
+
+  return { registries, accounts: { registrar, attestor }, identityOwner: identityOwner() };
+}
+
+/**
+ * Mints an ERC-8004 identity for an agent on this chain, if it has none there.
+ *
+ * The URI is the agent's registration file, which lists its identity on every
+ * chain, so all of an agent's mints point at the same document. Returns the
+ * existing id unchanged if it already has one here: a second identity on the
+ * same chain would split its record in half, which is the shape a Sybil takes.
  */
 export async function registerIdentity(
   chain: DeployedChain,
   agentId: string,
   baseUrl: string,
-): Promise<{ registryId: string; txHash: Hash | null }> {
-  const [agent] = await db
-    .select({ id: agents.id, registryId: agents.registryId, registryChainId: agents.registryChainId })
-    .from(agents)
-    .where(eq(agents.id, agentId))
-    .limit(1);
-
+): Promise<{ registryId: string; txHash: Hash | null; transferTx: Hash | null }> {
+  const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId)).limit(1);
   if (!agent) throw new NotConfigured(`no agent ${agentId}`);
-  if (agent.registryId !== null && agent.registryChainId === chain.id) {
-    return { registryId: agent.registryId, txHash: null };
-  }
 
   const registries = registriesFor(chain);
-  const wallet = attestor(chain);
-  if (!wallet.account) throw new NotConfigured('the attestor wallet has no account');
+  const { registrar } = signers(chain);
 
-  const txHash = await wallet.writeContract({
+  const existing = await identityOn(chain, agentId);
+  if (existing) {
+    // Asked again of an identity already minted, so a run that died between
+    // the mint and the handover finishes the handover rather than leaving it.
+    const transferTx = await handOver(chain, registries, registrar, existing.registryId);
+    return { registryId: existing.registryId, txHash: null, transferTx };
+  }
+
+  const txHash = await registrar.writeContract({
     address: registries.identity,
     abi: identityRegistryAbi,
     functionName: 'register',
-    args: [`${baseUrl}/api/agents/${agentId}/attestation`],
-    account: wallet.account,
+    args: [`${baseUrl}/api/agents/${agentId}/registration`],
+    account: registrar.account,
     chain: chainDefinition(chain),
   });
 
@@ -155,9 +248,56 @@ export async function registerIdentity(
   }
 
   if (registryId === null) throw new Error(`identity registration emitted no Registered event: ${txHash}`);
-  await db.update(agents).set({ registryId, registryChainId: chain.id }).where(eq(agents.id, agentId));
+  await db.insert(agentIdentities).values({
+    agentId,
+    chainId: chain.id,
+    registry: registries.identity,
+    registryId,
+    registerTx: txHash,
+  });
 
-  return { registryId, txHash };
+  const transferTx = await handOver(chain, registries, registrar, registryId);
+  return { registryId, txHash, transferTx };
+}
+
+/**
+ * Moves a freshly minted identity from the registrar to `IDENTITY_OWNER`.
+ *
+ * Read from the chain rather than remembered, so it is safe to call on every
+ * run: an identity already handed over costs one read and sends nothing. One
+ * held by some third account is refused loudly, since that is not a state this
+ * arena can produce by itself.
+ */
+async function handOver(
+  chain: DeployedChain,
+  registries: Registries,
+  registrar: Signing,
+  registryId: string,
+): Promise<Hash | null> {
+  const owner = identityOwner();
+  if (!owner) return null;
+
+  const current = await publicClientFor(chain).readContract({
+    address: registries.identity,
+    abi: identityRegistryAbi,
+    functionName: 'ownerOf',
+    args: [BigInt(registryId)],
+  });
+  if (current.toLowerCase() === owner.toLowerCase()) return null;
+  if (current.toLowerCase() !== registrar.account.address.toLowerCase()) {
+    throw new Error(`identity ${registryId} on ${chain.name} is held by ${current}, neither the registrar nor IDENTITY_OWNER`);
+  }
+
+  const hash = await registrar.writeContract({
+    address: registries.identity,
+    abi: identityRegistryAbi,
+    functionName: 'transferFrom',
+    args: [registrar.account.address, owner, BigInt(registryId)],
+    account: registrar.account,
+    chain: chainDefinition(chain),
+  });
+  await mined(chain, hash, 'identity handover');
+  return hash;
 }
 
 export interface Published {
@@ -165,36 +305,36 @@ export interface Published {
   name: string;
   registryId: string;
   attestation: Attestation;
+  attestationId: string;
   evidenceHash: `0x${string}`;
   reputationTx: Hash;
-  validationTx: Hash;
+  validationTx: Hash | null;
 }
 
+const ABIS = {
+  reputation: reputationRegistryAbi,
+  validation: validationRegistryAbi,
+} as const;
+
 /**
- * Publishes one agent's record: the win rate to Reputation, how much to believe
- * it to Validation.
+ * Publishes one agent's record on one chain: the rating to Reputation, and how
+ * much to believe it to Validation where the chain has that registry.
  *
- * The order matters. The validation request goes up first and commits to the
- * evidence hash, so the score that follows is answering a question that was
- * already public rather than one written to fit the answer.
+ * The URI that goes on chain names this attestation's own row, not the agent's
+ * latest, so a reader who follows an old record still fetches the bytes its
+ * hash was taken over. The row is therefore written before anything is sent.
  */
 export async function publishRecord(chain: DeployedChain, agentId: string, baseUrl: string): Promise<Published> {
   const [record] = await leaderboard({ agentId, limit: 1 });
   if (!record) throw new NotConfigured(`no record for agent ${agentId}`);
 
-  const [agent] = await db
-    .select({ registryId: agents.registryId, registryChainId: agents.registryChainId })
-    .from(agents)
-    .where(eq(agents.id, agentId))
-    .limit(1);
-
-  if (!agent?.registryId || agent.registryChainId !== chain.id) {
+  const identity = await identityOn(chain, agentId);
+  if (!identity) {
     throw new NotConfigured(`agent ${agentId} has no ERC-8004 identity on ${chain.name}. Register it first.`);
   }
 
   const registries = registriesFor(chain);
-  const wallet = attestor(chain);
-  if (!wallet.account) throw new NotConfigured('the attestor wallet has no account');
+  const keys = signers(chain);
 
   const rating = { mu: record.ratingMu, sigma: record.ratingSigma };
   const attestation = buildAttestation({
@@ -209,57 +349,15 @@ export async function publishRecord(chain: DeployedChain, agentId: string, baseU
     measuredAt: new Date(),
   });
 
-  const uri = `${baseUrl}/api/agents/${agentId}/attestation`;
+  const attestationId = randomUUID();
+  const uri = `${baseUrl}/api/attestations/${attestationId}`;
   const evidenceHash = keccak256(toHex(canonicalise(attestation)));
-  const registryId = BigInt(agent.registryId);
-  const validator = wallet.account.address;
-
-  const validationTx = await wallet.writeContract({
-    address: registries.validation,
-    abi: validationRegistryAbi,
-    functionName: 'validationRequest',
-    args: [validator, registryId, uri, evidenceHash],
-    account: wallet.account,
-    chain: chainDefinition(chain),
-  });
-  await publicClientFor(chain).waitForTransactionReceipt({ hash: validationTx, confirmations: 1 });
-
-  // Awaited like the others. Each of these is signed by the same account, so a
-  // write sent before the previous one is mined can be built on the same nonce
-  // and quietly replace it. Waiting is the whole fix.
-  const responseTx = await wallet.writeContract({
-    address: registries.validation,
-    abi: validationRegistryAbi,
-    functionName: 'validationResponse',
-    args: [evidenceHash, confidenceIn(rating), uri, evidenceHash, VALIDATION_TAG],
-    account: wallet.account,
-    chain: chainDefinition(chain),
-  });
-  await publicClientFor(chain).waitForTransactionReceipt({ hash: responseTx, confirmations: 1 });
-
-  const reputationTx = await wallet.writeContract({
-    address: registries.reputation,
-    abi: reputationRegistryAbi,
-    functionName: 'giveFeedback',
-    args: [
-      registryId,
-      BigInt(Math.round(attestation.rating * 10 ** REPUTATION_DECIMALS)),
-      REPUTATION_DECIMALS,
-      REPUTATION_TAGS.game,
-      REPUTATION_TAGS.metric,
-      uri,
-      uri,
-      evidenceHash,
-    ],
-    account: wallet.account,
-    chain: chainDefinition(chain),
-  });
-  await publicClientFor(chain).waitForTransactionReceipt({ hash: reputationTx, confirmations: 1 });
 
   await db.insert(attestations).values({
+    id: attestationId,
     agentId,
     chainId: chain.id,
-    registryId: agent.registryId,
+    registryId: identity.registryId,
     matches: attestation.matches,
     rating: Math.round(attestation.rating * 10 ** REPUTATION_DECIMALS),
     ratingMu: attestation.ratingMu,
@@ -267,17 +365,50 @@ export async function publishRecord(chain: DeployedChain, agentId: string, baseU
     confidence: attestation.confidence,
     evidenceHash,
     evidence: attestation,
-    reputationTx,
-    validationTx,
   });
+
+  const plan = publishPlan({
+    registryId: BigInt(identity.registryId),
+    attestor: keys.attestor.account.address,
+    uri,
+    evidenceHash,
+    attestation,
+    // The request must come from the identity's owner, which is no longer the
+    // registrar once identities are handed over.
+    validation: registries.validation !== null && identityOwner() === null,
+  });
+
+  const sent: Partial<Record<(typeof plan)[number]['column'], Hash>> = {};
+  for (const write of plan) {
+    const wallet = keys[write.signer];
+    const address = write.registry === 'validation' ? registries.validation! : registries.reputation;
+
+    // Awaited one at a time. Two writes from one account sent before the first
+    // is mined can be built on the same nonce and quietly replace each other.
+    // The cast is the price of choosing the ABI at runtime; the arguments were
+    // shaped against the same specification in publishPlan.
+    const hash = await wallet.writeContract({
+      address,
+      abi: ABIS[write.registry],
+      functionName: write.functionName,
+      args: write.args,
+      account: wallet.account,
+      chain: chainDefinition(chain),
+    } as unknown as Parameters<WalletClient['writeContract']>[0]);
+    await mined(chain, hash, write.functionName);
+
+    sent[write.column] = hash;
+    await db.update(attestations).set({ [write.column]: hash }).where(eq(attestations.id, attestationId));
+  }
 
   return {
     agentId,
     name: record.name,
-    registryId: agent.registryId,
+    registryId: identity.registryId,
     attestation,
+    attestationId,
     evidenceHash,
-    reputationTx,
-    validationTx,
+    reputationTx: sent.reputationTx!,
+    validationTx: sent.validationTx ?? null,
   };
 }

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SEAT_COST, STARTING_GRANT, formatChips } from '@/lib/economy';
 import { useAccount, type AccountAgent } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
+import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
 import { Badge, Button, ButtonLink, Card, Stat } from './ui';
 
@@ -24,6 +25,24 @@ export function AgentConsole() {
   /** Shown once, right after minting. It is not stored and cannot be shown again. */
   const [freshToken, setFreshToken] = useState<{ agentId: string; token: string } | null>(null);
   const [cashierOpen, setCashierOpen] = useState(false);
+  const signedIn = account !== null;
+
+  // This page is the answer to "what did the arena see", and an answer read
+  // once on load is wrong the moment an agent connects, queues or is seated.
+  // Asked again while the tab is being looked at, and the moment it is looked
+  // at again, rather than on a timer nobody is watching.
+  useEffect(() => {
+    if (!signedIn) return;
+    const look = () => {
+      if (document.visibilityState === 'visible') void refresh().catch(() => {});
+    };
+    const timer = setInterval(look, STATUS_POLL_MS);
+    document.addEventListener('visibilitychange', look);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', look);
+    };
+  }, [signedIn, refresh]);
 
   if (loading) {
     return (
@@ -77,26 +96,10 @@ export function AgentConsole() {
     }
   }
 
-  /**
-   * The first `Agent N` this account is not already using.
-   *
-   * Counting the agents is not the same question. Names are editable here, so
-   * an owner who renames their only agent to "Agent 2" makes the count suggest
-   * a name the server will refuse — and the refusal blames them for a name the
-   * button chose. The duplicate rule itself is right; only the guess was wrong.
-   */
-  function nextAgentName(): string {
-    const taken = new Set(account!.agents.map((agent) => agent.name.trim().toLowerCase()));
-    for (let n = 1; ; n += 1) {
-      const name = `Agent ${n}`;
-      if (!taken.has(name.toLowerCase())) return name;
-    }
-  }
-
   async function addAgent() {
     const body = await call('/api/agents', {
       method: 'POST',
-      body: JSON.stringify({ name: nextAgentName() }),
+      body: JSON.stringify({ name: unusedName(account!.agents) }),
     });
     if (body) setFreshToken({ agentId: String(body.agentId), token: String(body.token) });
   }
@@ -143,6 +146,9 @@ export function AgentConsole() {
                   if (body) setFreshToken({ agentId: agent.id, token: String(body.token) });
                 }}
                 onRename={(name) => void call(`/api/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ name }) })}
+                onQueue={(enabled) =>
+                  void call(`/api/agents/${agent.id}/queue`, { method: 'POST', body: JSON.stringify({ enabled }) })
+                }
               />
             ))
           )}
@@ -191,6 +197,7 @@ function AgentCard({
   token,
   onRotate,
   onRename,
+  onQueue,
 }: {
   agent: AccountAgent;
   busy: boolean;
@@ -198,6 +205,7 @@ function AgentCard({
   token: string | null;
   onRotate: () => void;
   onRename: (name: string) => void;
+  onQueue: (enabled: boolean) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const name = draft ?? agent.name;
@@ -215,6 +223,11 @@ function AgentCard({
               if (draft !== null && draft.trim() && draft !== agent.name) onRename(draft.trim());
               setDraft(null);
             }}
+            // Enter is what everyone presses to finish typing a name, and
+            // leaving the field is what saves it.
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
             maxLength={24}
             aria-label="Agent name"
             className="h-9 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
@@ -222,6 +235,8 @@ function AgentCard({
         </div>
         <Status agent={agent} affordable={affordable} />
       </div>
+
+      <QueueSwitch agent={agent} disabled={busy} onChange={onQueue} />
 
       {/*
         Shown once, immediately after minting. Only the hash is stored, so this
@@ -241,6 +256,8 @@ function AgentCard({
         <Stat label="Net chips" value={`${agent.chipsWon >= 0 ? '+' : ''}${formatChips(agent.chipsWon)}`} />
         <Stat label="Biggest pot" value={formatChips(agent.biggestPot)} />
       </dl>
+
+      <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {agent.seat ? (
@@ -312,9 +329,81 @@ function FreshToken({ token }: { token: string }) {
 function Status({ agent, affordable }: { agent: AccountAgent; affordable: boolean }) {
   if (agent.seat) return <Badge tone="accent">In a match</Badge>;
   if (!agent.connected) return <Badge>Not connected</Badge>;
+  if (!agent.queueEnabled) return <Badge>Connected, matches off</Badge>;
   if (!agent.ready) return <Badge>Connected, not queued</Badge>;
   if (!affordable) return <Badge tone="danger">Queued, not enough chips</Badge>;
   return <Badge tone="accent">Queued</Badge>;
+}
+
+/**
+ * The owner's say in whether this agent is seated.
+ *
+ * The agent asks by saying `ready`; this is the owner agreeing to it. Off for a
+ * new agent, so the first run of freshly written code connects and can be
+ * watched answering without being charged a seat. Turning it off mid-match
+ * stops the next match, not this one, because nobody leaves a match.
+ */
+function QueueSwitch({
+  agent,
+  disabled,
+  onChange,
+}: {
+  agent: AccountAgent;
+  disabled: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  const on = agent.queueEnabled;
+  const label = `Play matches: ${agent.name}`;
+
+  return (
+    <div className="mt-4 flex items-start gap-3 rounded-control border border-line bg-surface-2 px-3 py-2.5">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onChange(!on)}
+        className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+          on ? 'border-accent bg-accent' : 'border-line-strong bg-surface-3'
+        }`}
+      >
+        <span
+          aria-hidden
+          className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
+            on ? 'translate-x-[1.125rem] bg-accent-ink' : 'translate-x-0.5 bg-muted'
+          }`}
+        />
+      </button>
+      <div className="min-w-0">
+        <p className="text-sm text-ink">Play matches {on ? 'on' : 'off'}</p>
+        <p className="mt-0.5 text-xs text-faint">
+          {on
+            ? agent.seat
+              ? 'It is queued again when this match ends. Turning this off stops the next match, not this one.'
+              : `When connected and asking for a game, it is seated and charged ${formatChips(SEAT_COST)} for each match.`
+            : 'It can connect and be watched answering, but it is never seated and never charged.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** How often the page asks what the arena sees of these agents. */
+const STATUS_POLL_MS = 5_000;
+
+/**
+ * A default name no other agent on this account already has.
+ *
+ * Counting agents alone collides as soon as one has been renamed: an owner
+ * holding "Agent 1" and a renamed "Agent 3" would be offered "Agent 3" again,
+ * refused, and offered it again on every click.
+ */
+function unusedName(agents: readonly AccountAgent[]): string {
+  const taken = new Set(agents.map((agent) => agent.name.toLowerCase()));
+  let n = agents.length + 1;
+  while (taken.has(`agent ${n}`)) n += 1;
+  return `Agent ${n}`;
 }
 
 function ConnectGuide() {
