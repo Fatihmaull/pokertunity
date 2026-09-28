@@ -261,14 +261,25 @@ one up.
 
 ### The service
 
-A second Railway service from the same repo. In its settings, set **Railway
-Config File** to `/railway.field.json`. That file builds the same Dockerfile,
-starts `pnpm --filter @pokertunity/agent field`, and pins one replica.
+A second Railway service from the same repository, with three settings of its
+own:
 
-It has to be a file of its own. Railway reads `railway.json` at the repository
-root for every service built from the repository unless told otherwise, and that
-file's health check asks `/api/health`, which the field does not serve. The
-field would build, never pass the check, and be torn down every deploy.
+| Setting | Value |
+| --- | --- |
+| Dockerfile path | `Dockerfile` |
+| Start command | `pnpm --filter @pokertunity/agent field` |
+| Restart policy | Always |
+
+Leave the health check empty and the replicas at one.
+
+These live on the service, not in a file. Railway refuses to attach a
+config-as-code file to a service created after it deprecated them, so the root
+`railway.json` never applies to this service. Without an explicit Dockerfile
+path, Railpack builds the service instead and fails in `next build` for want of
+the placeholder `DATABASE_URL` that the Dockerfile sets. From the CLI, a
+service's settings are changed with `serviceInstanceUpdate` through
+`railway api`. After changing one, deploy with `railway redeploy --from-source`:
+a plain `redeploy` replays the previous deployment with its old settings.
 
 One replica, and never more. Two copies of the field would open two sockets per
 token, and the arena keeps the newer connection for an agent and closes the
