@@ -194,30 +194,42 @@ function AgentCard({
 
   return (
     <Card className="p-5">
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      {/* Who it is and when it was last heard from on the left; what it is
+          doing and the one switch that changes that on the right. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 items-center gap-3">
           <ChipDot color={agent.color} size={22} />
-          <input
-            value={name}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => {
-              if (draft !== null && draft.trim() && draft !== agent.name) onRename(draft.trim());
-              setDraft(null);
-            }}
-            // Enter is what everyone presses to finish typing a name, and
-            // leaving the field is what saves it.
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
-            }}
-            maxLength={24}
-            aria-label="Agent name"
-            className="h-9 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
-          />
+          <div className="min-w-0">
+            <input
+              value={name}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={() => {
+                if (draft !== null && draft.trim() && draft !== agent.name) onRename(draft.trim());
+                setDraft(null);
+              }}
+              // Enter is what everyone presses to finish typing a name, and
+              // leaving the field is what saves it.
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+              maxLength={24}
+              aria-label="Agent name"
+              className="-ml-2 h-8 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
+            />
+            <p className="text-xs text-faint">
+              {agent.lastCloseReason
+                ? `Last disconnect: ${agent.lastCloseReason}`
+                : agent.lastSeenAt
+                  ? `Last seen ${new Date(agent.lastSeenAt).toLocaleString('en-US')}`
+                  : 'Never connected'}
+            </p>
+          </div>
         </div>
-        <Status agent={agent} affordable={affordable} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Status agent={agent} affordable={affordable} />
+          <QueueSwitch agent={agent} disabled={busy} onChange={onQueue} />
+        </div>
       </div>
-
-      <QueueSwitch agent={agent} disabled={busy} onChange={onQueue} />
 
       {/*
         Shown once, immediately after minting. Only the hash is stored, so this
@@ -247,15 +259,6 @@ function AgentCard({
         <Button size="sm" onClick={onRotate} disabled={busy}>
           Rotate token
         </Button>
-        {agent.lastCloseReason ? (
-          <span className="text-xs text-faint">Last disconnect: {agent.lastCloseReason}</span>
-        ) : agent.lastSeenAt ? (
-          <span className="text-xs text-faint">
-            Last seen {new Date(agent.lastSeenAt).toLocaleString('en-US')}
-          </span>
-        ) : (
-          <span className="text-xs text-faint">Never connected</span>
-        )}
       </div>
 
       {/* Measured over thousands of hands, so it says little early on and
@@ -271,7 +274,6 @@ function AgentCard({
   );
 }
 
-/** The one thing an owner debugging a silent agent actually needs. */
 /**
  * The token, at the only moment it exists anywhere we can show it.
  *
@@ -299,17 +301,24 @@ function FreshToken({ token, connected }: { token: string; connected: boolean })
   }
 
   return (
-    <div className="mt-4 rounded-control border border-accent/40 bg-accent/5 p-3">
-      <p className="text-xs font-medium text-ink">Copy this now. It is not shown again.</p>
-      <div className="mt-2 flex items-center gap-2">
-        <input
-          readOnly
-          value={token}
-          aria-label="Agent token"
-          onFocus={(event) => event.currentTarget.select()}
-          className="mono min-w-0 flex-1 rounded-control border border-line bg-surface-2 px-2 py-1.5 text-xs text-accent"
-        />
-        <Button onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+    <div className="mt-4 rounded-control border border-accent/40 bg-accent/5 p-2.5">
+      {/* One row where there is width for it: the warning, the token and the
+          button read as a single instruction. A phone breaks it after the
+          warning and keeps the field and its button together. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="text-xs font-medium text-ink">New token, shown once</p>
+        <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
+          <input
+            readOnly
+            value={token}
+            aria-label="Agent token"
+            onFocus={(event) => event.currentTarget.select()}
+            className="mono h-8 min-w-0 flex-1 rounded-control border border-line bg-surface-2 px-2 text-xs text-accent"
+          />
+          <Button size="sm" tone="primary" onClick={copy}>
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+        </div>
       </div>
       {/*
         Rotation refuses the old token on the next connection and leaves the one
@@ -354,42 +363,42 @@ function QueueSwitch({
   onChange: (enabled: boolean) => void;
 }) {
   const on = agent.queueEnabled;
-  const label = `Play matches: ${agent.name}`;
+  // What flipping it would mean, for whoever wonders. The badge beside it
+  // already says what it is doing now, so this does not need a line of its own.
+  const hint = on
+    ? agent.seat
+      ? 'Turning this off takes effect after this match.'
+      : `${formatChips(SEAT_COST)} per match.`
+    : 'Connects without being seated or charged.';
 
   return (
-    <div className="mt-4 flex items-center gap-3">
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`Play matches: ${agent.name}`}
+      title={hint}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className="inline-flex items-center gap-2.5 text-sm text-muted transition-colors hover:text-ink disabled:opacity-50"
+    >
+      Play matches
       {/* The thumb is placed absolutely from the track's centre line rather
           than left in the flow, so it sits dead centre whatever the border and
           line box around it add up to. */}
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={label}
-        disabled={disabled}
-        onClick={() => onChange(!on)}
-        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors disabled:opacity-50 ${
+      <span
+        aria-hidden
+        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors ${
           on ? 'border-accent bg-accent' : 'border-line-strong bg-surface-3'
         }`}
       >
         <span
-          aria-hidden
           className={`absolute top-1/2 left-0.5 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-transform ${
             on ? 'translate-x-4 bg-accent-ink' : 'translate-x-0 bg-muted'
           }`}
         />
-      </button>
-      <div className="min-w-0">
-        <p className="text-sm text-ink">Play matches {on ? 'on' : 'off'}</p>
-        <p className="text-xs text-faint">
-          {on
-            ? agent.seat
-              ? 'Turning this off takes effect after this match.'
-              : `${formatChips(SEAT_COST)} per match.`
-            : 'Connects without being seated or charged.'}
-        </p>
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }
 
