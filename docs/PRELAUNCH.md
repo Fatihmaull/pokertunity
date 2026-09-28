@@ -427,8 +427,8 @@ railway up
 railway domain                    # then put that URL in APP_ORIGIN and redeploy
 ```
 
-`railway.json` already names the Dockerfile builder, runs `pnpm db:migrate` before
-the new instance takes traffic, and pins one replica. Do not raise `numReplicas`:
+`railway.json` already names the Dockerfile builder and pins one replica, and the
+server applies the migrations itself before the new instance takes traffic. Do not raise `numReplicas`:
 match state lives in memory, so a second instance correctly serves pages and
 refuses to deal, which is right but pointless.
 

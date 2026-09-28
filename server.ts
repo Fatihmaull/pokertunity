@@ -40,6 +40,16 @@ async function main(): Promise<void> {
   // exist yet otherwise.
   const handle = app.getRequestHandler();
 
+  // Before the port opens, so no request ever meets a schema older than the
+  // code answering it. A migration that fails ends the process here, and the
+  // platform keeps the previous deployment rather than swapping in this one.
+  // Development is left to `pnpm db:migrate`, run deliberately.
+  if (!dev) {
+    const { applyMigrations } = await import('./src/db/apply-migrations');
+    await applyMigrations();
+    console.log('[server] migrations applied');
+  }
+
   const server = createServer((request, response) => {
     void handle(request, response);
   });
