@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SEAT_COST, STARTING_GRANT, formatChips } from '@/lib/economy';
+import { SEAT_COST, formatChips } from '@/lib/economy';
 import { useAccount, type AccountAgent } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
@@ -60,8 +60,7 @@ export function AgentConsole() {
             Bring an agent. We run the tournament.
           </h1>
           <p className="mx-auto mt-4 max-w-[56ch] text-base text-muted">
-            Connect a wallet and this page issues the token your agent connects with. It is one signature, not a
-            transaction, so it costs nothing. It proves the wallet is yours so nobody else can spend your chips.
+            Connect a wallet to get your agent&rsquo;s token. One signature, no transaction, no cost.
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
             <Button tone="primary" size="lg" onClick={() => void signIn()} disabled={connecting}>
@@ -113,7 +112,7 @@ export function AgentConsole() {
           <h1 className="text-2xl text-ink sm:text-3xl">Your agents</h1>
           <p className="mt-1.5 max-w-[62ch] text-sm text-muted">
             Each agent connects to the arena over a socket using its own token. It plays when it is connected and
-            has asked for a game. You never seat it: the arena matches it against opponents of similar rating.
+            has asked for a game.
           </p>
         </div>
         <Button tone="primary" onClick={() => void addAgent()} disabled={busy}>
@@ -128,10 +127,7 @@ export function AgentConsole() {
           {account.agents.length === 0 ? (
             <Card className="p-8 text-center">
               <h2 className="text-lg text-ink">No agents yet</h2>
-              <p className="mx-auto mt-2 max-w-[52ch] text-sm text-muted">
-                Add one and you get a token. Point the reference agent at it and you are playing in a minute, or
-                write your own against the protocol.
-              </p>
+              <p className="mx-auto mt-2 max-w-[52ch] text-sm text-muted">Add one to get its token.</p>
             </Card>
           ) : (
             account.agents.map((agent) => (
@@ -161,11 +157,7 @@ export function AgentConsole() {
             <h2 className="text-base text-ink">Chips</h2>
             <p className="mono mt-3 text-2xl text-ink tabular-nums">{formatChips(account.chips)}</p>
             <p className="mt-2 text-xs text-faint">
-              A seat costs {formatChips(SEAT_COST)}, buy-in and entry fee together. The buy-in comes back with
-              whatever your agent finished on.
-            </p>
-            <p className="mt-2 text-xs text-faint">
-              Every account starts with {formatChips(STARTING_GRANT)}, once. More are bought at the cashier.
+              {formatChips(SEAT_COST)} per match. Your agent&rsquo;s final stack comes back to you.
             </p>
             {/* Loud only when it is the thing standing between an agent and a
                 seat. An owner with chips to spare has no reason to look at it. */}
@@ -331,8 +323,7 @@ function FreshToken({ token, connected }: { token: string; connected: boolean })
       */}
       {connected ? (
         <p className="mt-2 text-xs text-muted">
-          The connection open now is still on the old token and keeps playing. If you rotated because the token
-          leaked, restart your agent with this one: it takes over the seat and the old connection is closed.
+          The open connection still uses the old token. Restart your agent with this one to close it.
         </p>
       ) : null}
     </div>
@@ -369,7 +360,10 @@ function QueueSwitch({
   const label = `Play matches: ${agent.name}`;
 
   return (
-    <div className="mt-4 flex items-start gap-3 rounded-control border border-line bg-surface-2 px-3 py-2.5">
+    <div className="mt-4 flex items-center gap-3 rounded-control border border-line bg-surface-2 px-3 py-2.5">
+      {/* The thumb is placed absolutely from the track's centre line rather
+          than left in the flow, so it sits dead centre whatever the border and
+          line box around it add up to. */}
       <button
         type="button"
         role="switch"
@@ -377,25 +371,25 @@ function QueueSwitch({
         aria-label={label}
         disabled={disabled}
         onClick={() => onChange(!on)}
-        className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors disabled:opacity-50 ${
           on ? 'border-accent bg-accent' : 'border-line-strong bg-surface-3'
         }`}
       >
         <span
           aria-hidden
-          className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
-            on ? 'translate-x-[1.125rem] bg-accent-ink' : 'translate-x-0.5 bg-muted'
+          className={`absolute top-1/2 left-0.5 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-transform ${
+            on ? 'translate-x-4 bg-accent-ink' : 'translate-x-0 bg-muted'
           }`}
         />
       </button>
       <div className="min-w-0">
         <p className="text-sm text-ink">Play matches {on ? 'on' : 'off'}</p>
-        <p className="mt-0.5 text-xs text-faint">
+        <p className="text-xs text-faint">
           {on
             ? agent.seat
-              ? 'It is queued again when this match ends. Turning this off stops the next match, not this one.'
-              : `When connected and asking for a game, it is seated and charged ${formatChips(SEAT_COST)} for each match.`
-            : 'It can connect and be watched answering, but it is never seated and never charged.'}
+              ? 'Turning this off takes effect after this match.'
+              : `${formatChips(SEAT_COST)} per match.`
+            : 'Connects without being seated or charged.'}
         </p>
       </div>
     </div>
@@ -423,10 +417,6 @@ function ConnectGuide() {
   return (
     <Card className="p-5">
       <h2 className="text-base text-ink">Connecting</h2>
-      <p className="mt-2 max-w-[62ch] text-sm text-muted">
-        Your agent opens a socket to the arena and says hello with its token. It is never called back, so it needs
-        no public address and no certificate. A laptop behind a router plays exactly as well as a server.
-      </p>
       <pre className="scroll-x mono mt-4 rounded-control border border-line bg-surface-2 p-3 text-xs text-muted">
 {`ARENA_URL=wss://<this-host>/agent \\
 AGENT_TOKEN=ah_... \\
@@ -434,9 +424,8 @@ AGENT_BRAIN=heuristic \\
 pnpm --filter @pokertunity/agent start`}
       </pre>
       <p className="mt-3 max-w-[62ch] text-xs text-faint">
-        That runs the reference agent, which plays off the equity the arena sends it and needs no model key. Set
-        AGENT_BRAIN=model with a key to have it reason, or write your own against the protocol: a handful of JSON
-        frames, and the reference agent is the documentation.
+        The heuristic brain needs no model key. Set AGENT_BRAIN=model with a key to have it reason, or write your
+        own against the protocol.
       </p>
     </Card>
   );

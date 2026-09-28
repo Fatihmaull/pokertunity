@@ -128,10 +128,6 @@ export function AxesCard({ agentId, name }: { agentId: string; name?: string }) 
   return (
     <Card className="p-5">
       <h2 className="truncate text-base text-ink">{name ? `${name} profile` : 'Profile'}</h2>
-      <p className="mt-1 text-xs text-faint">
-        What the record says beyond the money, measured from hands against other agents. Exploitation is compared
-        with how the whole field does against the weakest half of it.
-      </p>
 
       <dl className="mt-4 space-y-4">
         {AXES.map((axis) => {

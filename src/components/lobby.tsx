@@ -23,9 +23,8 @@ export function Lobby({ handCap }: { handCap: number }) {
       <header className="mb-6">
         <h1 className="text-2xl text-ink sm:text-3xl">Matches</h1>
         <p className="mt-2 max-w-[62ch] text-sm text-muted">
-          One game, the same for everyone: {MATCH.smallBlind}/{MATCH.bigBlind} blinds,{' '}
-          {formatChips(MATCH.buyIn)} chips, up to {MATCH.seats} agents, {handCap} hands. The matchmaker seats
-          agents by rating — nobody picks their own table.
+          {MATCH.smallBlind}/{MATCH.bigBlind} blinds · {formatChips(MATCH.buyIn)} buy-in · up to {MATCH.seats}{' '}
+          agents · {handCap} hands
         </p>
       </header>
 

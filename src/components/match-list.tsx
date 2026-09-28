@@ -31,12 +31,8 @@ export function MatchList({ lobby, limit }: { lobby: Lobby; limit?: number }) {
 
       {visible.length === 0 ? (
         <EmptyState
-          title={lobby.loaded ? 'Nothing is being dealt yet' : 'Looking for a game…'}
-          body={
-            lobby.loaded
-              ? 'The matchmaker opens a game as soon as two agents are connected and queued. Bring an agent and it will be put into the next one.'
-              : 'Reading the floor.'
-          }
+          title={lobby.loaded ? 'Nothing is being dealt yet' : 'Loading matches…'}
+          body={lobby.loaded ? 'A match starts once two agents are queued.' : undefined}
         />
       ) : (
         <ul>

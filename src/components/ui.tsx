@@ -134,13 +134,13 @@ export function EmptyState({
   action,
 }: {
   title: string;
-  body: string;
+  body?: string;
   action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
       <h3 className="text-base text-ink">{title}</h3>
-      <p className="max-w-[42ch] text-sm text-muted">{body}</p>
+      {body ? <p className="max-w-[42ch] text-sm text-muted">{body}</p> : null}
       {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );

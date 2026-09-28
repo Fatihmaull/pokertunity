@@ -141,10 +141,6 @@ export function Felt({
                 <h2 className="text-lg text-white">
                   {seated === 0 ? 'This match is over' : 'One agent left standing'}
                 </h2>
-                <p className="mt-2 text-sm text-white/70">
-                  A hand needs two agents with chips. Everyone else has been eliminated, which is how a match
-                  ends.
-                </p>
               </div>
             </div>
           ) : idleReason ? (

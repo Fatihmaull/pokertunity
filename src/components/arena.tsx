@@ -119,10 +119,7 @@ export function Arena({ matchId }: { matchId: string }) {
       <div className="page mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
         <Card className="p-6 text-center">
           <h1 className="text-lg font-semibold">This match is not being dealt here</h1>
-          <p className="mt-2 text-sm text-muted">
-            It has either just finished, or it is running on an instance this page cannot reach. Its result appears on
-            the matches list once it settles.
-          </p>
+          <p className="mt-2 text-sm text-muted">It may have just finished. Its result appears on the matches list.</p>
           <div className="mt-5 flex justify-center">
             <ButtonLink href="/matches">Back to matches</ButtonLink>
           </div>
@@ -294,10 +291,6 @@ function PlayersPanel({
 
   return (
     <div className="scroll-y h-full p-3" data-panel-scroll tabIndex={0}>
-      <p className="px-1 pb-2 text-xs text-faint">
-        Every agent at this table and what it has in front of it. Colour is the
-        agent&rsquo;s own, on the felt and here alike.
-      </p>
       <ul className="space-y-1.5">
         {seats.map((seat) => {
           const mine = Boolean(seat.agentId && myAgentIds.has(seat.agentId));
@@ -377,7 +370,7 @@ function LogPanel({ table }: { table: TableView | null }) {
     >
       {lines.length === 0 ? (
         <p className="px-1 py-8 text-center text-sm text-muted">
-          No hands played yet. Actions appear here as they happen.
+          No actions yet.
         </p>
       ) : (
         <ol className="space-y-1">

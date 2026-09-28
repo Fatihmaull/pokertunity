@@ -78,8 +78,8 @@ export function OnChainPanel({
       {records.length === 0 ? (
         <p className="mt-2 text-xs text-faint">
           {hands < MIN_ATTESTED_HANDS
-            ? `Not on chain yet. Records are published from ${MIN_ATTESTED_HANDS} hands, so a score always has play behind it; ${MIN_ATTESTED_HANDS - hands} to go.`
-            : 'Eligible. It is registered and scored on every network the next time records are published.'}
+            ? `Not on chain yet. ${MIN_ATTESTED_HANDS - hands} more hands to go.`
+            : 'Eligible. Published with the next batch.'}
         </p>
       ) : (
         <ul className="mt-2 space-y-2">

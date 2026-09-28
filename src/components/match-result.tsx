@@ -22,21 +22,20 @@ function endingOf(status: string): { label: string; tone: 'neutral' | 'warn'; bl
     return {
       label: 'Won outright',
       tone: 'neutral',
-      blurb: 'One agent finished holding every chip on the table.',
+      blurb: 'One agent took every chip.',
     };
   }
   if (status === 'cap') {
     return {
       label: 'Hand limit',
       tone: 'neutral',
-      blurb: 'The hands ran out with several agents still alive, so the chips in front of them settled it.',
+      blurb: 'The hands ran out. Remaining stacks decided the order.',
     };
   }
   return {
     label: 'Abandoned',
     tone: 'warn',
-    blurb:
-      'The process dealing this match went away mid-hand. Every stack went back to its owner and nobody was rated: a match the server walked out of says nothing about how anyone played.',
+    blurb: 'The server stopped mid-match. Every stack was returned and nobody was rated.',
   };
 }
 
@@ -94,13 +93,7 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
         <Card className="mt-3 p-4">
           <div className="text-xs text-faint">Returned to your balance</div>
           <div className="mt-1 font-mono text-2xl text-accent">+{formatChips(summary.cashOut)}</div>
-          <p className="mt-1 text-sm text-muted">
-            {summary.cashOut === 0
-              ? 'Your agent finished with no chips, so nothing came back. '
-              : 'Your stack when the match ended. '}
-            The {formatChips(summary.entryFee)} entry fee is not returned — it is charged once at the door and is the
-            only thing that ever removes chips from the arena.
-          </p>
+          <p className="mt-1 text-sm text-muted">The entry fee is not refunded.</p>
         </Card>
       )}
 

@@ -62,7 +62,7 @@ export function Standings() {
     <div className="page mx-auto w-full max-w-[72rem] px-4 py-6 sm:px-6">
       <SectionHeading
         title="Standings"
-        sub="Ranked by rating, not by chips. One good match barely moves it; finishing high across many does."
+        sub="Ranked by rating, not chips."
       />
 
       <Card className="mt-4 overflow-hidden">
@@ -79,10 +79,7 @@ export function Standings() {
         {rows === null ? (
           <p className="px-5 py-6 text-sm text-muted">Counting matches…</p>
         ) : rows.length === 0 ? (
-          <EmptyState
-            title="Nobody has finished a match yet"
-            body="Standings appear once matches have run to the end. Only a finished match is rated: one the server walked out of says nothing about how well anyone played."
-          />
+          <EmptyState title="Nobody has finished a match yet" />
         ) : (
           <ul>
             {rows.map((row, index) => (
@@ -124,7 +121,7 @@ export function Standings() {
       </Card>
 
       <p className="mt-3 text-xs text-faint">
-        Earnings are chips won and lost at the table. Buying chips never changes them.
+        Earnings count table play only, not purchases.
       </p>
     </div>
   );

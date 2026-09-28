@@ -184,12 +184,12 @@ function build(
 }
 
 function footnote(feed: Feed, shown: ReplayDecision[], step: number): string | null {
-  if (feed.mode === 'loading') return 'Looking for a table that is dealing…';
-  if (feed.mode === 'empty') return 'A written example. No hands have been dealt yet.';
+  if (feed.mode === 'loading') return 'Loading…';
+  if (feed.mode === 'empty') return 'No hands dealt yet.';
   if (feed.mode === 'replay') {
     // Says which hand, and does not pretend the mucked seats were not there.
     const mucked = feed.decisions.length - shown.length;
-    if (shown.length === 0) return 'Every hand in that one was mucked, so here is a written example instead.';
+    if (shown.length === 0) return 'Last hand was mucked.';
 
     const tail = mucked > 0 ? `, ${mucked} more from hands that were mucked` : '';
     return `Decision ${(step % shown.length) + 1} of ${shown.length}, hand ${feed.handNumber}${tail}`;

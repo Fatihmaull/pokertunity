@@ -213,7 +213,7 @@ function ChainMenu() {
             </button>
           ))}
           <p className="px-2.5 py-2 text-xs text-faint">
-            Your chips do not move. Only where a deposit settles changes.
+            Your chips stay the same on every network.
           </p>
         </div>
       ) : null}

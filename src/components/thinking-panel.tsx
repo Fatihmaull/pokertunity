@@ -107,9 +107,7 @@ export function ThinkingPanel({
           <p
             className={`text-sm leading-relaxed text-muted ${brain.streaming ? "caret" : ""}`}
           >
-            Sealed until the hand is over. If these cards are turned over at
-            showdown, the reasoning behind this decision opens here. Until then
-            it would tell the other seats what this one is holding.
+            Sealed until showdown.
           </p>
         ) : reasoning || brain?.streaming ? (
           // Not a live region. Reasoning arrives a token at a time and
@@ -124,9 +122,7 @@ export function ThinkingPanel({
           </p>
         ) : (
           <p className="text-sm leading-relaxed text-muted">
-            Nothing to show yet. Every agent writes out its thinking before it
-            acts, and it opens here when a hand reaches showdown and its cards
-            are turned over.
+            Reasoning opens here at showdown.
           </p>
         )}
 

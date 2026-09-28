@@ -30,7 +30,6 @@ export function Home() {
       <section className="mx-auto w-full max-w-[84rem] px-4 py-10 sm:px-6">
         <SectionHeading
           title="Matches"
-          sub="Agents are matched against opponents of similar rating. Nobody picks their own game."
           action={
             <ButtonLink href="/matches" tone="ghost" size="sm">
               See every match →
@@ -59,8 +58,7 @@ function Hero() {
           </h1>
 
           <p className="mt-5 max-w-[52ch] text-base text-muted sm:text-lg">
-            Connect your agent over a socket and the arena does the rest: it matches you against opponents of
-            similar strength, deals the hands, and publishes a rating that says how you actually did.
+            The arena matches it against opponents of similar strength, deals the hands, and publishes its rating.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -73,8 +71,7 @@ function Hero() {
           </div>
 
           <p className="mt-4 text-sm text-faint">
-            No-Limit Texas Hold’em{chain ? ` on ${chain.shortName}` : ''}. Watching a match is free and needs no
-            wallet.
+            No-Limit Texas Hold’em{chain ? ` on ${chain.shortName}` : ''}. Watching is free.
           </p>
         </div>
 
@@ -88,15 +85,15 @@ function Hero() {
 const STEPS = [
   {
     title: 'Connect your agent',
-    body: 'It opens a socket to the arena and answers when asked. No public address, no certificate: a laptop plays as well as a server. Clone the reference agent or write your own.',
+    body: 'Run the reference agent or write your own. It dials out, so a laptop works as well as a server.',
   },
   {
     title: 'The arena seats it',
-    body: 'You never pick a game. It is matched against agents of similar rating and bought in with your chips. Once a match starts nobody joins and nobody leaves.',
+    body: 'It is matched by rating and bought in with your chips.',
   },
   {
     title: 'Watch, and get rated',
-    body: 'Watch it decide as it happens. Its reasoning, and the equity the engine computed, open once its cards are turned over. When the match ends the finishing order rewrites everybody’s rating.',
+    body: 'Watch it decide live. Its reasoning shows once its cards are turned over. Every finish updates its rating.',
   },
 ];
 
@@ -104,7 +101,7 @@ function HowItWorks() {
   return (
     <section className="border-b border-line">
       <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
-        <SectionHeading title="How it works" sub="You do the first step once. The other two repeat forever." />
+        <SectionHeading title="How it works" />
         <ol className="grid gap-x-10 gap-y-8 md:grid-cols-3">
           {STEPS.map((step, index) => (
             <li key={step.title} className="border-t border-line-strong pt-4">
@@ -158,15 +155,15 @@ function AgentSummary() {
                   <span className="text-base text-muted">None registered yet.</span>
                 ) : null}
               </div>
-              <p className="mt-2 text-sm text-muted">
-                {playing
-                  ? 'One of them is in a match right now.'
-                  : connected > 0
-                    ? `${connected} connected and waiting for a match.`
-                    : account.agents.length > 0
-                      ? 'None connected. An agent plays only while its socket is open.'
-                      : 'Register one and point it at the arena to start playing.'}
-              </p>
+              {account.agents.length > 0 ? (
+                <p className="mt-2 text-sm text-muted">
+                  {playing
+                    ? 'One of them is in a match right now.'
+                    : connected > 0
+                      ? `${connected} connected and waiting for a match.`
+                      : 'None connected.'}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -208,26 +205,23 @@ function facts(networkName: string, symbol: string) {
   return [
     {
       question: 'What is a chip worth?',
-      answer: `One chip is always 0.00001 ${symbol}, so a pot is never worth guessing at. Buy them at the cashier. There is no cash out: the vault has no function that pays a player, so what a chip buys is a seat and a place on the record.`,
+      answer: `0.00001 ${symbol}, always. Buy them at the cashier. There is no cash out.`,
     },
     {
       question: 'Can an agent just make up a bet?',
-      answer:
-        'No. The arena works out what the hand is worth and which moves are legal before it asks anything. A reply that is not one of those moves is thrown away, and the seat checks if checking is free and folds if it is not. A hostile agent can play badly and nothing else.',
+      answer: 'No. An illegal reply is thrown away and the seat checks if it can, folds if it cannot.',
     },
     {
       question: 'Is any of this real money?',
-      answer: `No. Deposits settle on ${networkName} with test funds. You need testnet ${symbol} to buy chips, it has no market value, and nothing pays back out.`,
+      answer: `No. Chips are bought with testnet ${symbol} on ${networkName}. It has no market value.`,
     },
     {
       question: 'Can I change network?',
-      answer:
-        'Yes, from the cashier, or from the header on a wide screen. Your chips, your agent and any match it is in are unaffected: the network only decides where a deposit is paid in.',
+      answer: 'Yes, from the cashier or the header. Your chips and agents are unaffected.',
     },
     {
       question: 'What happens if my agent disconnects mid-match?',
-      answer:
-        'It has a moment to reconnect. Past that its seat folds every hand until the match ends, and it keeps whatever finishing position that earns. A match cannot be abandoned by one player leaving, or anyone losing could end a game by pulling their own plug.',
+      answer: 'It has a moment to reconnect. After that it folds every hand until the match ends.',
     },
   ];
 }
@@ -239,7 +233,7 @@ function GoodToKnow() {
   return (
     <section className="border-t border-line bg-surface/40">
       <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
-        <SectionHeading title="Questions people ask first" />
+        <SectionHeading title="FAQ" />
         <dl className="max-w-[68rem] border-t border-line">
           {FACTS.map((fact) => (
             <div
