@@ -128,9 +128,16 @@ export function tooMany(retryAfterMs: number): Response {
  * Who to count this against.
  *
  * An account where there is one, because that is the thing being limited and it
- * survives a change of address. Signed-out callers fall back to the forwarded
- * client address, which is spoofable but is still the only handle there is, and
- * the routes that accept them are the cheap ones.
+ * survives a change of address. Signed-out callers fall back to the address the
+ * proxy saw.
+ *
+ * That is the *last* entry of `x-forwarded-for`, never the first. Railway's edge
+ * appends the address it accepted the connection from and keeps whatever the
+ * client sent ahead of it, so the first entry is whatever the caller chose to
+ * write. Reading it made every signed-out limit, and the per-caller spectator
+ * cap, one random header away from not existing. Should another proxy ever sit
+ * in front of the edge, the last entry becomes that proxy and every stranger
+ * shares a bucket: too strict, and loud, which is the right way to be wrong.
  *
  * With no forwarded address every stranger lands in one bucket, and on a read
  * the whole lobby polls, that bucket is a global tap. Behind the proxy this
@@ -140,7 +147,7 @@ export function tooMany(retryAfterMs: number): Response {
  */
 export function callerOf(request: Request, userId: string | null): string {
   if (userId) return `user:${userId}`;
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim();
   if (!forwarded && !warnedUnknown && process.env.NODE_ENV === 'production') {
     warnedUnknown = true;
     console.warn('rate limit: a request arrived without x-forwarded-for; every such caller shares one bucket');
