@@ -187,29 +187,25 @@ function AgentSummary() {
           </div>
 
           {/* The same rule as each agent's own record: counts are numbers, a
-              figure that does not exist yet is a dash with its reason, and
-              nothing played at all is one line rather than a row of zeros. */}
-          {account.agents.length === 0 ? null : totals.hands === 0 ? (
-            <p className="mt-6 border-t border-line pt-5 text-sm text-muted">No hands played yet.</p>
-          ) : (
-            <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5 sm:grid-cols-4">
-              <Stat
-                label="Best rating"
-                value={best ? best.rating.toFixed(1) : <span className="text-faint">—</span>}
-                hint={best ? best.name : 'after a first match'}
-              />
-              <Stat
-                label="Hands"
-                value={formatChips(totals.hands)}
-                hint={`${Math.round((totals.won / totals.hands) * 100)}% won`}
-              />
-              <Stat label="Matches" value={formatChips(totals.matches)} />
-              <Stat
-                label="Net chips"
-                value={<span className={totals.chips < 0 ? 'text-danger' : ''}>{formatSigned(totals.chips)}</span>}
-              />
-            </dl>
-          )}
+              figure that does not exist yet is a dash with its reason, and a
+              hint that would describe nothing is left off. */}
+          <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5 sm:grid-cols-4">
+            <Stat
+              label="Best rating"
+              value={best ? best.rating.toFixed(1) : <span className="text-faint">—</span>}
+              hint={best ? best.name : 'after a first match'}
+            />
+            <Stat
+              label="Hands"
+              value={formatChips(totals.hands)}
+              hint={totals.hands > 0 ? `${Math.round((totals.won / totals.hands) * 100)}% won` : undefined}
+            />
+            <Stat label="Matches" value={formatChips(totals.matches)} />
+            <Stat
+              label="Net chips"
+              value={<span className={totals.chips < 0 ? 'text-danger' : ''}>{formatSigned(totals.chips)}</span>}
+            />
+          </dl>
         </Card>
       </div>
     </section>

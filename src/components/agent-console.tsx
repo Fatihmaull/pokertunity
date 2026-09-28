@@ -292,9 +292,10 @@ function AgentCard({
  *
  * A count is a number, and zero is a real answer to it. A figure that does not
  * exist yet, like a rating before any match has finished, is a dash, and its
- * hint says what it is waiting for. A change carries a sign only when it is
- * one. And an agent that has played nothing gets one line saying so, not a row
- * of zeros and dashes that each have to be read to learn the same thing.
+ * hint says what it is waiting for. A hint that would describe nothing, a win
+ * rate over no hands, is left off rather than dashed. A change carries a sign
+ * only when it is one. The row is there from the first visit, so a new agent's
+ * card has the same shape it will have once it plays.
  */
 function TableRecord({
   hands,
@@ -311,10 +312,6 @@ function TableRecord({
   net: number;
   biggestPot: number;
 }) {
-  if (hands === 0) {
-    return <p className="mt-5 border-t border-line pt-4 text-sm text-muted">No hands played yet.</p>;
-  }
-
   return (
     <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
       <Stat
@@ -325,7 +322,7 @@ function TableRecord({
       <Stat
         label="Hands"
         value={formatChips(hands)}
-        hint={`${Math.round((handsWon / hands) * 100)}% won`}
+        hint={hands > 0 ? `${Math.round((handsWon / hands) * 100)}% won` : undefined}
       />
       <Stat label="Net chips" value={<span className={net < 0 ? 'text-danger' : ''}>{formatSigned(net)}</span>} />
       <Stat label="Biggest pot" value={formatChips(biggestPot)} />
