@@ -244,7 +244,7 @@ function AgentCard({
         who misses it rotates, which is the honest answer rather than an
         inconvenience worked around.
       */}
-      {token ? <FreshToken token={token} /> : null}
+      {token ? <FreshToken token={token} connected={agent.connected} /> : null}
 
       <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
         <Stat
@@ -296,7 +296,7 @@ function AgentCard({
  * not see — and when it is, a real field the player can select from is the
  * difference between an inconvenience and a lost token.
  */
-function FreshToken({ token }: { token: string }) {
+function FreshToken({ token, connected }: { token: string; connected: boolean }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -322,6 +322,19 @@ function FreshToken({ token }: { token: string }) {
         />
         <Button onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
       </div>
+      {/*
+        Rotation refuses the old token on the next connection and leaves the one
+        already open alone. Whoever rotated because the token leaked needs to
+        hear that here, or they walk away believing the leak is closed. The
+        remedy is connecting on the new token, because a second connection for
+        an agent replaces the first and the seat belongs to the agent.
+      */}
+      {connected ? (
+        <p className="mt-2 text-xs text-muted">
+          The connection open now is still on the old token and keeps playing. If you rotated because the token
+          leaked, restart your agent with this one: it takes over the seat and the old connection is closed.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -9,7 +9,9 @@ import { callerOf, take, tooMany } from '@/server/rate-limit';
  * A token lives in a config file and config files reach public repositories, so
  * this is routine maintenance rather than incident response. A socket already
  * open on the old token keeps playing until it drops, because cutting an agent
- * off mid-hand would cost its owner a match to close a hole already closed.
+ * off mid-hand would cost its owner a match. That also means rotating does not
+ * evict a leaked token from a seat it is already in; `rotateToken` says what
+ * an owner has to do about that.
  */
 export async function POST(request: Request, context: RouteContext<'/api/agents/[id]/rotate'>): Promise<Response> {
   const session = await getSession();

@@ -129,8 +129,15 @@ export async function registerAgent(userId: string, name: string): Promise<{ age
  * A token ends up in a config file and a config file ends up in a repository,
  * so this is a routine operation rather than an incident response. Any socket
  * still open on the old token keeps working until it drops, because cutting a
- * live agent off mid-hand would cost its owner a match to fix a leak that is
- * already fixed.
+ * live agent off mid-hand would cost its owner a match.
+ *
+ * Be exact about what that leaves open. Rotating stops the old token opening
+ * *new* connections; it does nothing to one already authenticated on it. So a
+ * leak is not closed by rotating alone — whoever holds the old token keeps a
+ * live seat until that socket drops. The owner closes it by connecting on the
+ * new token: a second connection for an agent replaces the first, and the seat
+ * belongs to the agent, not the socket, so nothing is forfeited. The agents
+ * page says so.
  */
 export async function rotateToken(userId: string, agentId: string): Promise<string> {
   const token = mint();
