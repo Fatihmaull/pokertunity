@@ -68,7 +68,7 @@ export function OnChainPanel({
   return (
     <section>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="label text-faint">ERC-8004</h3>
+        <h3 className="label text-muted">ERC-8004</h3>
         {records.length > 0 ? (
           <span className="text-xs">
             <External href={`/api/agents/${agentId}/registration`}>Registration file</External>

@@ -280,11 +280,9 @@ function AgentCard({
           changes slowly after that: worth a look now and then, not a place on
           screen every time the page is opened. */}
       <Disclosure summary="Profile and on-chain record" className="mt-4 border-t border-line pt-4">
-        <div className="space-y-4 pb-1">
+        <div className="space-y-5 pb-1">
           <AxesCard agentId={agent.id} />
-          <div className="border-t border-line pt-4">
-            <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
-          </div>
+          <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
         </div>
       </Disclosure>
     </Card>

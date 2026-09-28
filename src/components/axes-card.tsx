@@ -140,41 +140,45 @@ export function AxesCard({ agentId }: { agentId: string }) {
   // Null is not zero. It means this agent has not played enough for the
   // measurement to say anything, and a dash beats printing a figure that would
   // read as a finding. Nor is a measurement not yet fetched a measurement of
-  // nothing, so the dash waits until the answer has arrived. Why a dash is
-  // there is said once under the tiles, not once per tile.
-  const unmeasured = axes !== null && AXES.some((axis) => axes[axis.key] === null);
+  // nothing, so nothing is claimed until the answer has arrived.
+  const measured = axes === null ? 0 : AXES.filter((axis) => axes[axis.key] !== null).length;
+  const status =
+    axes === null
+      ? unavailable
+        ? 'Unavailable'
+        : 'Loading…'
+      : measured === 0
+        ? 'Needs more hands'
+        : `${measured} of ${AXES.length} measured`;
 
   return (
-    <div>
-      {/* The same tiles as the record above it, so the profile reads as more
-          figures about the agent rather than as a questionnaire. */}
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
-        {AXES.map((axis) => {
-          const value = axes?.[axis.key] ?? null;
-          return (
-            <Stat
-              key={axis.key}
-              label={axis.label}
-              title={axis.asks}
-              hint={axis.hint}
-              value={
-                axes === null ? (
-                  <span className="text-faint">{unavailable ? '—' : '…'}</span>
-                ) : value === null ? (
-                  <span className="text-faint">—</span>
-                ) : (
-                  axis.format(value)
-                )
-              }
-            />
-          );
-        })}
-      </dl>
-      {unavailable && axes === null ? (
-        <p className="mt-3 text-xs text-faint">The profile could not be loaded.</p>
-      ) : unmeasured ? (
-        <p className="mt-3 text-xs text-faint">— not enough hands yet to measure.</p>
+    <section>
+      {/* Label on the left, where it stands on the right: the same line the
+          on-chain record below it uses, so the two read as a pair. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="label text-muted">Play profile</h3>
+        <span className="mono text-xs text-muted tabular-nums">{status}</span>
+      </div>
+
+      {/* No tiles until there is a figure to put in one. Four empty tiles
+          under a row of real ones read as the record being broken, not as the
+          profile being early. */}
+      {measured > 0 ? (
+        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+          {AXES.map((axis) => {
+            const value = axes?.[axis.key] ?? null;
+            return (
+              <Stat
+                key={axis.key}
+                label={axis.label}
+                title={axis.asks}
+                hint={value === null ? 'needs more hands' : axis.hint}
+                value={value === null ? <span className="text-faint">—</span> : axis.format(value)}
+              />
+            );
+          })}
+        </dl>
       ) : null}
-    </div>
+    </section>
   );
 }
