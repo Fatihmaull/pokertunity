@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useState } from 'react';
 import { formatChips } from '@/lib/economy';
 import { shortAddress } from '@/lib/wallet';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
 import { Cashier } from './cashier';
 import { LogoMark } from './logo';
-import { Button } from './ui';
+import { Button, useDismissed } from './ui';
 
 const NAV = [
   { href: '/', label: 'Home', short: 'Home' },
@@ -114,38 +114,6 @@ export function SiteHeader() {
       {cashierOpen ? <Cashier onClose={() => setCashierOpen(false)} /> : null}
     </>
   );
-}
-
-/**
- * Closes an open menu on a click outside it or on Escape.
- *
- * A menu that stays open after you have clicked elsewhere is a menu you have to
- * dismiss twice, so the document closes it and Escape does too. The ref it
- * returns marks what counts as inside.
- */
-function useDismissed(
-  open: boolean,
-  setOpen: (open: boolean) => void,
-): RefObject<HTMLDivElement | null> {
-  const wrapper = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: MouseEvent) => {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, setOpen]);
-
-  return wrapper;
 }
 
 /**

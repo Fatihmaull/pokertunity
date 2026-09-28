@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 
 /**
  * The shared control vocabulary. Every button, card, badge and tab in the
@@ -148,6 +148,38 @@ export function EmptyState({
       {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );
+}
+
+/**
+ * Closes an open menu on a click outside it or on Escape.
+ *
+ * A menu that stays open after you have clicked elsewhere is a menu you have to
+ * dismiss twice, so the document closes it and Escape does too. The ref it
+ * returns marks what counts as inside.
+ */
+export function useDismissed(
+  open: boolean,
+  setOpen: (open: boolean) => void,
+): RefObject<HTMLDivElement | null> {
+  const wrapper = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, setOpen]);
+
+  return wrapper;
 }
 
 /**
