@@ -12,13 +12,23 @@ import { registerAgent } from '../server/credentials';
  * agent can never join the match its stablemate is in. That is the point: with
  * N accounts a match holds at most N agents, and the extra one stays queued and
  * free for whoever turns up next.
+ *
+ * Only ever onto a demo account. This used to take whichever agent the table
+ * returned first, which on a database with real players in it can be one of
+ * theirs: the spare would land on a stranger's account, count against their
+ * agent limit and be seated on their chips.
  */
 async function main(): Promise<void> {
   const path = process.argv[2];
   if (!path) throw new Error('give it the field file to append to');
 
-  const [first] = await db.select({ userId: agents.userId }).from(agents).limit(1);
-  if (!first) throw new Error('seed some agents first');
+  const [first] = await db
+    .select({ userId: agents.userId })
+    .from(agents)
+    .where(eq(agents.demo, true))
+    .orderBy(agents.createdAt)
+    .limit(1);
+  if (!first) throw new Error('seed some demo agents first; a spare only goes onto an account the arena owns');
 
   const { token, agentId } = await registerAgent(first.userId, 'Spare (dev)');
   await db.update(agents).set({ demo: true, queueEnabled: true }).where(eq(agents.id, agentId));

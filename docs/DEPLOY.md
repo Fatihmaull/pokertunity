@@ -209,13 +209,28 @@ twice would only be a way for them to drift.
 
 ### Mint the tokens
 
-From a laptop, once, against Railway's **public** Postgres URL — the internal
-one is only reachable from inside Railway:
+Once, against the production database. There are two ways in.
+
+**Through the arena's own container.** This needs no public database URL; the
+production Postgres has none unless a TCP proxy is switched on for it. `railway ssh`
+needs a key registered once with `railway ssh keys add`.
+
+```bash
+railway ssh -s pokertunity -- sh -c 'cd /app \
+  && NODE_ENV=development pnpm -s db:seed 6 /tmp/field.json >/dev/null \
+  && NODE_ENV=development pnpm -s db:spare /tmp/field.json >/dev/null \
+  && cat /tmp/field.json && rm /tmp/field.json' > field.json
+```
+
+**From a laptop**, against Railway's **public** Postgres URL, if a TCP proxy is
+on. The internal URL is only reachable from inside Railway:
 
 ```bash
 DATABASE_URL=<railway public postgres url> pnpm db:seed 6 field.json
 DATABASE_URL=<railway public postgres url> pnpm db:spare field.json
 ```
+
+Either way the tokens land in `field.json` and are never printed.
 
 Six is the maximum: the seeder has six characters and caps the count at that.
 Each gets its own account, its own agent and a starting grant, and the tokens
@@ -228,20 +243,36 @@ fold every pot the other contests — so six accounts put at most six agents in 
 match. With exactly six, all of them are seated and a stranger waits out a whole
 match. With a seventh, one is always free and a newcomer is seated in seconds.
 
-Run this from a laptop, not as a Railway command: `seed-agents` refuses to run
-when `NODE_ENV=production`, because it is a development tool that mints accounts
-with no wallet behind them. It is guarding against being run *inside* the
-production container, not against pointing at a production database.
+`seed-agents` refuses to run when `NODE_ENV=production`, because it is a
+development tool that mints accounts with no wallet behind them. It is guarding
+against being run *by accident* inside the production container, which is why
+the first route above sets `NODE_ENV=development` for those two commands only.
+`db:spare` only ever adds to an account marked `demo`. On a database with real
+players in it, the agent it used to pick first could be one of theirs.
+
+A demo account gets `STARTING_GRANT` once, like anyone else, and nothing refills
+it. Every match costs `SEAT_COST`, the entry fee is never returned, and an
+account below `SEAT_COST` is silently left out of the queue. So a field runs down
+on its own, over hours to days depending on the hand cap. When `/api/health`
+stops showing seated agents, mint a fresh field rather than topping the old
+one up.
 
 `field.json` holds live tokens. It is gitignored; keep it that way.
 
 ### The service
 
-A second Railway service from the same repo, with the start command overridden:
+A second Railway service from the same repo. In its settings, set **Railway
+Config File** to `/railway.field.json`. That file builds the same Dockerfile,
+starts `pnpm --filter @pokertunity/agent field`, and pins one replica.
 
-```
-pnpm --filter @pokertunity/agent field
-```
+It has to be a file of its own. Railway reads `railway.json` at the repository
+root for every service built from the repository unless told otherwise, and that
+file's health check asks `/api/health`, which the field does not serve. The
+field would build, never pass the check, and be torn down every deploy.
+
+One replica, and never more. Two copies of the field would open two sockets per
+token, and the arena keeps the newer connection for an agent and closes the
+older, so the two would evict each other for as long as both ran.
 
 | Variable | Value |
 | --- | --- |
