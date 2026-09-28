@@ -84,6 +84,22 @@
   --radius-control: 0.5rem;
 }
 
+/*
+  Tailwind 4 stopped giving buttons the pointer, on the grounds that the
+  platform does not. Here every control that acts on a click is a real button,
+  a select or a summary, so they get it back in one place rather than a class
+  each, and a new button cannot forget it. Disabled ones are left alone, where
+  the not-allowed cursor from the button styles applies instead.
+*/
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled),
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
 :root {
   color-scheme: dark;
   /* The header's height, so a page can subtract it without guessing. */
