@@ -502,7 +502,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
     await assert.rejects(
       confirmDeposit(me, TX, 'arbitrum-sepolia', paid(quote.bytes32, me.address, BigInt(quote.valueWei))),
-      /belongs to BNB Smart Chain Testnet/,
+      /paid on Arbitrum Sepolia, but its purchase was priced on BNB Smart Chain Testnet, so it cannot be credited/,
     );
     assert.equal(await balance(me.userId), 0);
   });
