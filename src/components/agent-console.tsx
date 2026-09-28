@@ -242,12 +242,10 @@ function AgentCard({
           Rotate token
         </Button>
         {/*
-          Shown once, immediately after minting, beside the button that mints
-          it. Only the hash is stored, so this is the only moment the token
-          exists anywhere we can show it. An owner who misses it rotates, which
-          is the honest answer rather than an inconvenience worked around.
+          Keyed on the token so a second rotation starts fresh: not still
+          reading "Copied" from the first.
         */}
-        {token ? <FreshToken token={token} /> : null}
+        <TokenField key={token ?? 'hidden'} token={token} />
       </div>
 
       {/*
@@ -329,19 +327,30 @@ function TableRecord({
 }
 
 /**
- * The token, at the only moment it exists anywhere we can show it.
- *
- * Only the hash is stored, so this is one shot. That made the display the
- * least forgiving interaction in the product: 46 characters in a box that
- * scrolls under your finger, with no second chance. A laptop survives it on a
- * triple-click, which is probably why it lasted; a phone does not.
- *
- * The input is the fallback rather than the decoration. A clipboard write can
- * be refused — an insecure origin, a browser that wants a user gesture it did
- * not see — and when it is, a real field the player can select from is the
- * difference between an inconvenience and a lost token.
+ * What stands in for a token that exists but cannot be shown: its prefix and
+ * its length, the way a password field shows one. Only the hash is stored, so
+ * there is nothing else to put here, and a blank box would read as the agent
+ * having no token at all. Prefix and length follow TOKEN_PREFIX and
+ * TOKEN_BYTES in src/server/credentials.ts, which this page cannot import.
  */
-function FreshToken({ token }: { token: string }) {
+const MASKED_TOKEN = `ah_${'•'.repeat(43)}`;
+
+/**
+ * The agent's token: masked, except at the one moment it can be shown.
+ *
+ * Only the hash is stored, so the real token is on screen once, right after
+ * minting, and the rest of the time the box holds its masked shape. The box is
+ * always there so the card does not change shape when a token arrives, and so
+ * an owner who lost theirs can see where one goes and which button makes it.
+ *
+ * Minting made the display the least forgiving interaction in the product:
+ * 46 characters in a box that scrolls under your finger, with no second
+ * chance. The input is the fallback rather than the decoration. A clipboard
+ * write can be refused — an insecure origin, a browser that wants a user
+ * gesture it did not see — and when it is, a real field the player can select
+ * from is the difference between an inconvenience and a lost token.
+ */
+function TokenField({ token }: { token: string | null }) {
   const [copied, setCopied] = useState(false);
   const field = useRef<HTMLInputElement>(null);
 
@@ -349,11 +358,13 @@ function FreshToken({ token }: { token: string }) {
   // of the button that made it. Brought into view and selected, the token is
   // one Ctrl+C away wherever the owner clicked from.
   useEffect(() => {
+    if (!token) return;
     field.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     field.current?.focus({ preventScroll: true });
   }, [token]);
 
   async function copy() {
+    if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
       setCopied(true);
@@ -370,12 +381,15 @@ function FreshToken({ token }: { token: string }) {
       <input
         ref={field}
         readOnly
-        value={token}
-        aria-label="New agent token"
-        onFocus={(event) => event.currentTarget.select()}
-        className="mono h-8 min-w-0 flex-1 rounded-control border border-accent/40 bg-accent/5 px-2 text-xs text-accent"
+        value={token ?? MASKED_TOKEN}
+        aria-label={token ? 'New agent token' : 'Agent token, hidden'}
+        title={token ? undefined : 'Shown once, when it is made. Rotate for a new one.'}
+        onFocus={token ? (event) => event.currentTarget.select() : undefined}
+        className={`mono h-8 min-w-0 flex-1 rounded-control border px-2 text-xs ${
+          token ? 'border-accent/40 bg-accent/5 text-accent' : 'border-line bg-surface-2 text-faint'
+        }`}
       />
-      <Button size="sm" tone="primary" onClick={copy}>
+      <Button size="sm" tone={token ? 'primary' : 'secondary'} onClick={copy} disabled={!token}>
         {copied ? 'Copied' : 'Copy'}
       </Button>
     </div>
