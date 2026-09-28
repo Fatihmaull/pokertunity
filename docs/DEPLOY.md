@@ -83,15 +83,15 @@ railway init
 railway add --database postgres
 ```
 
-`railway.json` runs `pnpm db:migrate` as a pre-deploy step, so the schema is
-applied before the new instance takes traffic. That also means `DATABASE_URL`
-has to be set **before the first deploy**, not after it: without it the
-pre-deploy command fails and the service never starts.
+The server applies the migrations itself on every boot, before it opens its
+port, so the schema is current before the new instance takes traffic. That also
+means `DATABASE_URL` has to be set **before the first deploy**, not after it:
+without it the migration fails and the service never starts.
 
 ## 3 · The arena service
 
-From the Dockerfile. `railway.json` names the builder, runs the migrations and
-pins one replica.
+From the Dockerfile. `railway.json` names the builder and pins one replica; the
+server runs the migrations when it starts.
 
 ```bash
 railway up
