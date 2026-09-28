@@ -235,9 +235,9 @@ function AgentCard({
       </div>
 
       {/* The token belongs to the agent named just above it, so it sits under
-          that name, lined up with its text, rather than among the figures.
-          A phone drops the indent, as it does for the badge row. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 sm:pl-[2.125rem]">
+          that name rather than among the figures, on the card's left edge
+          like everything else below the header. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onRotate} disabled={busy}>
           Rotate token
         </Button>
@@ -258,7 +258,7 @@ function AgentCard({
         an agent replaces the first and the seat belongs to the agent.
       */}
       {token && agent.connected ? (
-        <p className="mt-2 text-xs text-muted sm:pl-[2.125rem]">
+        <p className="mt-2 text-xs text-muted">
           The open connection still uses the old token. Restart your agent with this one to close it.
         </p>
       ) : null}
