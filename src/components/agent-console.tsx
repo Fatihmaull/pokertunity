@@ -244,12 +244,7 @@ function AgentCard({
         who misses it rotates, which is the honest answer rather than an
         inconvenience worked around.
       */}
-      {token ? (
-        <div className="mt-4 rounded-control border border-accent/40 bg-accent/5 p-3">
-          <p className="text-xs font-medium text-ink">Copy this now. It is not shown again.</p>
-          <code className="mono mt-2 block overflow-x-auto whitespace-nowrap text-xs text-accent">{token}</code>
-        </div>
-      ) : null}
+      {token ? <FreshToken token={token} /> : null}
 
       <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
         <Stat
@@ -288,6 +283,49 @@ function AgentCard({
 }
 
 /** The one thing an owner debugging a silent agent actually needs. */
+/**
+ * The token, at the only moment it exists anywhere we can show it.
+ *
+ * Only the hash is stored, so this is one shot. That made the display the
+ * least forgiving interaction in the product: 46 characters in a box that
+ * scrolls under your finger, with no second chance. A laptop survives it on a
+ * triple-click, which is probably why it lasted; a phone does not.
+ *
+ * The input is the fallback rather than the decoration. A clipboard write can
+ * be refused — an insecure origin, a browser that wants a user gesture it did
+ * not see — and when it is, a real field the player can select from is the
+ * difference between an inconvenience and a lost token.
+ */
+function FreshToken({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+    } catch {
+      // Left for the player to select by hand, which is why it is an input.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-control border border-accent/40 bg-accent/5 p-3">
+      <p className="text-xs font-medium text-ink">Copy this now. It is not shown again.</p>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          readOnly
+          value={token}
+          aria-label="Agent token"
+          onFocus={(event) => event.currentTarget.select()}
+          className="mono min-w-0 flex-1 rounded-control border border-line bg-surface-2 px-2 py-1.5 text-xs text-accent"
+        />
+        <Button onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+      </div>
+    </div>
+  );
+}
+
 function Status({ agent, affordable }: { agent: AccountAgent; affordable: boolean }) {
   if (agent.seat) return <Badge tone="accent">In a match</Badge>;
   if (!agent.connected) return <Badge>Not connected</Badge>;

@@ -34,6 +34,28 @@ export function hasWallet(): boolean {
   return typeof window !== 'undefined' && Boolean(window.ethereum);
 }
 
+/**
+ * Follows a change the player made inside the wallet rather than through us.
+ *
+ * Without this the interface keeps claiming a network and an address the
+ * wallet has already left, which is the worst kind of wrong because it looks
+ * authoritative: the next deposit is priced for the chain the header shows,
+ * and the session goes on naming an account nobody is looking at.
+ *
+ * Returns an unsubscribe. A provider that offers no events yields one that
+ * does nothing, so a caller never has to ask whether it worked.
+ */
+export function watchWallet(
+  event: 'chainChanged' | 'accountsChanged',
+  handler: (...args: unknown[]) => void,
+): () => void {
+  const injected = typeof window === 'undefined' ? undefined : window.ethereum;
+  if (!injected?.on) return () => {};
+
+  injected.on(event, handler);
+  return () => injected.removeListener?.(event, handler);
+}
+
 export async function connect(chain: ChainInfo): Promise<string> {
   const accounts = (await wallet().request({ method: 'eth_requestAccounts' })) as string[];
   const address = accounts[0];
@@ -55,14 +77,13 @@ export async function currentAddress(): Promise<string | null> {
  */
 export async function ensureChain(chain: ChainInfo): Promise<void> {
   const target = numberToHex(chain.id);
-  const current = (await wallet().request({ method: 'eth_chainId' })) as string;
-  if (current?.toLowerCase() === target.toLowerCase()) return;
+  if (await onChain(target)) return;
 
   try {
     await wallet().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: target }] });
   } catch (error) {
-    const code = (error as { code?: number }).code;
-    if (code !== 4902) throw error;
+    if (!isUnknownChain(error)) throw error;
+
     await wallet().request({
       method: 'wallet_addEthereumChain',
       params: [
@@ -75,7 +96,49 @@ export async function ensureChain(chain: ChainInfo): Promise<void> {
         },
       ],
     });
+
+    // Adding is not switching. Some wallets make the new network active and
+    // some leave you where you were, so the only way to know is to ask, and
+    // every caller here treats a resolved promise as "we are on that chain".
+    if (!(await onChain(target))) {
+      await wallet().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: target }] });
+    }
   }
+
+  // Asked once more rather than assumed. A wallet that answers a switch
+  // without performing one would otherwise send the next transaction to
+  // whichever network the player was already on.
+  if (!(await onChain(target))) {
+    throw new WalletError(`Your wallet is not on ${chain.name}. Switch to it and try again.`);
+  }
+}
+
+async function onChain(target: string): Promise<boolean> {
+  const current = (await wallet().request({ method: 'eth_chainId' })) as string | undefined;
+  return current?.toLowerCase() === target.toLowerCase();
+}
+
+/**
+ * Whether a failed switch means the wallet has never heard of the network.
+ *
+ * `4902` at the top level is what the MetaMask extension answers, and it is
+ * not the only shape in circulation: several wallets wrap the provider error
+ * and report `-32603` with the original nested underneath. Monad is the one
+ * chain in the registry that no wallet ships with, so this branch is the only
+ * thing standing between a player on another wallet and a raw provider error.
+ */
+function isUnknownChain(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let node: unknown = error;
+
+  while (node && typeof node === 'object' && !seen.has(node)) {
+    seen.add(node);
+    const shape = node as { code?: number; data?: unknown; originalError?: unknown; cause?: unknown };
+    if (shape.code === 4902) return true;
+    node = shape.originalError ?? shape.cause ?? (shape.data as { originalError?: unknown })?.originalError ?? shape.data;
+  }
+
+  return false;
 }
 
 export async function signMessage(address: string, message: string): Promise<string> {

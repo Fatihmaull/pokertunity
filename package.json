@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false server.ts",
     "build": "next build",
-    "start": "NODE_ENV=production tsx server.ts",
+    "start": "cross-env NODE_ENV=production tsx server.ts",
     "lint": "eslint",
     "test": "tsx --test 'src/**/*.test.ts' 'packages/*/src/**/*.test.ts'",
     "test:contracts": "cd contracts && forge test",
@@ -14,7 +14,7 @@
     "db:seed": "tsx src/dev/seed-agents.ts",
     "db:spare": "tsx src/dev/add-spare.ts",
     "agent": "tsx agents/personal-agent.ts",
-    "agent:second": "AGENT_ENV_FILE=agents/.env.second tsx agents/personal-agent.ts",
+    "agent:second": "cross-env AGENT_ENV_FILE=agents/.env.second tsx agents/personal-agent.ts",
     "abi": "node scripts/generate-abi.mjs",
     "deploy:vault": "bash scripts/deploy-vault.sh",
     "attest": "tsx src/dev/attest.ts"
@@ -39,6 +39,7 @@
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
     "babel-plugin-react-compiler": "1.0.0",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",

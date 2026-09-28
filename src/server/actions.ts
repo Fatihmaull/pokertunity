@@ -5,7 +5,7 @@ import { conservative } from '../lib/rating';
 import { chipsToWei, packageById, weiToChips } from '../lib/economy';
 import { chainById } from '../lib/chains';
 import { REQUIRED_CONFIRMATIONS, observeDeposit } from './chain';
-import { UnknownChain, requireChain, vaultAddress, type DeployedChain } from './chains';
+import { UnknownChain, enabledChains, requireChain, vaultAddress, type DeployedChain } from './chains';
 import { bytes32ToIntent, intentToBytes32 } from '../lib/intent';
 import type { Session } from './auth';
 import { presenceOf } from './presence';
@@ -157,7 +157,16 @@ export async function startDeposit(session: Session, packageId: string, chainKey
   try {
     vault = vaultAddress(chain);
   } catch {
-    throw new ActionError(`Chips cannot be bought on ${chain.name} yet. Switch networks to buy in.`);
+    // Switching is only advice worth giving when there is somewhere to switch
+    // to. Before the first vault is deployed every enabled chain is in this
+    // same state, and telling a player to try the others sends them round all
+    // three to read the identical sentence.
+    const elsewhere = enabledChains().some((entry) => entry.key !== chain.key && entry.vault);
+    throw new ActionError(
+      elsewhere
+        ? `Chips cannot be bought on ${chain.name} yet. Switch networks to buy in.`
+        : 'Chips cannot be bought on any network yet. No vault has been deployed.',
+    );
   }
 
   const valueWei = chipsToWei(chosen.chips);

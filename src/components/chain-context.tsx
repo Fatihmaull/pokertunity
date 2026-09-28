@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { PublicChain } from '@/lib/chains';
-import { ensureChain, hasWallet } from '@/lib/wallet';
+import { ensureChain, hasWallet, watchWallet } from '@/lib/wallet';
 
 /**
  * Which network the player is on, for the whole interface.
@@ -79,6 +79,39 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
     },
     [chains, active],
   );
+
+  /**
+   * Follows the wallet when the player switches network inside it.
+   *
+   * The cookie is what prices a deposit, so leaving it behind means the next
+   * purchase is issued for the chain the header still shows and `ensureChain`
+   * then drags the wallet back — which reads as the site overruling a choice
+   * the player just made.
+   *
+   * A wallet that moves to a network this deployment does not settle on is
+   * left alone: there is no cookie value that describes it, and the cashier
+   * already refuses anything it cannot price.
+   */
+  useEffect(() => {
+    if (chains.length === 0) return;
+
+    return watchWallet('chainChanged', (...args) => {
+      const [id] = args as [string | undefined];
+      const moved = chains.find((entry) => entry.id === Number(id));
+      if (!moved || moved.key === active) return;
+
+      setActive(moved.key);
+      void fetch('/api/chains', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chain: moved.key }),
+      }).catch(() => {
+        // The header is already following the wallet. A cookie that failed to
+        // follow is re-sent by the next switch, and every money path resolves
+        // the chain again on the server anyway.
+      });
+    });
+  }, [chains, active]);
 
   const value = useMemo<ChainContextValue>(() => {
     const current = chains.find((entry) => entry.key === active) ?? null;
