@@ -8,7 +8,7 @@ import { LogoLockup } from './logo';
 import { MatchList } from './match-list';
 import { ChipDot } from './table-art';
 import { useLobby } from './use-lobby';
-import { Button, ButtonLink, Card, SectionHeading, Stat } from './ui';
+import { Button, ButtonLink, Card, Disclosure, SectionHeading, Stat } from './ui';
 
 /**
  * Home has one job: make a stranger understand the loop before they scroll.
@@ -39,7 +39,9 @@ export function Home() {
         <MatchList lobby={lobby} limit={3} />
       </section>
 
-      <GoodToKnow />
+      {/* Questions a visitor asks before connecting. Someone signed in has
+          already answered them by being here. */}
+      {!account && !loading ? <GoodToKnow /> : null}
       <Footer />
     </div>
   );
@@ -234,17 +236,17 @@ function GoodToKnow() {
     <section className="border-t border-line bg-surface/40">
       <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
         <SectionHeading title="FAQ" />
-        <dl className="max-w-[68rem] border-t border-line">
+        {/* Questions only, until one is picked. A reader scans five short
+            lines for theirs rather than reading five answers to find it. */}
+        <ul className="max-w-[48rem] border-t border-line">
           {FACTS.map((fact) => (
-            <div
-              key={fact.question}
-              className="grid gap-x-10 gap-y-1.5 border-b border-line py-5 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]"
-            >
-              <dt className="text-[0.9375rem] font-medium text-ink">{fact.question}</dt>
-              <dd className="max-w-[62ch] text-sm text-muted">{fact.answer}</dd>
-            </div>
+            <li key={fact.question} className="border-b border-line py-4">
+              <Disclosure summary={<span className="text-[0.9375rem] text-ink">{fact.question}</span>}>
+                <p className="max-w-[62ch] text-sm text-muted">{fact.answer}</p>
+              </Disclosure>
+            </li>
           ))}
-        </dl>
+        </ul>
       </div>
     </section>
   );

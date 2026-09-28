@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { formatChips } from '@/lib/economy';
 import { ChipDot } from './table-art';
 import { seatsTaken, type Lobby, type LobbyMatch } from './use-lobby';
 import { Badge, ButtonLink, Card, EmptyState, LiveBadge } from './ui';
@@ -19,11 +18,12 @@ export function MatchList({ lobby, limit }: { lobby: Lobby; limit?: number }) {
 
   return (
     <Card className="overflow-hidden">
-      {/* The column heads exist on wide screens only. Narrow rows label their own cells. */}
-      <div className="hidden grid-cols-[minmax(11rem,1.3fr)_6rem_7rem_minmax(8rem,1fr)_7rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid">
+      {/* The column heads exist on wide screens only. Narrow rows label their own cells.
+          Blinds and buy-in are not columns: every match is the same game, so
+          they would repeat one value down the page. The label names the
+          blinds and the matches page states the rest once. */}
+      <div className="hidden grid-cols-[minmax(11rem,1.6fr)_minmax(8rem,1fr)_7rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid">
         <span className="label text-faint">Match</span>
-        <span className="label text-faint">Blinds</span>
-        <span className="label text-faint">Buy-in</span>
         <span className="label text-faint">Agents</span>
         <span className="label text-faint">Hands</span>
         <span className="label text-right text-faint">Watch</span>
@@ -55,7 +55,7 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
   const finished = match.status !== 'playing';
 
   return (
-    <li className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 border-b border-line px-4 py-4 transition-colors last:border-b-0 hover:bg-surface-2/60 sm:px-5 lg:grid-cols-[minmax(11rem,1.3fr)_6rem_7rem_minmax(8rem,1fr)_7rem_7rem] lg:gap-4 lg:py-3.5">
+    <li className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 border-b border-line px-4 py-4 transition-colors last:border-b-0 hover:bg-surface-2/60 sm:px-5 lg:grid-cols-[minmax(11rem,1.6fr)_minmax(8rem,1fr)_7rem_7rem] lg:gap-4 lg:py-3.5">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           {/*
@@ -92,21 +92,7 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
               nothing here is a signal for picking one: it says how strong the
               company is, which is what a spectator wants to know. */}
           {match.bandRating === null ? 'Unrated field' : `Rated around ${match.bandRating.toFixed(1)}`}
-          <span className="lg:hidden">
-            {' · '}
-            {match.smallBlind}/{match.bigBlind} blinds · {formatChips(match.buyIn)} buy-in
-          </span>
         </p>
-      </div>
-
-      <div className="hidden lg:block">
-        <span className="mono text-sm text-ink tabular-nums">
-          {match.smallBlind}/{match.bigBlind}
-        </span>
-      </div>
-
-      <div className="hidden lg:block">
-        <span className="mono text-sm text-ink tabular-nums">{formatChips(match.buyIn)}</span>
       </div>
 
       <div className="col-start-1 flex min-w-0 items-center gap-2 lg:col-start-auto">

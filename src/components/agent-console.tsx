@@ -7,7 +7,7 @@ import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
 import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
-import { Badge, Button, ButtonLink, Card, Stat } from './ui';
+import { Badge, Button, ButtonLink, Card, Disclosure, Stat } from './ui';
 
 /**
  * An operations page, not an editor.
@@ -122,60 +122,49 @@ export function AgentConsole() {
 
       {failure ? <p className="mb-4 text-sm text-danger">{failure}</p> : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 space-y-5">
-          {account.agents.length === 0 ? (
-            <Card className="p-8 text-center">
-              <h2 className="text-lg text-ink">No agents yet</h2>
-              <p className="mx-auto mt-2 max-w-[52ch] text-sm text-muted">Add one to get its token.</p>
-            </Card>
-          ) : (
-            account.agents.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                busy={busy}
-                affordable={affordable}
-                token={freshToken?.agentId === agent.id ? freshToken.token : null}
-                onRotate={async () => {
-                  const body = await call(`/api/agents/${agent.id}/rotate`, { method: 'POST' });
-                  if (body) setFreshToken({ agentId: agent.id, token: String(body.token) });
-                }}
-                onRename={(name) => void call(`/api/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ name }) })}
-                onQueue={(enabled) =>
-                  void call(`/api/agents/${agent.id}/queue`, { method: 'POST', body: JSON.stringify({ enabled }) })
-                }
-              />
-            ))
-          )}
-
-          <ConnectGuide />
+      {/* The balance and the Buy button are in the header on every page. Here
+          it is worth a line only when it is what stands between an agent and
+          a seat. */}
+      {affordable ? null : (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/40 bg-danger-soft px-5 py-4">
+          <p className="text-sm text-ink">
+            Not enough chips for a match. A seat costs {formatChips(SEAT_COST)}.
+          </p>
+          <Button tone="primary" size="sm" onClick={() => setCashierOpen(true)}>
+            Buy chips
+          </Button>
         </div>
+      )}
 
-        <aside className="space-y-5">
-          <Card className="p-5">
-            <h2 className="text-base text-ink">Chips</h2>
-            <p className="mono mt-3 text-2xl text-ink tabular-nums">{formatChips(account.chips)}</p>
-            <p className="mt-2 text-xs text-faint">
-              {formatChips(SEAT_COST)} per match. Your agent&rsquo;s final stack comes back to you.
-            </p>
-            {/* Loud only when it is the thing standing between an agent and a
-                seat. An owner with chips to spare has no reason to look at it. */}
-            <Button
-              className="mt-3 w-full"
-              tone={affordable ? undefined : 'primary'}
-              onClick={() => setCashierOpen(true)}
-            >
-              Buy chips
-            </Button>
+      <div className="space-y-5">
+        {account.agents.length === 0 ? (
+          <Card className="p-8 text-center">
+            <h2 className="text-lg text-ink">No agents yet</h2>
+            <p className="mx-auto mt-2 max-w-[52ch] text-sm text-muted">Add one to get its token.</p>
           </Card>
+        ) : (
+          account.agents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              busy={busy}
+              affordable={affordable}
+              token={freshToken?.agentId === agent.id ? freshToken.token : null}
+              onRotate={async () => {
+                const body = await call(`/api/agents/${agent.id}/rotate`, { method: 'POST' });
+                if (body) setFreshToken({ agentId: agent.id, token: String(body.token) });
+              }}
+              onRename={(name) => void call(`/api/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ name }) })}
+              onQueue={(enabled) =>
+                void call(`/api/agents/${agent.id}/queue`, { method: 'POST', body: JSON.stringify({ enabled }) })
+              }
+            />
+          ))
+        )}
 
-          {/* One per agent. An owner running several strategies is comparing
-              exactly these numbers, so showing only the first hides the answer. */}
-          {account.agents.map((agent) => (
-            <AxesCard key={agent.id} agentId={agent.id} name={agent.name} />
-          ))}
-        </aside>
+        {/* Open until an agent has made it in once. After that the owner
+            knows how, and it is only in the way of the agents themselves. */}
+        <ConnectGuide open={account.agents.every((agent) => !agent.connected && !agent.lastSeenAt)} />
       </div>
       {cashierOpen ? <Cashier onClose={() => setCashierOpen(false)} /> : null}
     </Shell>
@@ -249,9 +238,7 @@ function AgentCard({
         <Stat label="Biggest pot" value={formatChips(agent.biggestPot)} />
       </dl>
 
-      <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-5 flex flex-wrap items-center gap-2">
         {agent.seat ? (
           <ButtonLink href={`/match/${agent.seat.matchId}`} tone="primary" size="sm">
             Watch it play
@@ -270,6 +257,16 @@ function AgentCard({
           <span className="text-xs text-faint">Never connected</span>
         )}
       </div>
+
+      {/* Measured over thousands of hands, so it says little early on and
+          changes slowly after that: worth a look now and then, not a place on
+          screen every time the page is opened. */}
+      <Disclosure summary="Profile and on-chain record" className="mt-4 border-t border-line pt-4">
+        <div className="space-y-5 pb-1">
+          <AxesCard agentId={agent.id} />
+          <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
+        </div>
+      </Disclosure>
     </Card>
   );
 }
@@ -360,7 +357,7 @@ function QueueSwitch({
   const label = `Play matches: ${agent.name}`;
 
   return (
-    <div className="mt-4 flex items-center gap-3 rounded-control border border-line bg-surface-2 px-3 py-2.5">
+    <div className="mt-4 flex items-center gap-3">
       {/* The thumb is placed absolutely from the track's centre line rather
           than left in the flow, so it sits dead centre whatever the border and
           line box around it add up to. */}
@@ -413,24 +410,26 @@ function unusedName(agents: readonly AccountAgent[]): string {
   return `Agent ${n}`;
 }
 
-function ConnectGuide() {
+function ConnectGuide({ open }: { open: boolean }) {
   return (
     <Card className="p-5">
-      <h2 className="text-base text-ink">Connecting</h2>
-      <pre className="scroll-x mono mt-4 rounded-control border border-line bg-surface-2 p-3 text-xs text-muted">
+      <Disclosure summary={<span className="text-base text-ink">How to connect</span>} defaultOpen={open}>
+        <pre className="scroll-x mono rounded-control border border-line bg-surface-2 p-3 text-xs text-muted">
 {`ARENA_URL=wss://<this-host>/agent \\
 AGENT_TOKEN=ah_... \\
 AGENT_BRAIN=heuristic \\
 pnpm --filter @pokertunity/agent start`}
-      </pre>
-      <p className="mt-3 max-w-[62ch] text-xs text-faint">
-        The heuristic brain needs no model key. Set AGENT_BRAIN=model with a key to have it reason, or write your
-        own against the protocol.
-      </p>
+        </pre>
+        <p className="mt-3 max-w-[62ch] text-xs text-faint">
+          The heuristic brain needs no model key. Set AGENT_BRAIN=model with a key to have it reason, or write your
+          own against the protocol.
+        </p>
+      </Disclosure>
     </Card>
   );
 }
 
+/** One column: a sidebar beside the agents only ever held what the header already shows. */
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="page mx-auto w-full max-w-[76rem] px-4 py-8 sm:px-6 sm:py-10">{children}</div>;
+  return <div className="page mx-auto w-full max-w-[56rem] px-4 py-8 sm:px-6 sm:py-10">{children}</div>;
 }

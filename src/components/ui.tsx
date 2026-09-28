@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useId, useState } from 'react';
 
 /**
  * The shared control vocabulary. Every button, card, badge and tab in the
@@ -142,6 +143,54 @@ export function EmptyState({
       <h3 className="text-base text-ink">{title}</h3>
       {body ? <p className="max-w-[42ch] text-sm text-muted">{body}</p> : null}
       {action ? <div className="mt-1">{action}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Detail that only some readers want, closed until asked for.
+ *
+ * The contents mount when it opens rather than being hidden, so a closed one
+ * fetches nothing. That matters where the detail is an expensive read made
+ * once per agent on the page.
+ */
+export function Disclosure({
+  summary,
+  defaultOpen = false,
+  className = '',
+  children,
+}: {
+  summary: React.ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const id = useId();
+
+  return (
+    <div className={className}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 text-left text-sm font-medium text-muted transition-colors hover:text-ink"
+      >
+        {summary}
+        <svg
+          aria-hidden
+          viewBox="0 0 16 16"
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        >
+          <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </button>
+      {open ? (
+        <div id={id} className="mt-3">
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

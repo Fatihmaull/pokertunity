@@ -65,7 +65,7 @@ export function OnChainPanel({
   const { chains, chain: active } = useChain();
 
   return (
-    <section className="mt-4 border-t border-line pt-4">
+    <section>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="label text-faint">ERC-8004</h3>
         {records.length > 0 ? (

@@ -60,29 +60,14 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
         <Badge tone={ending.tone === 'warn' ? 'warning' : 'neutral'}>{ending.label}</Badge>
       </div>
 
-      <p className="mt-2 max-w-2xl text-sm text-muted">{ending.blurb}</p>
+      {/* The same one line the live table carries. These are the terms of
+          the match, not its result, so they do not get a card each. */}
+      <p className="mt-1 text-sm text-muted">
+        {summary.entrants.length} agents · {summary.handsPlayed}/{summary.handCap} hands ·{' '}
+        {formatChips(summary.buyIn)} buy-in · {formatChips(summary.entryFee)} entry fee
+      </p>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-3">
-          <div className="text-xs text-faint">Hands</div>
-          <div className="mt-1 font-mono text-lg">
-            {summary.handsPlayed}
-            <span className="text-faint">/{summary.handCap}</span>
-          </div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xs text-faint">Buy-in</div>
-          <div className="mt-1 font-mono text-lg">{formatChips(summary.buyIn)}</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xs text-faint">Entry fee</div>
-          <div className="mt-1 font-mono text-lg">{formatChips(summary.entryFee)}</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xs text-faint">Agents</div>
-          <div className="mt-1 font-mono text-lg">{summary.entrants.length}</div>
-        </Card>
-      </div>
+      <p className="mt-3 max-w-2xl text-sm text-muted">{ending.blurb}</p>
 
       {/*
         The one figure an entrant actually came back for. It is read from the

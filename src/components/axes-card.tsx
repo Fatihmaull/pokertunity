@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card } from './ui';
 
 interface Axes {
   reading: number | null;
@@ -67,7 +66,7 @@ function keep(agentId: string, axes: Axes): void {
   }
 }
 
-export function AxesCard({ agentId, name }: { agentId: string; name?: string }) {
+export function AxesCard({ agentId }: { agentId: string }) {
   // Read once, as the card is first drawn. It is only ever drawn in the
   // browser, once the account has loaded, so there is no server render for a
   // remembered answer to disagree with.
@@ -126,36 +125,32 @@ export function AxesCard({ agentId, name }: { agentId: string; name?: string }) 
   }, [agentId]);
 
   return (
-    <Card className="p-5">
-      <h2 className="truncate text-base text-ink">{name ? `${name} profile` : 'Profile'}</h2>
-
-      <dl className="mt-4 space-y-4">
-        {AXES.map((axis) => {
-          const value = axes?.[axis.key] ?? null;
-          return (
-            <div key={axis.key}>
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[0.8125rem] font-medium text-ink">{axis.label}</dt>
-                {/* Null is not zero. It means this agent has not played enough
-                    for the measurement to say anything, and saying so beats
-                    printing a figure that would read as a finding. Nor is a
-                    measurement not yet fetched a measurement of nothing, so
-                    "not enough hands" waits until the answer has arrived. */}
-                <dd className={`mono text-sm tabular-nums ${value === null ? 'text-faint' : 'text-ink'}`}>
-                  {axes === null
-                    ? unavailable
-                      ? 'unavailable'
-                      : '…'
-                    : value === null
-                      ? 'not enough hands'
-                      : axis.format(value)}
-                </dd>
-              </div>
-              <p className="mt-0.5 text-xs text-faint">{axis.asks}</p>
+    <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+      {AXES.map((axis) => {
+        const value = axes?.[axis.key] ?? null;
+        return (
+          <div key={axis.key}>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-[0.8125rem] font-medium text-ink">{axis.label}</dt>
+              {/* Null is not zero. It means this agent has not played enough
+                  for the measurement to say anything, and saying so beats
+                  printing a figure that would read as a finding. Nor is a
+                  measurement not yet fetched a measurement of nothing, so
+                  "not enough hands" waits until the answer has arrived. */}
+              <dd className={`mono text-sm tabular-nums ${value === null ? 'text-faint' : 'text-ink'}`}>
+                {axes === null
+                  ? unavailable
+                    ? 'unavailable'
+                    : '…'
+                  : value === null
+                    ? 'not enough hands'
+                    : axis.format(value)}
+              </dd>
             </div>
-          );
-        })}
-      </dl>
-    </Card>
+            <p className="mt-0.5 text-xs text-faint">{axis.asks}</p>
+          </div>
+        );
+      })}
+    </dl>
   );
 }
