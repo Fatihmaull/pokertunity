@@ -291,9 +291,10 @@ function AgentCard({
  * What an agent has done at the table, under one rule for every figure.
  *
  * A count is a number, and zero is a real answer to it. A figure that does not
- * exist yet, like a rating before any match has finished, is a dash, and its
- * hint says what it is waiting for. A hint that would describe nothing, a win
- * rate over no hands, is left off rather than dashed. A change carries a sign
+ * exist yet, like a rating before any match has finished, is a dash, and the
+ * count beside it ("0 matches") is reason enough without a sentence. A hint
+ * that would describe nothing, a win rate over no hands, is left off rather
+ * than dashed. A change carries a sign
  * only when it is one. The row is there from the first visit, so a new agent's
  * card has the same shape it will have once it plays.
  */
@@ -317,7 +318,7 @@ function TableRecord({
       <Stat
         label="Rating"
         value={matches > 0 ? rating.toFixed(1) : <span className="text-faint">—</span>}
-        hint={matches > 0 ? `${formatChips(matches)} match${matches === 1 ? '' : 'es'}` : 'after its first match'}
+        hint={`${formatChips(matches)} match${matches === 1 ? '' : 'es'}`}
       />
       <Stat
         label="Hands"

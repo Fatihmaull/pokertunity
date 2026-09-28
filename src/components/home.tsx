@@ -187,13 +187,14 @@ function AgentSummary() {
           </div>
 
           {/* The same rule as each agent's own record: counts are numbers, a
-              figure that does not exist yet is a dash with its reason, and a
-              hint that would describe nothing is left off. */}
+              figure that does not exist yet is a dash, and a hint that would
+              describe nothing is left off. The Matches tile beside the rating
+              already says why it is a dash. */}
           <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5 sm:grid-cols-4">
             <Stat
               label="Best rating"
               value={best ? best.rating.toFixed(1) : <span className="text-faint">—</span>}
-              hint={best ? best.name : 'after a first match'}
+              hint={best?.name}
             />
             <Stat
               label="Hands"
