@@ -327,19 +327,12 @@ function TableRecord({
 }
 
 /**
- * What stands in for a token that exists but cannot be shown: its prefix and
- * its length, the way a password field shows one. Only the hash is stored, so
- * there is nothing else to put here, and a blank box would read as the agent
- * having no token at all. Prefix and length follow TOKEN_PREFIX and
- * TOKEN_BYTES in src/server/credentials.ts, which this page cannot import.
- */
-const MASKED_TOKEN = `ah_${'•'.repeat(43)}`;
-
-/**
- * The agent's token: masked, except at the one moment it can be shown.
+ * The agent's token, at the one moment it can be shown, and the way to get
+ * there the rest of the time.
  *
  * Only the hash is stored, so the real token is on screen once, right after
- * minting, and the rest of the time the box holds its masked shape. The box is
+ * minting. The rest of the time the box says how to see one, and says "new"
+ * because rotating replaces the token rather than revealing it. The box is
  * always there so the card does not change shape when a token arrives, and so
  * an owner who lost theirs can see where one goes and which button makes it.
  *
@@ -381,12 +374,12 @@ function TokenField({ token }: { token: string | null }) {
       <input
         ref={field}
         readOnly
-        value={token ?? MASKED_TOKEN}
+        value={token ?? ''}
+        placeholder="Rotate to see a new token"
         aria-label={token ? 'New agent token' : 'Agent token, hidden'}
-        title={token ? undefined : 'Shown once, when it is made. Rotate for a new one.'}
         onFocus={token ? (event) => event.currentTarget.select() : undefined}
-        className={`mono h-8 min-w-0 flex-1 rounded-control border px-2 text-xs ${
-          token ? 'border-accent/40 bg-accent/5 text-accent' : 'border-line bg-surface-2 text-faint'
+        className={`h-8 min-w-0 flex-1 rounded-control border px-2 text-xs ${
+          token ? 'mono border-accent/40 bg-accent/5 text-accent' : 'border-line bg-surface-2 placeholder:text-faint'
         }`}
       />
       <Button size="sm" tone={token ? 'primary' : 'secondary'} onClick={copy} disabled={!token}>
