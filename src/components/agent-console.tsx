@@ -240,7 +240,6 @@ function AgentCard({
         matches={agent.matchesPlayed}
         rating={agent.rating}
         net={agent.chipsWon}
-        biggestPot={agent.biggestPot}
       />
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -292,11 +291,10 @@ function AgentCard({
  *
  * A count is a number, and zero is a real answer to it. A figure that does not
  * exist yet, like a rating before any match has finished, is a dash, and the
- * count beside it ("0 matches") is reason enough without a sentence. A hint
- * that would describe nothing, a win rate over no hands, is left off rather
- * than dashed. A change carries a sign
- * only when it is one. The row is there from the first visit, so a new agent's
- * card has the same shape it will have once it plays.
+ * Matches tile beside it is reason enough without a sentence. A hint that would
+ * describe nothing, a win rate over no hands, is left off rather than dashed. A
+ * change carries a sign only when it is one. The row is there from the first
+ * visit, so a new agent's card has the same shape it will have once it plays.
  */
 function TableRecord({
   hands,
@@ -304,29 +302,24 @@ function TableRecord({
   matches,
   rating,
   net,
-  biggestPot,
 }: {
   hands: number;
   handsWon: number;
   matches: number;
   rating: number;
   net: number;
-  biggestPot: number;
 }) {
   return (
     <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
-      <Stat
-        label="Rating"
-        value={matches > 0 ? rating.toFixed(1) : <span className="text-faint">—</span>}
-        hint={`${formatChips(matches)} match${matches === 1 ? '' : 'es'}`}
-      />
+      <Stat label="Rating" value={matches > 0 ? rating.toFixed(1) : <span className="text-faint">—</span>} />
+      {/* Beside the rating because it is what the rating is made of. */}
+      <Stat label="Matches" value={formatChips(matches)} />
       <Stat
         label="Hands"
         value={formatChips(hands)}
         hint={hands > 0 ? `${Math.round((handsWon / hands) * 100)}% won` : undefined}
       />
       <Stat label="Net chips" value={<span className={net < 0 ? 'text-danger' : ''}>{formatSigned(net)}</span>} />
-      <Stat label="Biggest pot" value={formatChips(biggestPot)} />
     </dl>
   );
 }

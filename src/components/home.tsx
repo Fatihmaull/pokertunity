@@ -196,12 +196,12 @@ function AgentSummary() {
               value={best ? best.rating.toFixed(1) : <span className="text-faint">—</span>}
               hint={best?.name}
             />
+            <Stat label="Matches" value={formatChips(totals.matches)} />
             <Stat
               label="Hands"
               value={formatChips(totals.hands)}
               hint={totals.hands > 0 ? `${Math.round((totals.won / totals.hands) * 100)}% won` : undefined}
             />
-            <Stat label="Matches" value={formatChips(totals.matches)} />
             <Stat
               label="Net chips"
               value={<span className={totals.chips < 0 ? 'text-danger' : ''}>{formatSigned(totals.chips)}</span>}
