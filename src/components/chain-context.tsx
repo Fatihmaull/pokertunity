@@ -65,7 +65,7 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({ chain: key }),
         });
         if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
           throw new Error(body.error ?? 'That network is unavailable.');
         }
         setActive(key);

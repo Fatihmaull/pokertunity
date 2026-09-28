@@ -84,7 +84,7 @@ export function AgentConsole() {
         headers: { 'content-type': 'application/json' },
         ...init,
       });
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       if (!response.ok) throw new Error(String(body.error ?? 'That did not work.'));
       await refresh();
       return body;
