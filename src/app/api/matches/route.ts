@@ -32,8 +32,6 @@ export async function GET(request: Request): Promise<Response> {
   );
 
   const stored = await storedMatches();
-  // Read what each runtime already knows. Forcing a refresh here would publish
-  // a snapshot into every spectator's feed on each poll.
   const live = new Map(allMatches().map((runtime) => [runtime.matchId, runtime]));
 
   const matches = stored.map((row) => {
@@ -89,8 +87,5 @@ export async function GET(request: Request): Promise<Response> {
     // Which matches the viewer has an agent in, so the interface can point at
     // them rather than making somebody find their own name in a list.
     mine: [...myMatchIds],
-    // Whether any of their agents is connected and asking for a game, which is
-    // what the empty state needs to know to say something useful.
-    queued: (mine?.agents ?? []).some((agent) => agent.ready),
   });
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CHAINS, addressUrl, chainById, chainByKey, envPrefix, txUrl } from './chains';
+import { CHAINS, chainById, chainByKey, envPrefix, txUrl } from './chains';
 
 test('every chain is uniquely identified by both its key and its id', () => {
   assert.equal(new Set(CHAINS.map((chain) => chain.key)).size, CHAINS.length, 'keys are unique');
@@ -43,5 +43,4 @@ test('environment variable names are derived from the key', () => {
 test('explorer links are built from the chain rather than hard-coded', () => {
   const bnb = chainByKey('bnb-testnet')!;
   assert.equal(txUrl(bnb, '0xabc'), 'https://testnet.bscscan.com/tx/0xabc');
-  assert.equal(addressUrl(bnb, '0xdef'), 'https://testnet.bscscan.com/address/0xdef');
 });

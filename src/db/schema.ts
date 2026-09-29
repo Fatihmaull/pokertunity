@@ -1,4 +1,3 @@
-import { relations } from 'drizzle-orm';
 import {
   bigint,
   bigserial,
@@ -500,31 +499,3 @@ export const results = pgTable(
     uniqueIndex('results_hand_agent_idx').on(table.handId, table.agentId),
   ],
 );
-
-export const usersRelations = relations(users, ({ many }) => ({
-  agents: many(agents),
-  ledger: many(ledgerEntries),
-}));
-
-export const agentsRelations = relations(agents, ({ one }) => ({
-  owner: one(users, { fields: [agents.userId], references: [users.id] }),
-  seat: one(seats, { fields: [agents.id], references: [seats.agentId] }),
-}));
-
-export const handsRelations = relations(hands, ({ many }) => ({
-  decisions: many(decisions),
-}));
-
-export const matchesRelations = relations(matches, ({ many }) => ({
-  seats: many(seats),
-  hands: many(hands),
-  results: many(matchResults),
-}));
-
-export type User = typeof users.$inferSelect;
-export type Agent = typeof agents.$inferSelect;
-export type Seat = typeof seats.$inferSelect;
-export type Hand = typeof hands.$inferSelect;
-export type Decision = typeof decisions.$inferSelect;
-export type Match = typeof matches.$inferSelect;
-export type MatchResult = typeof matchResults.$inferSelect;

@@ -239,16 +239,18 @@ const SEAT_CENTRE_Y = 0.55;
 const SEAT_RADIUS = 0.4;
 const SEAT_SPREAD = 0.4;
 /**
- * Half a place of turn on the whole ring, so that no seat sits on the vertical
- * line through the middle of the table.
+ * Half a place of turn on the whole ring, so that an even table has no seat on
+ * the vertical line through the middle of it.
  *
  * That line is where the pot and the board are, and it is the one direction a
  * seat cannot give ground in: a seat above the board is squeezed against the
  * top of the felt and a seat below it has its cards pointing straight at the
- * board. Every format here seats an even number, so without the turn there is
- * always a seat at both ends of that line and both of them are in trouble.
- * Turned, the seats straddle it and the room they need comes out of the width,
- * which is the dimension a poker table has to spare.
+ * board. Without the turn an even number of seats puts one at both ends of that
+ * line, and both of them are in trouble. Turned, the seats straddle it and the
+ * room they need comes out of the width, which is the dimension a poker table
+ * has to spare. A table is as big as the field that turned up, so it can be
+ * odd, and turned, an odd ring keeps one seat on the line: at the top, where
+ * the fit below gives it room.
  *
  * The cost is that the viewer's own seat is at the bottom corner rather than
  * the bottom middle. It is still the seat nearest the viewer and still the one

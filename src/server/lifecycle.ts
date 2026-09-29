@@ -3,8 +3,8 @@ import { abandonOrphanedMatches, startMatchmaker, stopMatchmaker } from './match
 import { stopMatches } from './registry';
 
 /**
- * Brings the arena up and takes it down cleanly. Kept out of
- * `instrumentation.ts` so the Edge build never parses Node process APIs.
+ * Brings the arena up and takes it down cleanly. Booted by `server.ts` once the
+ * port is bound, and never from `instrumentation.ts`; that file says why.
  */
 
 /** How often a process that is not dealing offers to take over. */

@@ -18,7 +18,7 @@ export const CATEGORY = {
 
 export type Category = (typeof CATEGORY)[keyof typeof CATEGORY];
 
-const CATEGORY_NAMES: Record<Category, string> = {
+export const CATEGORY_NAMES: Record<Category, string> = {
   [CATEGORY.HIGH_CARD]: 'high card',
   [CATEGORY.PAIR]: 'pair',
   [CATEGORY.TWO_PAIR]: 'two pair',

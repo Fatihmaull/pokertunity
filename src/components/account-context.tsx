@@ -2,45 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { connect, currentAddress, ensureChain, signMessage, watchWallet, WalletError } from '@/lib/wallet';
-import type { OnChainRecord } from '@/lib/erc8004';
+import type { Account } from '@/server/actions';
 import { useChain } from './chain-context';
 
-export interface AccountAgent {
-  id: string;
-  name: string;
-  color: string;
-  handsPlayed: number;
-  handsWon: number;
-  chipsWon: number;
-  biggestPot: number;
-  /** The published rating, which is what the standings sort on. */
-  rating: number;
-  ratingMu: number;
-  ratingSigma: number;
-  matchesPlayed: number;
-  /** The match it is playing in right now, or null while it waits for one. */
-  seat: { matchId: string; seatIndex: number; stack: number } | null;
-  /** Whether a socket for it is open on the arena right now. */
-  connected: boolean;
-  /** Whether it has asked to be queued on that socket. */
-  ready: boolean;
-  /** Whether its owner lets it be seated. Asking is not enough without this. */
-  queueEnabled: boolean;
-  lastSeenAt: string | null;
-  /** Why its last connection ended, in a sentence an owner can act on. */
-  lastCloseReason: string | null;
-  /** Its ERC-8004 identity and newest published record, per chain. */
-  onchain: OnChainRecord[];
-}
-
-interface AccountState {
-  address: string;
-  chips: number;
-  agents: AccountAgent[];
-}
-
 interface AccountContextValue {
-  account: AccountState | null;
+  account: Account | null;
   loading: boolean;
   connecting: boolean;
   error: string | null;
@@ -54,7 +20,7 @@ const Context = createContext<AccountContextValue | null>(null);
 
 export function AccountProvider({ children }: { children: React.ReactNode }) {
   const { chain } = useChain();
-  const [account, setAccount] = useState<AccountState | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +30,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     // A route that throws answers 500 with no body at all, and parsing that
     // surfaced as "Unexpected end of JSON input" in place of a sign-in error.
     if (!response.ok) throw new Error('Your account could not be loaded. Try again in a moment.');
-    const body = (await response.json()) as { session: unknown; account?: AccountState };
+    const body = (await response.json()) as { session: unknown; account?: Account };
     setAccount(body.session && body.account ? body.account : null);
     setLoading(false);
   }, []);
@@ -76,7 +42,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     fetch('/api/account', { cache: 'no-store' })
       .then((response) => {
         if (!response.ok) throw new Error(`account ${response.status}`);
-        return response.json() as Promise<{ session: unknown; account?: AccountState }>;
+        return response.json() as Promise<{ session: unknown; account?: Account }>;
       })
       .then((body) => {
         if (cancelled) return;

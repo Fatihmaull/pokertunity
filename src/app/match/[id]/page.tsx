@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { Arena } from '@/components/arena';
 import { MatchResult } from '@/components/match-result';
 import { stakesLabel } from '@/lib/economy';
-import { account } from '@/server/actions';
 import { getSession } from '@/server/auth';
 import { matchSummary } from '@/server/store';
 
@@ -33,12 +32,10 @@ export default async function Page(props: PageProps<'/match/[id]'>) {
   const { id } = await props.params;
 
   const session = await getSession();
-  const viewer = session ? await account(session).catch(() => null) : null;
   const summary = await matchSummary(id, session?.userId ?? null).catch(() => null);
 
   if (!summary) notFound();
   if (summary.status !== 'playing') return <MatchResult summary={summary} />;
 
-  void viewer;
   return <Arena matchId={id} />;
 }

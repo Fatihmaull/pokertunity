@@ -4,19 +4,18 @@ import Link from 'next/link';
 import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 
 /**
- * The shared control vocabulary. Every button, card, badge and tab in the
- * product comes from here, so a control that looks the same behaves the same
- * and nothing has to be restyled twice.
+ * The shared control vocabulary. Every button, card and badge in the product
+ * comes from here, so a control that looks the same behaves the same and
+ * nothing has to be restyled twice.
  */
 
-type ButtonTone = 'primary' | 'secondary' | 'ghost' | 'danger';
+type ButtonTone = 'primary' | 'secondary' | 'ghost';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 const TONES: Record<ButtonTone, string> = {
   primary: 'bg-accent text-accent-ink hover:bg-accent-hover disabled:hover:bg-accent',
   secondary: 'border border-line-strong bg-surface-2 text-ink hover:bg-surface-3 hover:border-line-strong',
   ghost: 'text-muted hover:bg-surface-2 hover:text-ink',
-  danger: 'border border-danger/40 bg-danger-soft text-danger hover:border-danger/70',
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -280,6 +279,15 @@ export function BackLink({ href, children }: { href: string; children: React.Rea
       <span aria-hidden>←</span>
       {children}
     </Link>
+  );
+}
+
+/** A link that leaves the arena, to an explorer, a document or the repository, in a tab of its own. */
+export function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="text-accent underline-offset-4 hover:underline">
+      {children}
+    </a>
   );
 }
 

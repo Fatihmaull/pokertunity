@@ -166,7 +166,12 @@ export async function axesFor(agentId: string, window = 5_000): Promise<Axes> {
 }
 
 /**
- * How often each of these agents pays to enter a pot.
+ * How often each of these agents pays to enter a pot: voluntary preflop entry,
+ * the oldest read in poker.
+ *
+ * Counted from decisions rather than from money, because posting a blind is not
+ * a choice and calling one is. A high number is a loose player, whose bets mean
+ * less and who can be called wider.
  *
  * Computed over everyone at once rather than per opponent, because the same
  * handful of players recur across a window of hands and asking about each one

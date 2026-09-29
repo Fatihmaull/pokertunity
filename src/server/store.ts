@@ -511,8 +511,8 @@ export interface PersistedHand {
  * describing a hand whose stacks never moved: numbers published about chips that
  * stayed where they were, and a table that dealt on from the old stacks.
  */
-export async function recordHand(hand: PersistedHand): Promise<string> {
-  return db.transaction(async (tx) => {
+export async function recordHand(hand: PersistedHand): Promise<void> {
+  await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(hands)
       .values({
@@ -619,8 +619,6 @@ export async function recordHand(hand: PersistedHand): Promise<string> {
       .update(matches)
       .set({ handsPlayed: hand.handNumber })
       .where(eq(matches.id, hand.matchId));
-
-    return row.id;
   });
 }
 

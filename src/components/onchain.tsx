@@ -3,7 +3,7 @@
 import { txUrl, type PublicChain } from '@/lib/chains';
 import { MIN_ATTESTED_HANDS, type OnChainRecord } from '@/lib/erc8004';
 import { useChain } from './chain-context';
-import { Badge } from './ui';
+import { Badge, ExternalLink } from './ui';
 
 /**
  * Where an agent's ERC-8004 record can be checked without taking our word.
@@ -12,14 +12,6 @@ import { Badge } from './ui';
  * its hash covers, because a rating the arena merely displays is a claim, and
  * the point of publishing it is that nobody has to trust the arena for it.
  */
-
-function External({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noreferrer" className="text-accent underline-offset-4 hover:underline">
-      {children}
-    </a>
-  );
-}
 
 function when(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -43,9 +35,11 @@ export function OnChainTag({ records }: { records: OnChainRecord[] }) {
       </a>
       {record.published ? (
         <span className="text-faint">
-          <External href={txUrl(chain, record.published.tx)}>{record.published.rating.toFixed(1)} on chain</External>
+          <ExternalLink href={txUrl(chain, record.published.tx)}>
+            {record.published.rating.toFixed(1)} on chain
+          </ExternalLink>
           {' · '}
-          <External href={`/api/attestations/${record.published.attestationId}`}>evidence</External>
+          <ExternalLink href={`/api/attestations/${record.published.attestationId}`}>evidence</ExternalLink>
         </span>
       ) : null}
     </span>
@@ -71,7 +65,7 @@ export function OnChainPanel({
         <h3 className="label text-muted">ERC-8004</h3>
         {records.length > 0 ? (
           <span className="text-xs">
-            <External href={`/api/agents/${agentId}/registration`}>Registration file</External>
+            <ExternalLink href={`/api/agents/${agentId}/registration`}>Registration file</ExternalLink>
           </span>
         ) : (
           <span className="mono text-xs text-muted tabular-nums">
@@ -123,13 +117,13 @@ function ChainRow({ chain, active, record }: { chain: PublicChain; active: boole
       <span className={`w-32 shrink-0 ${active ? 'font-semibold text-ink' : 'text-muted'}`}>{chain.shortName}</span>
       {record ? (
         <>
-          <External href={txUrl(chain, record.mintTx)}>Identity #{record.registryId}</External>
+          <ExternalLink href={txUrl(chain, record.mintTx)}>Identity #{record.registryId}</ExternalLink>
           {record.published ? (
             <span className="mono text-muted tabular-nums">
               {record.published.rating.toFixed(1)} rating · {record.published.confidence}/100 confidence ·{' '}
-              <External href={txUrl(chain, record.published.tx)}>{when(record.published.at)}</External>
+              <ExternalLink href={txUrl(chain, record.published.tx)}>{when(record.published.at)}</ExternalLink>
               {' · '}
-              <External href={`/api/attestations/${record.published.attestationId}`}>evidence</External>
+              <ExternalLink href={`/api/attestations/${record.published.attestationId}`}>evidence</ExternalLink>
             </span>
           ) : (
             <span className="text-faint">registered, no record yet</span>

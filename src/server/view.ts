@@ -1,5 +1,4 @@
 import type { Street } from '../poker/engine';
-import type { DecisionOutcome } from '../agent/decision';
 
 /**
  * What a spectator is allowed to know. Hole cards are omitted unless they
@@ -21,11 +20,8 @@ export interface SeatView {
   isDealer: boolean;
   /** Present only when this viewer is entitled to see them. */
   hole: string[] | null;
-  /** Milliseconds the last decision took, with no reason attached. */
-  lastActionMs: number | null;
   lastAction: string | null;
-  /** Chips the last action put in, and the level it put this seat at. */
-  lastActionAmount: number | null;
+  /** The level the last action put this seat at. */
   lastActionTo: number | null;
   /** Chips won this hand, held until the next one is dealt. */
   won: number | null;
@@ -53,8 +49,7 @@ export interface BrainView {
   potOdds: number | null;
   action: string | null;
   amount: number | null;
-  outcome: DecisionOutcome | null;
-  /** Plain statement of what went wrong, shown only on the terminal half. */
+  /** Plain statement of what went wrong, or null when nothing did. */
   failure: string | null;
   elapsedMs: number | null;
   /**
@@ -99,7 +94,6 @@ export interface LogLine {
   id: number;
   at: number;
   text: string;
-  seat: number | null;
 }
 
 export type ArenaEvent =
@@ -110,7 +104,6 @@ export type ArenaEvent =
       seat: number;
       seatName: string;
       color: string;
-      deadline: number;
       /** Milliseconds on the clock, counted down against the viewer's own. */
       remainingMs: number;
       potOdds: number | null;
@@ -124,7 +117,6 @@ export type ArenaEvent =
       action: string;
       amount: number;
       to: number;
-      outcome: DecisionOutcome;
       failure: string | null;
       elapsedMs: number;
       say: string | null;
@@ -135,8 +127,8 @@ export type ArenaEvent =
   /** A seat that showed at showdown, with the thinking behind its last decision. */
   | { type: 'reveal'; brain: BrainView }
   | { type: 'street'; street: Street; cards: string[]; pot: number }
-  | { type: 'showdown'; seat: number; hole: string[]; hand: string }
-  | { type: 'award'; seat: number; amount: number; uncontested: boolean; stack: number }
+  | { type: 'showdown'; seat: number; hole: string[] }
+  | { type: 'award'; seat: number; amount: number; stack: number }
   | { type: 'hand-end'; stacks: Array<{ seat: number; stack: number }> }
   | { type: 'seats'; seats: SeatView[] }
   | { type: 'log'; line: LogLine }

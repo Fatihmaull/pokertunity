@@ -42,17 +42,15 @@ export class MatchRuntime {
   /**
    * The seats in this hand, in engine order. The engine numbers seats densely
    * from zero; the table numbers them by chair, and chairs go sparse as soon as
-   * anyone in the middle stands up. This array is the only bridge between the
+   * anyone in the middle busts out. This array is the only bridge between the
    * two, so nothing outside it may assume the numbers agree.
    */
   private lineup: SeatedAgent[] = [];
   /** Colour to draw each chair in, after resolving collisions at this table. */
   private palette = new Map<number, string>();
   private handNumber = 0;
-  /** The button follows a chair, not a position, so it survives a seat change. */
+  /** The button follows a chair, not a position, so it survives a bust renumbering the lineup. */
   private buttonChair = -1;
-  /** True from the moment a hand's lineup is fixed until its result is stored. */
-  private handLive = false;
   /** How the match ended, once it has. Null while it is still being played. */
   private ending: MatchEnding | null = null;
   private toAct: number | null = null;
@@ -63,7 +61,7 @@ export class MatchRuntime {
   /** The last decision each chair made this hand, whole, for opening at a showdown. */
   private decided = new Map<number, BrainView>();
   private shown = new Map<number, Card[]>();
-  private timing = new Map<number, { elapsedMs: number; action: string; amount: number; to: number }>();
+  private timing = new Map<number, { elapsedMs: number; action: string; to: number }>();
   /** What each chair won this hand, so a snapshot mid-award still shows it. */
   private won = new Map<number, number>();
   /** Blinds posted this hand. Posting one is not acting, so it is kept apart. */
@@ -86,9 +84,9 @@ export class MatchRuntime {
   /**
    * Reads the roster once, when the match opens.
    *
-   * Nobody joins and nobody leaves a match, so this is not a refresh in the old
-   * sense: the set of agents is fixed from the first hand to the last, which is
-   * the whole reason a finishing order means anything.
+   * Nobody joins and nobody leaves a match: the set of agents is fixed from the
+   * first hand to the last, which is the whole reason a finishing order means
+   * anything.
    */
   private async loadRoster(): Promise<void> {
     this.seated = await loadSeats(this.matchId);
@@ -141,11 +139,6 @@ export class MatchRuntime {
   /** Chair a given engine position is sitting in. */
   private chairOf(position: number): number {
     return this.lineup[position]?.seatIndex ?? position;
-  }
-
-  /** Whether this agent is sitting in the hand being played right now. */
-  isInLiveHand(agentId: string): boolean {
-    return this.handLive && this.lineup.some((seat) => seat.agentId === agentId);
   }
 
   start(): void {
@@ -204,9 +197,7 @@ export class MatchRuntime {
           status: 'empty' as SeatStatus,
           isDealer: false,
           hole: null,
-          lastActionMs: null,
           lastAction: null,
-          lastActionAmount: null,
           lastActionTo: null,
           won: null,
           blind: null,
@@ -228,9 +219,7 @@ export class MatchRuntime {
         status: this.statusOf(index, live),
         isDealer: this.state !== null && position !== null && position === this.state.button,
         hole: hole ? hole.map(cardName) : null,
-        lastActionMs: timing?.elapsedMs ?? null,
         lastAction: timing?.action ?? null,
-        lastActionAmount: timing?.amount ?? null,
         lastActionTo: timing?.to ?? null,
         won: this.won.get(index) ?? null,
         // A blind is only a blind before the flop. After that the chips are in
@@ -253,8 +242,8 @@ export class MatchRuntime {
     this.bus.publish(event);
   }
 
-  private note(text: string, seat: number | null = null): void {
-    const line: LogLine = { id: ++this.logSequence, at: Date.now(), text, seat };
+  private note(text: string): void {
+    const line: LogLine = { id: ++this.logSequence, at: Date.now(), text };
     this.log.push(line);
     if (this.log.length > 200) this.log.shift();
     this.publish({ type: 'log', line });
@@ -294,10 +283,9 @@ export class MatchRuntime {
         console.error(`[${this.matchId}] hand ${this.handNumber} abandoned`, error);
         this.note('That hand could not be completed and was abandoned.');
       } finally {
-        // Whatever happened, no hand is holding chips any more. Leaving either
-        // of these set would strand the match: the flag until the next deal,
-        // and the rows forever, because nothing else clears them.
-        this.handLive = false;
+        // Whatever happened, no hand is holding chips any more. Leaving the
+        // seats marked would strand the match for good, because nothing else
+        // clears them.
         await clearInHand(this.matchId).catch((error) => {
           console.error(`[${this.matchId}] could not release the seats`, error);
         });
@@ -356,7 +344,6 @@ export class MatchRuntime {
     }
 
     this.lineup = lineup;
-    this.handLive = true;
 
     // From a CSPRNG, never from a seed: see `shuffledDeck` for what a seed hands
     // to an agent that goes looking for it.
@@ -364,9 +351,9 @@ export class MatchRuntime {
     const startedAt = new Date();
 
     this.handNumber += 1;
-    // The button moves to the next occupied chair, so a seat changing hands
-    // between deals cannot hand the same player the button twice or skip a
-    // player's blinds.
+    // The button moves to the next occupied chair, so a seat emptying between
+    // deals cannot hand the same player the button twice or skip a player's
+    // blinds.
     const button = nextButtonPosition(lineup, this.buttonChair);
     this.buttonChair = lineup[button].seatIndex;
     this.shown.clear();
@@ -380,7 +367,7 @@ export class MatchRuntime {
 
     let state = startHand({
       handId: `${this.matchId}-${this.handNumber}`,
-      seats: lineup.map((seat) => ({ agentId: seat.agentId, stack: seat.stack, sittingOut: false })),
+      seats: lineup.map((seat) => ({ agentId: seat.agentId, stack: seat.stack })),
       button,
       smallBlind: this.config.smallBlind,
       bigBlind: this.config.bigBlind,
@@ -430,7 +417,6 @@ export class MatchRuntime {
         potOdds,
         action: null,
         amount: null,
-        outcome: null,
         failure: null,
         elapsedMs: null,
         sealed: false,
@@ -441,7 +427,6 @@ export class MatchRuntime {
         seat: chair,
         seatName: agent.name,
         color,
-        deadline: this.deadline,
         // The browser's clock is not this one. Sending what is left lets the
         // arena count down against its own clock instead of a foreign epoch.
         remainingMs: ACT_CLOCK_MS,
@@ -456,7 +441,6 @@ export class MatchRuntime {
         link: () => linkFor(agent.agentId) ?? null,
         state,
         seatIndex: position,
-        bigBlind: this.config.bigBlind,
         clockMs: ACT_CLOCK_MS,
         matchId: this.matchId,
         handNumber: this.handNumber,
@@ -489,7 +473,6 @@ export class MatchRuntime {
       this.timing.set(chair, {
         elapsedMs: record.elapsedMs,
         action: applied?.action ?? record.action.type,
-        amount: applied?.amount ?? 0,
         to: applied?.to ?? 0,
       });
       if (record.say) this.talk.set(chair, record.say);
@@ -505,7 +488,6 @@ export class MatchRuntime {
         potOdds,
         action: applied?.action ?? record.action.type,
         amount: applied?.amount ?? 0,
-        outcome: record.outcome,
         failure: record.failure,
         elapsedMs: record.elapsedMs,
         sealed: false,
@@ -518,7 +500,6 @@ export class MatchRuntime {
         action: applied?.action ?? record.action.type,
         amount: applied?.amount ?? 0,
         to: applied?.to ?? 0,
-        outcome: record.outcome,
         failure: record.failure,
         elapsedMs: record.elapsedMs,
         say: record.say,
@@ -529,7 +510,6 @@ export class MatchRuntime {
 
       this.note(
         describeAction(agent.name, applied?.action ?? record.action.type, applied?.amount ?? 0, applied?.to ?? 0),
-        chair,
       );
       // Stored hands are indexed by engine position, which is what the lineup
       // written alongside them is indexed by.
@@ -554,7 +534,6 @@ export class MatchRuntime {
     // Storing the stacks now would delete them, so the hand is abandoned and
     // the stored stacks, which still hold every chip, stand as they are.
     if (state.toAct !== null) {
-      this.handLive = false;
       this.note('The table stopped mid-hand. That hand does not count.');
       return;
     }
@@ -629,9 +608,9 @@ export class MatchRuntime {
           pot: totalPot(state),
         });
         this.note(`${capitalise(event.street)}: ${event.cards.map(cardName).join(' ')}`);
-        // The bets have just swept into the pot and three new cards have
-        // landed. Both are the reason the next decision reads the way it does,
-        // so neither is allowed to be overwritten by it.
+        // The bets have just swept into the pot and the new cards have landed.
+        // Both are the reason the next decision reads the way it does, so
+        // neither is allowed to be overwritten by it.
         await this.pause(STREET_SETTLE_MS);
       }
     }
@@ -647,7 +626,7 @@ export class MatchRuntime {
       const chair = this.chairOf(event.seat);
       this.shown.set(chair, [...event.hole]);
       const hand = describeHand(evaluate([...event.hole, ...state.board]));
-      this.publish({ type: 'showdown', seat: chair, hole: event.hole.map(cardName), hand });
+      this.publish({ type: 'showdown', seat: chair, hole: event.hole.map(cardName) });
       this.note(`${lineup[event.seat]?.name ?? 'Seat'} shows ${event.hole.map(cardName).join(' ')}, ${hand}.`);
 
       // The cards are face up, so what the seat thought of them tells nobody
@@ -674,10 +653,9 @@ export class MatchRuntime {
         type: 'award',
         seat: chair,
         amount: event.amount,
-        uncontested: event.uncontested,
         stack: state.seats[event.seat].stack,
       });
-      this.note(`${lineup[event.seat]?.name ?? 'Seat'} wins ${event.amount}.`, chair);
+      this.note(`${lineup[event.seat]?.name ?? 'Seat'} wins ${event.amount}.`);
     }
 
     // The pot has just been pushed. Clearing the board on the same frame means
@@ -696,7 +674,7 @@ export class MatchRuntime {
     deck: readonly Card[];
     startedAt: Date;
     recorded: RecordedDecision[];
-  }): Promise<string> {
+  }): Promise<void> {
     const { lineup, state, deck, startedAt, recorded } = context;
     const potSize = totalPot(state);
     const dealtIn = state.seats.filter((seat) => !seat.sittingOut);
@@ -731,7 +709,7 @@ export class MatchRuntime {
     // One transaction: the hand, its results and counters, the stacks it left
     // and the seats it knocked out. If it fails, none of it happened, which is
     // what lets the table carry on from the stacks it already holds.
-    const handId = await recordHand({
+    await recordHand({
       matchId: this.matchId,
       handNumber: this.handNumber,
       deck,
@@ -762,7 +740,6 @@ export class MatchRuntime {
     for (const [position, seat] of lineup.entries()) {
       seat.stack = state.seats[position].stack;
     }
-    this.handLive = false;
 
     // A stack too short to post a big blind cannot play another hand. Nobody
     // leaves a match, so an eliminated seat stays where it is with its finishing
@@ -775,11 +752,8 @@ export class MatchRuntime {
         seat.stack > 0
           ? `${seat.name} is down to ${seat.stack} and cannot post a blind, finishing on hand ${this.handNumber}.`
           : `${seat.name} is out of chips, finishing on hand ${this.handNumber}.`,
-        seat.seatIndex,
       );
     }
-
-    return handId;
   }
 }
 

@@ -143,7 +143,6 @@ const SAMPLE: BrainState = {
   draws: ['flush draw'],
   action: 'raise',
   amount: 1200,
-  outcome: 'decided',
   failure: null,
   elapsedMs: 4300,
 };
@@ -170,7 +169,6 @@ function build(
       draws: drawsOf(brain.handRead),
       action: brain.action,
       amount: brain.amount ?? 0,
-      outcome: brain.outcome,
       failure: brain.failure,
       elapsedMs: brain.elapsedMs,
     };
@@ -190,7 +188,6 @@ function build(
       draws: drawsOf(decision.handRead),
       action: decision.action,
       amount: decision.amount,
-      outcome: decision.outcome,
       failure: decision.outcome === 'timeout' ? 'ran out of time' : null,
       elapsedMs: decision.elapsedMs,
     };

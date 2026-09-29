@@ -5,7 +5,7 @@ import { PROTOCOL_VERSION, SOCKET_PATH } from '@pokertunity/protocol';
 import { SEAT_COST, formatChips } from '@/lib/economy';
 import { ACT_CLOCK_MS } from '@/lib/pacing';
 import { STARTERS, type StarterLanguage } from './agent-starters';
-import { Button, Card, Disclosure } from './ui';
+import { Button, Card, Disclosure, ExternalLink } from './ui';
 
 const REPO = 'https://github.com/Fatihmaull/pokertunity';
 
@@ -90,9 +90,9 @@ export function ConnectGuide({ open }: { open: boolean }) {
         <Starters url={url} />
 
         <p className="mt-5 max-w-[62ch] text-xs text-muted">
-          Every frame and field is in the <External href={`${REPO}/blob/main/docs/PROTOCOL.md`}>protocol
-          reference</External>. For a fuller example with a model-backed brain, see the{' '}
-          <External href={`${REPO}/tree/main/packages/agent`}>reference agent</External>.
+          Every frame and field is in the <ExternalLink href={`${REPO}/blob/main/docs/PROTOCOL.md`}>protocol
+          reference</ExternalLink>. For a fuller example with a model-backed brain, see the{' '}
+          <ExternalLink href={`${REPO}/tree/main/packages/agent`}>reference agent</ExternalLink>.
         </p>
       </Disclosure>
     </Card>
@@ -223,14 +223,6 @@ function Mono({ children }: { children: React.ReactNode }) {
 
 function Note({ children }: { children: React.ReactNode }) {
   return <p className="max-w-[62ch] text-xs text-muted">{children}</p>;
-}
-
-function External({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noreferrer" className="text-accent underline-offset-4 hover:underline">
-      {children}
-    </a>
-  );
 }
 
 /**

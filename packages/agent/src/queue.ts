@@ -1,19 +1,8 @@
 import { RateLimited } from './provider';
 
-/**
- * One token bucket for every model request the server makes, sized to the
- * provider's requests-per-minute allowance. Tables share it, so three busy
- * tables slow down together instead of one starving the others.
- *
- * Keys are pooled for failover and for holding more than one paid key. They are
- * not a way to multiply a free tier: limits are enforced per project, and
- * spreading load across projects to get around them breaks the provider's terms.
- */
 export interface LeasedKey {
   key: string;
-  /** Call when the request finishes so the key returns to rotation. */
-  release(): void;
-  /** Call instead of release when the provider rate-limited this key. */
+  /** Call when the provider rate-limited this key. */
   cooldown(ms: number): void;
 }
 
@@ -23,11 +12,21 @@ interface KeyState {
   availableAt: number;
 }
 
+/**
+ * One token bucket for every model request this process makes, sized to the
+ * provider's requests-per-minute allowance. Every agent in the process shares
+ * it, so a field of busy agents slows down together instead of one starving
+ * the others.
+ *
+ * Keys are pooled for failover and for holding more than one paid key. They are
+ * not a way to multiply a free tier: limits are enforced per project, and
+ * spreading load across projects to get around them breaks the provider's terms.
+ */
 export class ModelQueue {
   private readonly keys: KeyState[];
   private readonly capacity: number;
   private tokens: number;
-  private lastRefill = Date.now();
+  private lastRefill: number;
 
   constructor(
     keys: readonly string[],
@@ -54,7 +53,6 @@ export class ModelQueue {
         this.tokens -= 1;
         return {
           key: ready.key,
-          release: () => {},
           cooldown: (ms) => {
             ready.availableAt = this.now() + ms;
           },
@@ -72,14 +70,9 @@ export class ModelQueue {
     for (let attempt = 0; attempt < 2; attempt++) {
       const lease = await this.acquire(signal);
       try {
-        const result = await work(lease.key);
-        lease.release();
-        return result;
+        return await work(lease.key);
       } catch (error) {
-        if (!(error instanceof RateLimited)) {
-          lease.release();
-          throw error;
-        }
+        if (!(error instanceof RateLimited)) throw error;
         lease.cooldown(error.retryAfterMs);
         lastError = error;
       }

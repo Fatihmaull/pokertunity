@@ -108,7 +108,3 @@ export function envPrefix(key: string): string {
 export function txUrl(chain: ChainInfo, txHash: string): string {
   return `${chain.explorer.url}/tx/${txHash}`;
 }
-
-export function addressUrl(chain: ChainInfo, address: string): string {
-  return `${chain.explorer.url}/address/${address}`;
-}

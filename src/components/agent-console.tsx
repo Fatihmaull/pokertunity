@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { SEAT_COST, formatChips } from '@/lib/economy';
 import { formatSigned } from '@/lib/format';
-import { useAccount, type AccountAgent } from './account-context';
+import type { AgentSummary } from '@/server/actions';
+import { useAccount } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
 import { OnChainPanel } from './onchain';
@@ -194,7 +195,7 @@ function AgentCard({
   onRename,
   onQueue,
 }: {
-  agent: AccountAgent;
+  agent: AgentSummary;
   busy: boolean;
   affordable: boolean;
   token: string | null;
@@ -404,7 +405,7 @@ function TokenField({ token }: { token: string | null }) {
   );
 }
 
-function Status({ agent, affordable }: { agent: AccountAgent; affordable: boolean }) {
+function Status({ agent, affordable }: { agent: AgentSummary; affordable: boolean }) {
   if (agent.seat) return <Badge tone="accent">In a match</Badge>;
   if (!agent.connected) return <Badge>{agent.lastSeenAt ? 'Not connected' : 'Never connected'}</Badge>;
   if (!agent.queueEnabled) return <Badge>Connected, matches off</Badge>;
@@ -426,7 +427,7 @@ function QueueSwitch({
   disabled,
   onChange,
 }: {
-  agent: AccountAgent;
+  agent: AgentSummary;
   disabled: boolean;
   onChange: (enabled: boolean) => void;
 }) {
@@ -480,7 +481,7 @@ const STATUS_POLL_MS = 5_000;
  * holding "Agent 1" and a renamed "Agent 3" would be offered "Agent 3" again,
  * refused, and offered it again on every click.
  */
-function unusedName(agents: readonly AccountAgent[]): string {
+function unusedName(agents: readonly AgentSummary[]): string {
   const taken = new Set(agents.map((agent) => agent.name.toLowerCase()));
   let n = agents.length + 1;
   while (taken.has(`agent ${n}`)) n += 1;

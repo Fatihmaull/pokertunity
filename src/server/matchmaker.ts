@@ -200,6 +200,8 @@ async function explain(ready: readonly string[]): Promise<void> {
   }
 }
 
+type Entrant = Candidate & { waitingSince: number };
+
 /**
  * Splits the queue into the matches that should start right now.
  *
@@ -208,8 +210,6 @@ async function explain(ready: readonly string[]): Promise<void> {
  * waiting forever for a neighbour who never arrives. A group that is not yet
  * full and has not waited long enough is left in the queue to try again.
  */
-type Entrant = Candidate & { waitingSince: number };
-
 function groupsFrom(waiting: readonly Entrant[], now = Date.now()): Entrant[][] {
   // Longest wait first: the queue is already in that order, and rebuilding it
   // by rating would quietly prioritise whoever happened to rate highest.

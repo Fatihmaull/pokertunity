@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { ButtonLink } from '@/components/ui';
 
+// Read by Next when it renders a 404, which static analysis does not know a
+// not-found file can export.
+// fallow-ignore-next-line unused-export
 export const metadata: Metadata = { title: 'Not found' };
 
 /**

@@ -26,12 +26,6 @@
   --color-surface-3: #262629;
   --color-line: #2b2b2f;
   --color-line-strong: #3b3b41;
-  /*
-    The boundary of anything you can type in or toggle. A field's fill barely
-    differs from the card behind it, so the border is what identifies the
-    control and it clears the 3:1 that WCAG asks of a component boundary.
-  */
-  --color-line-input: #6a6a6f;
 
   --color-ink: #ededee;
   --color-muted: #a8a8ac;
@@ -110,8 +104,6 @@
     than the table it is reporting on.
   */
   --stage-h: max(31rem, min(72vh, 43rem));
-  /* Overwritten per seat wherever an agent owns the surface. */
-  --agent: var(--color-accent);
 
   /*
     Two curves, because everything that moves on a poker table is a physical
@@ -219,7 +211,7 @@ h3 {
   height: 1em;
   margin-left: 0.12em;
   vertical-align: -0.15em;
-  background: var(--agent);
+  background: var(--color-accent);
   animation: caret 1.05s steps(1, end) infinite;
 }
 

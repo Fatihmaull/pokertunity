@@ -17,7 +17,6 @@ export interface BrainState {
   draws: string[];
   action: string | null;
   amount: number;
-  outcome: "decided" | "timeout" | "error" | null;
   failure: string | null;
   elapsedMs: number | null;
   /** What the agent said out loud, if it said anything. */

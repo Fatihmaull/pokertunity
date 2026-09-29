@@ -723,7 +723,6 @@ function foldedHand(matchId: string, field: Candidate[], stacks: [number, number
     read: { made: 'high card', category: 0, flushDraw: false, openEnded: false, gutshot: false, overcards: false },
     outcome: 'decided',
     elapsedMs: 5,
-    source: 'agent',
     failure: null,
   };
 
