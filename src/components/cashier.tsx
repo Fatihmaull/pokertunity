@@ -236,11 +236,6 @@ export function Cashier({ onClose }: { onClose: () => void }) {
           })}
         </div>
 
-        <div className="border-t border-line bg-surface-2 px-6 py-5">
-          <h3 className="label mb-2 text-faint">No cash out</h3>
-          <p className="max-w-[68ch] text-sm text-muted">Chips cannot be withdrawn. The vault has no payout function.</p>
-        </div>
-
         {chain && !settles ? (
           <div className="border-t border-line px-6 py-4">
             {/* Advice worth following, or none. Before the first vault exists
