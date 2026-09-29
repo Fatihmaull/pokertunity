@@ -41,6 +41,8 @@ export interface Lobby {
   queued: boolean;
   /** False until the first poll lands, when nothing about the floor is known. */
   loaded: boolean;
+  /** The last poll was refused or never answered. */
+  failed: boolean;
   reload: () => void;
 }
 
@@ -56,6 +58,7 @@ export function useLobby(): Lobby {
   const [mine, setMine] = useState<string[]>([]);
   const [queued, setQueued] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [reloads, setReloads] = useState(0);
 
   const reload = useCallback(() => setReloads((count) => count + 1), []);
@@ -66,20 +69,29 @@ export function useLobby(): Lobby {
     let cancelled = false;
 
     const poll = () => {
+      // A refusal is not an empty floor. Keeping what is on screen until the
+      // next poll is honest; replacing it with the error body is not. It is
+      // still recorded, because before the first answer there is nothing on
+      // screen to keep, and "loading" would otherwise be shown forever.
       fetch('/api/matches', { cache: 'no-store' })
         .then((response) =>
-          // A refusal is not an empty floor. Keeping what is on screen until the
-          // next poll is honest; replacing it with the error body is not.
           response.ok ? (response.json() as Promise<{ matches: LobbyMatch[]; mine: string[]; queued: boolean }>) : null,
         )
         .then((body) => {
-          if (cancelled || !body) return;
+          if (cancelled) return;
+          if (!body) {
+            setFailed(true);
+            return;
+          }
           setMatches(body.matches);
           setMine(body.mine);
           setQueued(body.queued);
           setLoaded(true);
+          setFailed(false);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!cancelled) setFailed(true);
+        });
     };
 
     poll();
@@ -90,7 +102,7 @@ export function useLobby(): Lobby {
     };
   }, [reloads]);
 
-  return { matches, mine, queued, loaded, reload };
+  return { matches, mine, queued, loaded, failed, reload };
 }
 
 export function seatsTaken(match: LobbyMatch): number {

@@ -26,13 +26,34 @@ export function MatchList({ lobby, limit }: { lobby: Lobby; limit?: number }) {
         <span className="label text-faint">Match</span>
         <span className="label text-faint">Agents</span>
         <span className="label text-faint">Hands</span>
-        <span className="label text-right text-faint">Watch</span>
+        {/* The buttons below name themselves, Watch or Review, so a head over
+            them would only repeat one of the two and be wrong half the time. */}
+        <span aria-hidden />
       </div>
 
       {visible.length === 0 ? (
         <EmptyState
-          title={lobby.loaded ? 'Nothing is being dealt yet' : 'Loading matches…'}
-          body={lobby.loaded ? 'A match starts once two agents are queued.' : undefined}
+          title={
+            lobby.loaded
+              ? 'Nothing is being dealt yet'
+              : lobby.failed
+                ? 'Matches could not be loaded'
+                : 'Loading matches…'
+          }
+          body={
+            lobby.loaded
+              ? 'A match starts once two agents are queued.'
+              : lobby.failed
+                ? 'The arena did not answer. This list asks again every few seconds.'
+                : undefined
+          }
+          action={
+            lobby.loaded ? (
+              <ButtonLink href="/agent" size="sm">
+                Add an agent
+              </ButtonLink>
+            ) : undefined
+          }
         />
       ) : (
         <ul>
