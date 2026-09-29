@@ -11,11 +11,16 @@ import { Cashier } from './cashier';
 import { LogoMark } from './logo';
 import { Button, useDismissed } from './ui';
 
+/*
+  Each label is the title of the page it opens, so a link and the heading it
+  lands on never disagree. The one short form keeps the phone row inside four
+  equal cells; it drops a word rather than swapping in a different one.
+*/
 const NAV = [
   { href: '/', label: 'Home', short: 'Home' },
   { href: '/matches', label: 'Matches', short: 'Matches' },
-  { href: '/standings', label: 'Standings', short: 'Ranks' },
-  { href: '/agent', label: 'Your agent', short: 'Agent' },
+  { href: '/standings', label: 'Standings', short: 'Standings' },
+  { href: '/agent', label: 'Your agents', short: 'Agents' },
 ];
 
 /**
@@ -56,7 +61,7 @@ export function SiteHeader() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex-1 rounded-control px-2.5 py-1.5 text-center text-[0.8125rem] font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm lg:flex-none ${
+                  className={`flex-1 rounded-control px-2 py-1.5 text-center text-[0.8125rem] font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm lg:flex-none ${
                     active ? 'bg-surface-2 text-ink' : 'text-muted hover:text-ink'
                   }`}
                 >
@@ -98,7 +103,10 @@ export function SiteHeader() {
 
       {error ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex justify-center px-4">
-          <div className="entering pointer-events-auto flex max-w-[40rem] items-start gap-4 rounded-card border border-danger/40 bg-surface px-4 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)]">
+          <div
+            role="alert"
+            className="entering pointer-events-auto flex max-w-[40rem] items-start gap-4 rounded-card border border-danger/40 bg-surface px-4 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)]"
+          >
             <p className="text-sm text-ink">{error}</p>
             <button
               type="button"
@@ -200,6 +208,9 @@ function WalletMenu({ address, onSignOut }: { address: string; onSignOut: () => 
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="menu"
+        // On a phone the address is hidden and only the dot is left, which
+        // names nothing to a screen reader without this.
+        aria-label={`Wallet ${shortAddress(address)}`}
         className="mono inline-flex h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 text-[0.8125rem] text-muted transition-colors hover:text-ink"
       >
         <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />

@@ -230,6 +230,59 @@ export function Disclosure({
   );
 }
 
+/**
+ * The top of every page reached from the navigation, so each one opens on the
+ * same left edge with the same title treatment and a visitor moving between
+ * them sees the content change rather than the frame.
+ */
+export function PageHeader({
+  title,
+  badges,
+  sub,
+  action,
+  back,
+}: {
+  title: React.ReactNode;
+  /** State of the thing titled, set on the title's line. */
+  badges?: React.ReactNode;
+  sub?: React.ReactNode;
+  action?: React.ReactNode;
+  back?: React.ReactNode;
+}) {
+  return (
+    <header className="mb-6">
+      {back}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 className="display text-[2rem] text-ink sm:text-[2.5rem]">{title}</h1>
+            {badges}
+          </div>
+          {sub ? <p className="mt-2 max-w-[62ch] text-sm text-muted">{sub}</p> : null}
+        </div>
+        {action}
+      </div>
+    </header>
+  );
+}
+
+/**
+ * The way back up, for a page somebody can land on cold from a shared link.
+ * One step, named after where it goes, because the title below it already says
+ * where they are.
+ */
+export function BackLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="mb-3 inline-flex items-center gap-1.5 text-sm text-faint transition-colors hover:text-ink"
+    >
+      <span aria-hidden>←</span>
+      {children}
+    </Link>
+  );
+}
+
 export function SectionHeading({
   title,
   sub,

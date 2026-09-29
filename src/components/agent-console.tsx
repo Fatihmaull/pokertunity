@@ -8,7 +8,7 @@ import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
 import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
-import { Badge, Button, ButtonLink, Card, Disclosure, Stat } from './ui';
+import { Badge, Button, ButtonLink, Card, Disclosure, EmptyState, PageHeader, Stat } from './ui';
 
 /**
  * An operations page, not an editor.
@@ -56,14 +56,14 @@ export function AgentConsole() {
   if (!account) {
     return (
       <Shell>
-        <Card className="mx-auto mt-10 max-w-[46rem] p-8 text-center sm:p-12">
-          <h1 className="mx-auto max-w-[26ch] text-2xl text-ink sm:text-3xl">
-            Bring an agent. We run the tournament.
+        <Card className="mt-4 p-8 sm:p-12">
+          <h1 className="display max-w-[20ch] text-[2rem] text-ink sm:text-[2.5rem]">
+            Register an agent and get its token.
           </h1>
-          <p className="mx-auto mt-4 max-w-[56ch] text-base text-muted">
-            Connect a wallet to get your agent&rsquo;s token. One signature, no transaction, no cost.
+          <p className="mt-4 max-w-[56ch] text-base text-muted">
+            Connect a wallet first. It takes one signature: no transaction, no cost.
           </p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <div className="mt-7 flex flex-wrap gap-3">
             <Button tone="primary" size="lg" onClick={() => void signIn()} disabled={connecting}>
               {connecting ? 'Check your wallet' : 'Connect wallet'}
             </Button>
@@ -108,20 +108,25 @@ export function AgentConsole() {
 
   return (
     <Shell>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div>
-          <h1 className="text-2xl text-ink sm:text-3xl">Your agents</h1>
-          <p className="mt-1.5 max-w-[62ch] text-sm text-muted">
-            Each agent connects to the arena over a socket using its own token. It plays when it is connected and
-            has asked for a game.
-          </p>
-        </div>
-        <Button tone="primary" onClick={() => void addAgent()} disabled={busy}>
-          Add an agent
-        </Button>
-      </header>
+      <PageHeader
+        title="Your agents"
+        sub="Each agent connects to the arena over a socket using its own token. It plays when it is connected and has asked for a game."
+        // With no agents yet the empty card below carries this button, so
+        // the page does not offer the same action twice.
+        action={
+          account.agents.length > 0 ? (
+            <Button tone="primary" onClick={() => void addAgent()} disabled={busy}>
+              Add an agent
+            </Button>
+          ) : null
+        }
+      />
 
-      {failure ? <p className="mb-4 text-sm text-danger">{failure}</p> : null}
+      {failure ? (
+        <p role="alert" className="mb-4 text-sm text-danger">
+          {failure}
+        </p>
+      ) : null}
 
       {/* The balance and the Buy button are in the header on every page. Here
           it is worth a line only when it is what stands between an agent and
@@ -139,9 +144,16 @@ export function AgentConsole() {
 
       <div className="space-y-5">
         {account.agents.length === 0 ? (
-          <Card className="p-8 text-center">
-            <h2 className="text-lg text-ink">No agents yet</h2>
-            <p className="mx-auto mt-2 max-w-[52ch] text-sm text-muted">Add one to get its token.</p>
+          <Card>
+            <EmptyState
+              title="No agents yet"
+              body="Add one to get its token."
+              action={
+                <Button tone="primary" onClick={() => void addAgent()} disabled={busy}>
+                  Add an agent
+                </Button>
+              }
+            />
           </Card>
         ) : (
           account.agents.map((agent) => (
@@ -493,7 +505,15 @@ pnpm --filter @pokertunity/agent start`}
   );
 }
 
-/** One column: a sidebar beside the agents only ever held what the header already shows. */
+/**
+ * One column: a sidebar beside the agents only ever held what the header
+ * already shows. The column is narrow for reading but starts on the same left
+ * edge as every other page, so the title does not jump sideways on the way in.
+ */
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="page mx-auto w-full max-w-[56rem] px-4 py-8 sm:px-6 sm:py-10">{children}</div>;
+  return (
+    <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
+      <div className="max-w-[56rem]">{children}</div>
+    </div>
+  );
 }

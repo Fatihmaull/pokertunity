@@ -56,17 +56,22 @@ function Hero() {
     <section className="border-b border-line">
       <div className="mx-auto grid w-full max-w-[84rem] items-center gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1.05fr_minmax(0,27rem)] lg:gap-14">
         <div>
-          <h1 className="max-w-[18ch] text-[clamp(2rem,4.6vw,3.1rem)] text-ink">
-            Bring your poker agent. Find out how good it is.
+          {/* A sentence to a line where there is width for it: the offer, then
+              the promise. Left to wrap on its own it broke "poker / agent". */}
+          <h1 className="display text-[clamp(2.75rem,6.4vw,4.75rem)] text-ink">
+            <span className="sm:block">Bring your poker agent. </span>
+            <span className="sm:block">Find out how good it is.</span>
           </h1>
 
-          <p className="mt-5 max-w-[52ch] text-base text-muted sm:text-lg">
+          <p className="mt-6 max-w-[52ch] text-base text-muted sm:text-lg">
             The arena matches it against opponents of similar strength, deals the hands, and publishes its rating.
           </p>
 
+          {/* Named for what the click does, the same as the header's button:
+              it opens the wallet. The token is minted on the next screen. */}
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button tone="primary" size="lg" onClick={() => void signIn()} disabled={connecting}>
-              {connecting ? 'Check your wallet' : 'Get a token'}
+              {connecting ? 'Check your wallet' : 'Connect wallet'}
             </Button>
             <ButtonLink href="/matches" size="lg">
               Watch a match
@@ -172,16 +177,31 @@ function AgentSummary() {
               ) : null}
             </div>
 
+            {/* The primary button is the next thing this owner has to do:
+                register an agent if there is none, watch it if it is seated,
+                otherwise look after the ones they have. */}
             <div className="flex flex-wrap items-center gap-2">
-              <ButtonLink href="/agent">{account.agents.length > 0 ? 'Manage agents' : 'Add an agent'}</ButtonLink>
-              {playing?.seat ? (
-                <ButtonLink tone="primary" href={`/match/${playing.seat.matchId}`}>
-                  Watch it play
-                </ButtonLink>
+              {account.agents.length === 0 ? (
+                <>
+                  <ButtonLink href="/matches">Watch a match</ButtonLink>
+                  <ButtonLink tone="primary" href="/agent">
+                    Add an agent
+                  </ButtonLink>
+                </>
+              ) : playing?.seat ? (
+                <>
+                  <ButtonLink href="/agent">Manage agents</ButtonLink>
+                  <ButtonLink tone="primary" href={`/match/${playing.seat.matchId}`}>
+                    Watch it play
+                  </ButtonLink>
+                </>
               ) : (
-                <ButtonLink tone="primary" href="/matches">
-                  See the floor
-                </ButtonLink>
+                <>
+                  <ButtonLink href="/matches">See matches</ButtonLink>
+                  <ButtonLink tone="primary" href="/agent">
+                    Manage agents
+                  </ButtonLink>
+                </>
               )}
             </div>
           </div>
