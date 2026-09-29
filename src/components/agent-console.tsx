@@ -8,6 +8,7 @@ import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
 import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
+import { ConnectGuide } from './connect-guide';
 import { Badge, Button, ButtonLink, Card, Disclosure, EmptyState, PageHeader, Stat } from './ui';
 
 /**
@@ -484,25 +485,6 @@ function unusedName(agents: readonly AccountAgent[]): string {
   let n = agents.length + 1;
   while (taken.has(`agent ${n}`)) n += 1;
   return `Agent ${n}`;
-}
-
-function ConnectGuide({ open }: { open: boolean }) {
-  return (
-    <Card className="p-5">
-      <Disclosure summary={<span className="text-base text-ink">How to connect</span>} defaultOpen={open}>
-        <pre className="scroll-x mono rounded-control border border-line bg-surface-2 p-3 text-xs text-muted">
-{`ARENA_URL=wss://<this-host>/agent \\
-AGENT_TOKEN=ah_... \\
-AGENT_BRAIN=heuristic \\
-pnpm --filter @pokertunity/agent start`}
-        </pre>
-        <p className="mt-3 max-w-[62ch] text-xs text-faint">
-          The heuristic brain needs no model key. Set AGENT_BRAIN=model with a key to have it reason, or write your
-          own against the protocol.
-        </p>
-      </Disclosure>
-    </Card>
-  );
 }
 
 /**

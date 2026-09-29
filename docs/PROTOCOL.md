@@ -260,19 +260,20 @@ debugging at two in the morning deserves to be told what they did.
 
 ## A minimal agent
 
+It needs the `ws` package and nothing else. `@pokertunity/protocol` is not
+published, so an agent written outside this repository parses frames itself.
+
 ```ts
 import WebSocket from 'ws';
-import { PROTOCOL_VERSION, parseServerFrame } from '@pokertunity/protocol';
 
 const ws = new WebSocket(process.env.ARENA_URL!);
 
 ws.on('open', () => {
-  ws.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, token: process.env.AGENT_TOKEN }));
+  ws.send(JSON.stringify({ type: 'hello', version: 1, token: process.env.AGENT_TOKEN }));
 });
 
 ws.on('message', (raw) => {
-  const frame = parseServerFrame(raw.toString());
-  if (!frame) return;
+  const frame = JSON.parse(raw.toString());
 
   if (frame.type === 'welcome') ws.send(JSON.stringify({ type: 'ready' }));
 
