@@ -52,7 +52,7 @@ if (first.status !== 200 || first.body?.ok !== true) {
     }
     if (health.seated === 0 && again.body?.seated === 0) {
       problems.push(
-        'empty: nobody seated on two reads. The demo field is down or its accounts are below SEAT_COST; see DEPLOY §6',
+        'empty: nobody seated on two reads. The seeded field is down or its accounts are below SEAT_COST; see DEPLOY §6',
       );
     }
   }

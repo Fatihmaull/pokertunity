@@ -634,7 +634,6 @@ async function candidate(
     ownerId: account.userId,
     rating,
     published: conservative(rating),
-    demo: false,
     matchesPlayed,
   };
 }

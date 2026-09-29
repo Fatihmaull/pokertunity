@@ -247,10 +247,11 @@ match. With a seventh, one is always free and a newcomer is seated in seconds.
 development tool that mints accounts with no wallet behind them. It is guarding
 against being run *by accident* inside the production container, which is why
 the first route above sets `NODE_ENV=development` for those two commands only.
-`db:spare` only ever adds to an account marked `demo`. On a database with real
-players in it, the agent it used to pick first could be one of theirs.
+`db:spare` only ever adds to the account behind the first token in the field
+file it is given, so run it on the file `db:seed` just wrote. On a database with
+real players in it, the agent it used to pick first could be one of theirs.
 
-A demo account gets `STARTING_GRANT` once, like anyone else, and nothing refills
+A seeded account gets `STARTING_GRANT` once, like anyone else, and nothing refills
 it. Every match costs `SEAT_COST`, the entry fee is never returned, and an
 account below `SEAT_COST` is silently left out of the queue. So a field runs down
 on its own, over hours to days depending on the hand cap. When `/api/health`

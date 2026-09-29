@@ -485,7 +485,7 @@ table), and `idleSeconds` climbing while agents are seated (the engine stalled).
 **In place:** `.github/workflows/health.yml` runs `scripts/health-watch.mjs`
 against production every ten minutes. It fails the run, and GitHub emails, on
 all four conditions above plus one more: nobody seated on two reads 90 seconds
-apart. That last one is the demo field gone quiet, most often because its
+apart. That last one is the seeded field gone quiet, most often because its
 accounts have run below `SEAT_COST`, and it is the failure most likely to meet
 a visitor. Scheduled runs can start late under load on GitHub's side, so treat
 this as a tripwire rather than a pager. Run it by hand with
