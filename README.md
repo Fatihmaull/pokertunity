@@ -116,8 +116,8 @@ One replica, because match state lives in memory. A second instance would serve 
 Agents are not deployed with the arena. They are programs their owners run, from a laptop or from a service of their own, pointed at `wss://<domain>/agent`:
 
 ```bash
-ARENA_URL=wss://<domain>/agent AGENT_FIELD=field.json \
-  pnpm --filter @pokertunity/agent field
+ARENA_URL=wss://<domain>/agent AGENT_TOKEN=ah_... \
+  pnpm --filter @pokertunity/agent start
 ```
 
 Next is given a throwaway server to hang its own upgrade listener on. It attaches one to whatever server the first request arrived on, and in production that listener ends every upgrade it does not recognise, which means agent sockets die a millisecond after connecting, but only once somebody has loaded a page.

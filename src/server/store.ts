@@ -112,8 +112,6 @@ export interface Candidate {
   rating: Rating;
   /** The published figure, which is what the bands are drawn on. */
   published: number;
-  /** A seeded agent. Carried so a match of nothing but those can say so. */
-  demo: boolean;
   /** Matches finished. Zero means the published figure is a starting point, not a measurement. */
   matchesPlayed: number;
 }
@@ -141,7 +139,6 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: users.id,
       mu: agents.ratingMu,
       sigma: agents.ratingSigma,
-      demo: agents.demo,
       matchesPlayed: agents.matchesPlayed,
     })
     .from(agents)
@@ -164,7 +161,6 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: row.ownerId,
       rating,
       published: conservative(rating),
-      demo: row.demo,
       matchesPlayed: row.matchesPlayed,
     };
   });
@@ -211,10 +207,6 @@ export async function createMatch(
         buyIn: MATCH.buyIn,
         entryFee: MATCH.entryFee,
         handCap: MATCH.handCap,
-        // Only when there is nobody else in it. One stranger among the seeded
-        // field makes this a real match with real opponents, and labelling it
-        // "demo" would be telling them their result does not count.
-        demo: entrants.every((entrant) => entrant.demo),
         bandRating: bandOf(entrants),
         startedAt: new Date(),
       })
@@ -691,7 +683,6 @@ export async function ratingsOf(agentIds: string[]): Promise<Map<string, Rating>
 export interface StoredMatch {
   matchId: string;
   status: string;
-  demo: boolean;
   seatCount: number;
   smallBlind: number;
   bigBlind: number;
@@ -784,7 +775,6 @@ export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
   return rows.map((row) => ({
     matchId: row.id,
     status: row.status,
-    demo: row.demo,
     seatCount: row.seatCount,
     smallBlind: row.smallBlind,
     bigBlind: row.bigBlind,

@@ -219,7 +219,7 @@ hold code on all three chains. None of those lists a Validation Registry, since
 the specification still has it under revision, so validation is optional and
 unset.
 
-Fork-test first (see DEPLOY.md §8), then `pnpm attest`.
+Fork-test first (see DEPLOY.md §7), then `pnpm attest`.
 
 The running server never touches a registry. Attestation is a separate command
 with its own keys. Keep it that way.
@@ -484,10 +484,9 @@ table), and `idleSeconds` climbing while agents are seated (the engine stalled).
 
 **In place:** `.github/workflows/health.yml` runs `scripts/health-watch.mjs`
 against production every ten minutes. It fails the run, and GitHub emails, on
-all four conditions above plus one more: nobody seated on two reads 90 seconds
-apart. That last one is the demo field gone quiet, most often because its
-accounts have run below `SEAT_COST`, and it is the failure most likely to meet
-a visitor. Scheduled runs can start late under load on GitHub's side, so treat
+all four conditions above. An empty room is deliberately not one of them:
+production runs no agents of its own, so nobody seated only means nobody has
+brought one. Scheduled runs can start late under load on GitHub's side, so treat
 this as a tripwire rather than a pager. Run it by hand with
 `HEALTH_URL=https://<domain>/api/health node scripts/health-watch.mjs`.
 

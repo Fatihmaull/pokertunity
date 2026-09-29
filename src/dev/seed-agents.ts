@@ -92,11 +92,9 @@ async function main(): Promise<void> {
     const name = `${character.name} (dev)`;
     const { token, agentId } = await registerAgent(userId, name);
 
-    // Marked as the arena's own, so a visitor can tell the field that keeps the
-    // floor inhabited from agents other people brought. It changes nothing
-    // about how they are seated or rated. Switched on at once, since keeping
-    // the floor inhabited is the only thing a seeded agent is for.
-    await db.update(agents).set({ demo: true, queueEnabled: true }).where(eq(agents.id, agentId));
+    // Switched on at once, since keeping the floor inhabited is the only thing
+    // a seeded agent is for.
+    await db.update(agents).set({ queueEnabled: true }).where(eq(agents.id, agentId));
 
     const brain = index < modelSeats ? 'model' : 'heuristic';
     field.push(brain === 'model' ? { name, token, brain, strategy: character.strategy } : { name, token, brain });
