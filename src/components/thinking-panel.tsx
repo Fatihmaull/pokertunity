@@ -1,7 +1,7 @@
 "use client";
 
 import { ACT_CLOCK_MS } from "@/lib/pacing";
-import { agentHex } from "./table-art";
+import { ChipDot } from "./table-art";
 import { useRemaining } from "./use-remaining";
 import { Badge } from "./ui";
 
@@ -51,17 +51,22 @@ export function ThinkingPanel({
   brain,
   deadline,
   footnote,
+  live = true,
 }: {
   brain: BrainState | null;
   /** Epoch milliseconds the act clock expires, if a seat is thinking. */
   deadline?: number | null;
   /** Context for a panel that is replaying rather than watching live. */
   footnote?: string | null;
+  /**
+   * Whether a clock can run here at all. A replay has none, and holding room
+   * for one left a band of nothing under the name on every decision.
+   */
+  live?: boolean;
 }) {
-  // The agent's own colour marks whose panel this is and nothing else. The
+  // The agent's own chip marks whose panel this is and nothing else. The
   // meters and the caret are the instrument, and an instrument that changes
   // colour with whoever is being measured is harder to read, not easier.
-  const hex = agentHex(brain?.color);
   const reasoning = prose(brain?.reasoning ?? "");
 
   return (
@@ -70,13 +75,11 @@ export function ThinkingPanel({
         <div className="flex min-h-6 items-center gap-2">
           {brain?.seatName ? (
             <>
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{
-                  background: `color-mix(in srgb, ${hex} 55%, #1f2b28)`,
-                }}
-                aria-hidden
-              />
+              {brain.color ? (
+                <ChipDot color={brain.color} size={14} />
+              ) : (
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-muted" aria-hidden />
+              )}
               <span className="truncate text-sm font-semibold text-ink">
                 {brain.seatName}
               </span>
@@ -94,7 +97,7 @@ export function ThinkingPanel({
             </span>
           )}
         </div>
-        <ActClock deadline={deadline ?? null} />
+        {live ? <ActClock deadline={deadline ?? null} /> : null}
       </div>
 
       <div
@@ -134,6 +137,21 @@ export function ThinkingPanel({
         ) : null}
       </div>
 
+      {brain ? (
+        <div className="shrink-0 border-t border-line px-4 py-3">
+          <PriceLine
+            equity={brain.sealed ? null : brain.equity}
+            price={brain.potOdds}
+            sealed={Boolean(brain.sealed)}
+            read={
+              brain.sealed
+                ? null
+                : [brain.made, ...brain.draws].filter(Boolean).join(", ") || null
+            }
+          />
+        </div>
+      ) : null}
+
       <div
         className="shrink-0 border-t border-line px-4 py-3"
         aria-live="polite"
@@ -144,7 +162,7 @@ export function ThinkingPanel({
           {brain?.action ? (
             <>
               <div className="flex items-baseline gap-3">
-                <span className="text-base font-semibold text-ink capitalize">
+                <span className="display text-[1.625rem] text-ink capitalize">
                   {brain.action}
                   {brain.amount > 0
                     ? ` ${brain.amount.toLocaleString("en-US")}`
@@ -178,6 +196,82 @@ export function ThinkingPanel({
       </div>
     </div>
   );
+}
+
+/**
+ * The arithmetic under every decision at this table, drawn as one line.
+ *
+ * Break-even is what a call costs as a share of the pot it would win, and it is
+ * public: anyone at the rail can work it out from the pot and the bet. Equity is
+ * the arena's own count of how often this holding wins, and it names the cards,
+ * so it stays sealed exactly as long as the reasoning does and fills the line
+ * only once the hand is shown. Watching the fill land either side of the tick
+ * is watching the decision get made, and a fill that stops just short of it is
+ * the reason the seat took so long.
+ *
+ * No verdict colour. A raise can be right below break-even and a call wrong
+ * above it, so the line reports the two numbers and leaves the judgement to
+ * whoever is reading the reasoning beside it.
+ */
+function PriceLine({
+  equity,
+  price,
+  sealed,
+  read,
+}: {
+  equity: number | null;
+  price: number | null;
+  sealed: boolean;
+  /** What the equity was counted for, in the hand-read's own words. */
+  read: string | null;
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-4 text-xs">
+        <span
+          className="flex min-w-0 items-baseline gap-1.5"
+          title="How often this hand wins against random cards, from the arena's own count."
+        >
+          <span className="shrink-0 text-faint">Equity</span>
+          <span className="mono shrink-0 text-ink tabular-nums">
+            {equity != null ? percent(equity) : sealed ? "sealed" : "—"}
+          </span>
+          {read ? <span className="truncate text-faint">{read}</span> : null}
+        </span>
+        <span
+          className="flex shrink-0 items-baseline gap-1.5"
+          title="The share of the pot a call has to win to pay for itself."
+        >
+          <span className="text-faint">Break-even</span>
+          <span className="mono text-live tabular-nums">
+            {price != null ? percent(price) : "—"}
+          </span>
+        </span>
+      </div>
+
+      {/* The figures above say it in words; the line says it at a glance. */}
+      <div className="relative mt-2 h-1.5 rounded-full bg-surface-3" aria-hidden>
+        {equity != null ? (
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-ink transition-[width] duration-500 ease-out"
+            style={{ width: percent(equity) }}
+          />
+        ) : null}
+        {/* Ringed in the card's own fill, so the tick reads the same over
+            the white of a filled line as over the empty track. */}
+        {price != null ? (
+          <span
+            className="absolute -top-1 -bottom-1 w-[3px] -translate-x-1/2 rounded-full bg-live shadow-[0_0_0_2px_var(--color-surface)]"
+            style={{ left: percent(price) }}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function percent(share: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, share)) * 100)}%`;
 }
 
 /**
