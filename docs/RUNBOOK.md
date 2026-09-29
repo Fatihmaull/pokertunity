@@ -233,8 +233,8 @@ So the usual causes, in order of likelihood:
   finished on the chain it was paid on, whatever they have since switched to.
   The pending deposit is still there.
 
-Chain and transaction hash carry a unique index together, so a replayed confirm
-cannot credit twice — retrying is safe.
+Chain, transaction hash and log index carry a unique index together, so a
+replayed confirm cannot credit twice — retrying is safe.
 
 Chip balances are one number across every chain. A chain switch does not move
 them and is not a cause.

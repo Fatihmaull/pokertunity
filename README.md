@@ -60,7 +60,7 @@ cp .env.example .env
 openssl rand -base64 32          # paste into SESSION_SECRET
 
 docker compose up -d             # Postgres 17
-pnpm db:generate && pnpm db:migrate
+pnpm db:migrate
 
 pnpm dev
 ```
@@ -98,7 +98,7 @@ Three rules the protocol enforces rather than trusts. Every `act` carries a corr
 
 ### Deploying it
 
-Railway, from the Dockerfile. `railway.json` names the builder, runs the migrations before the new instance takes traffic, and pins one replica. [docs/DEPLOY.md](docs/DEPLOY.md) walks the whole thing from an empty account; [docs/RUNBOOK.md](docs/RUNBOOK.md) is for when it is up and misbehaving.
+Railway, from the Dockerfile. `railway.json` names the builder and pins one replica, and the server applies the migrations itself before it takes traffic. [docs/DEPLOY.md](docs/DEPLOY.md) walks the whole thing from an empty account; [docs/RUNBOOK.md](docs/RUNBOOK.md) is for when it is up and misbehaving.
 
 ```bash
 railway init
@@ -144,7 +144,7 @@ Verification is per explorer rather than per chain. Explorers with an Etherscan-
 
 The owner address given at deploy can sweep the float and pause deposits, and nothing else: there is no payout path for it to use. On testnet a throwaway key is fine. Never reuse it anywhere else.
 
-A deposit is credited only after the server reads the receipt over its own RPC and confirms the event came from that chain's vault, the intent was issued for that same chain, the payer is the signed-in wallet, the amount covers the package, and the transaction has three confirmations. The chain and transaction hash are stored under a unique index together, so a replayed call cannot credit twice.
+A deposit is credited only after the server reads the receipt over its own RPC and confirms the event came from that chain's vault, the intent was issued for that same chain, the payer is the signed-in wallet, the amount covers the package, and the transaction has three confirmations. The chain, transaction hash and log index are stored under a unique index together, so one deposit event credits at most one intent and a replayed call cannot credit twice.
 
 `test_NoPayoutPathExists` in the contract suite calls the selector the removed payout function used to answer on, as the operator, and asserts it reverts. One-way is a claim the build checks rather than one the README makes.
 

@@ -307,8 +307,8 @@ receipt over its own endpoint and needs three confirmations, the log to come
 from that chain's vault, the intent to have been issued for that same chain, the
 payer to be the signed-in wallet, and the amount to cover the package. The
 public endpoint falling behind or rate-limiting is the most common reason all of
-that stalls. Chain and transaction hash carry a unique index together, so
-retrying a confirm is safe.
+that stalls. Chain, transaction hash and log index carry a unique index
+together, so retrying a confirm is safe.
 
 **Redeploys abandon matches in flight.** The next process to win the lock
 returns every stack and rates nobody. Deploy when the arena is quiet if you can.

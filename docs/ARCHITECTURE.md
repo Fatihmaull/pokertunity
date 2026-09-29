@@ -21,7 +21,7 @@ which parts of the shape are load-bearing.
 `server.ts` is the entrypoint, not `next start`. Next cannot accept a WebSocket
 and agents dial in over one, so the HTTP server belongs to us: it wraps Next,
 routes `/agent` upgrades to the socket layer and hands every other upgrade to
-Next's own handler.
+Next's own listener.
 
 ```
                     ┌──────────────────────────────────────────┐
@@ -42,13 +42,15 @@ happens.
 
 Two details in `server.ts` look like accidents and are not.
 
-`getRequestHandler()` and `getUpgradeHandler()` are both called *after*
-`prepare()`. Next is then handed a throwaway `httpServer` it never listens on.
-On the first request Next attaches an upgrade listener of its own to whatever
-that option names, falling back to the server the request arrived on — and in
-production that listener ends every upgrade it does not recognise. Without the
-decoy, agent sockets connect and die a millisecond later, but only once a page
-has been served, which is about as confusing as a bug gets.
+`getRequestHandler()` is called *after* `prepare()`, and Next is handed a
+throwaway `httpServer` it never listens on. On the first request Next attaches
+an upgrade listener of its own to whatever that option names, falling back to
+the server the request arrived on — and in production that listener ends every
+upgrade it does not recognise. Without the decoy, agent sockets connect and die
+a millisecond later, but only once a page has been served, which is about as
+confusing as a bug gets. Every upgrade that is not an agent's is re-emitted
+onto the decoy rather than passed to `getUpgradeHandler()`, which routes to an
+empty handler: hot reload hangs on it with no open, no close and no error.
 
 `src/instrumentation.ts` is deliberately empty. Booting the engine from there
 as well gives Next's module graph its own copy of the advisory lock, and the
@@ -110,9 +112,10 @@ agent: ready ──► AgentLink.readySince stamped, queued
                 │            recordHand()   ─► hands, decisions, results
                 └─ ends on elimination or handCap
 
-           settleMatch()  returns the stacks, records the finishing order,
-                          rewrites every rating in one transaction
            closeMatch()   the runtime is dropped
+           settleMatch()  returns the stacks, records the finishing order,
+                          rewrites every rating in one transaction,
+                          retried every tick until it lands
 ```
 
 A match is fixed from the first hand to the last: no joining, no leaving, no
@@ -236,8 +239,9 @@ the same transaction as the change. `users.chips` is a cache of that table.
 own RPC, confirms the log came from that chain's vault, that the intent was
 issued for that same chain, that the payer is the signed-in wallet, that the
 amount covers the package, and that the transaction has `REQUIRED_CONFIRMATIONS`
-(3). Chain and transaction hash carry a unique index together, so a replayed
-call cannot credit twice.
+(3). Chain, transaction hash and log index carry a unique index together, so
+one deposit event credits at most one intent and a replayed call cannot credit
+twice.
 
 **The entry fee is the only thing that removes chips.** A pot rake would tax
 contested pots, which charges an aggressive agent more than a cautious one for
@@ -334,7 +338,7 @@ never hand-written.
 | `users` | An account, keyed by wallet address. `chips` is a cache of `ledgerEntries`. |
 | `agents` | A program somebody registered, its bearer token, its rating. Up to `MAX_AGENTS_PER_ACCOUNT` (8) per account. |
 | `ledgerEntries` | Append-only record of every chip movement, with `balanceAfter`. |
-| `depositIntents` | Chips promised against a deposit that has not landed yet. Chain plus transaction hash are unique together. |
+| `depositIntents` | Chips promised against a deposit that has not landed yet. Chain, transaction hash and log index are unique together. |
 | `matches` | One game, from dealt to rated, carrying the settings it was played under. |
 | `seats` | An agent occupying a chair in a match. Deleted when the match settles. |
 | `matchResults` | How one agent finished one match, the chair it played, and the rating before and after. The seats are deleted when a match settles, so this is the only place either the finishing order or the seating survives. |
