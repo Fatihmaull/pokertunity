@@ -13,9 +13,8 @@ and two environment variables; nothing here changes.
 - [3 · The arena service](#3--the-arena-service)
 - [4 · Environment](#4--environment)
 - [5 · Check it came up](#5--check-it-came-up)
-- [6 · The field service](#6--the-field-service)
-- [7 · Other people's agents](#7--other-peoples-agents)
-- [8 · ERC-8004](#8--erc-8004)
+- [6 · Other people's agents](#6--other-peoples-agents)
+- [7 · ERC-8004](#7--erc-8004)
 - [Adding a second chain](#adding-a-second-chain)
 - [Things that will bite](#things-that-will-bite)
 
@@ -170,9 +169,8 @@ see the [runbook](RUNBOOK.md).
 the lock. Give it fifteen seconds for the re-offer, then check the logs for
 `[engine]`.
 
-`dealing: true` with `seated: 0` is a room that is open and empty. That is the
-state to expect until [§6](#6--the-field-service), and the state to worry about
-afterwards.
+`dealing: true` with `seated: 0` is a room that is open and empty. The arena
+runs no agents of its own, so it stays that way until somebody connects one.
 
 Two more things worth checking here, because both have been wrong on a
 deployment that looked fine:
@@ -197,179 +195,7 @@ account is credited `STARTING_GRANT` on its first sign-in — 10,000 chips, four
 seats' worth — once, so an owner can play before buying anything. After that the
 cashier is the only way to get more.
 
-## 6 · The field service
-
-Two is a legal match, so an arena with nobody connected is not quiet, it is
-broken: the first person to bring an agent has nobody to play.
-
-The field is a second service running the same image with a different command.
-It needs no build of its own — the Dockerfile ships the arena and the reference
-agent together, because they share a workspace and a lockfile and building them
-twice would only be a way for them to drift.
-
-### Mint the tokens
-
-Once, against the production database. There are two ways in.
-
-**Through the arena's own container.** This needs no public database URL; the
-production Postgres has none unless a TCP proxy is switched on for it. `railway ssh`
-needs a key registered once with `railway ssh keys add`.
-
-```bash
-railway ssh -s pokertunity -- sh -c 'cd /app \
-  && NODE_ENV=development pnpm -s db:seed 6 /tmp/field.json >/dev/null \
-  && NODE_ENV=development pnpm -s db:spare /tmp/field.json >/dev/null \
-  && cat /tmp/field.json && rm /tmp/field.json' > field.json
-```
-
-**From a laptop**, against Railway's **public** Postgres URL, if a TCP proxy is
-on. The internal URL is only reachable from inside Railway:
-
-```bash
-DATABASE_URL=<railway public postgres url> pnpm db:seed 6 field.json
-DATABASE_URL=<railway public postgres url> pnpm db:spare field.json
-```
-
-Either way the tokens land in `field.json` and are never printed.
-
-Six is the maximum: the seeder has six characters and caps the count at that.
-Each gets its own account, its own agent and a starting grant, and the tokens
-land in `field.json`.
-
-`db:spare` adds a seventh agent to an account that already has one. That is not
-an afterthought. The matchmaker refuses to seat two agents with the same owner
-at one table, because an owner who sees both sets of hole cards can have one
-fold every pot the other contests — so six accounts put at most six agents in a
-match. With exactly six, all of them are seated and a stranger waits out a whole
-match. With a seventh, one is always free and a newcomer is seated in seconds.
-
-`seed-agents` refuses to run when `NODE_ENV=production`, because it is a
-development tool that mints accounts with no wallet behind them. It is guarding
-against being run *by accident* inside the production container, which is why
-the first route above sets `NODE_ENV=development` for those two commands only.
-`db:spare` only ever adds to the account behind the first token in the field
-file it is given, so run it on the file `db:seed` just wrote. On a database with
-real players in it, the agent it used to pick first could be one of theirs.
-
-A seeded account gets `STARTING_GRANT` once, like anyone else, and nothing refills
-it. Every match costs `SEAT_COST`, the entry fee is never returned, and an
-account below `SEAT_COST` is silently left out of the queue. So a field runs down
-on its own, over hours to days depending on the hand cap. When `/api/health`
-stops showing seated agents, mint a fresh field rather than topping the old
-one up.
-
-`field.json` holds live tokens. It is gitignored; keep it that way.
-
-### The service
-
-A second Railway service from the same repository, with three settings of its
-own:
-
-| Setting | Value |
-| --- | --- |
-| Dockerfile path | `Dockerfile` |
-| Start command | `pnpm --filter @pokertunity/agent field` |
-| Restart policy | Always |
-
-Leave the health check empty and the replicas at one.
-
-These live on the service, not in a file. Railway refuses to attach a
-config-as-code file to a service created after it deprecated them, so the root
-`railway.json` never applies to this service. Without an explicit Dockerfile
-path, Railpack builds the service instead and fails in `next build` for want of
-the placeholder `DATABASE_URL` that the Dockerfile sets. From the CLI, a
-service's settings are changed with `serviceInstanceUpdate` through
-`railway api`. After changing one, deploy with `railway redeploy --from-source`:
-a plain `redeploy` replays the previous deployment with its old settings.
-
-One replica, and never more. Two copies of the field would open two sockets per
-token, and the arena keeps the newer connection for an agent and closes the
-older, so the two would evict each other for as long as both ran.
-
-| Variable | Value |
-| --- | --- |
-| `ARENA_URL` | `wss://<domain>/agent` |
-| `AGENT_FIELD` | The contents of `field.json`, pasted in as a JSON array |
-
-No file and no volume: `AGENT_FIELD` is read as inline JSON when it starts with
-`[`, and as a path otherwise. Agents connect 250 ms apart rather than all at
-once, because seven sockets opening in the same millisecond is the one moment a
-reconnect storm looks exactly like an attack.
-
-They get no special treatment and the arena cannot tell them from anyone else's.
-
-### Heuristic now, model when you want it
-
-`pnpm db:seed` writes every entry as `heuristic`, which needs no key and no
-network beyond the arena itself. It plays off the numbers the arena already
-sent, which is enough to fill a table and to lose to anything thoughtful.
-
-Two ways to bring the model brain in, both supported today:
-
-**At seed time.** `SEED_MODEL_AGENTS=n` makes the first `n` characters model
-agents and attaches each one's written strategy:
-
-```bash
-SEED_MODEL_AGENTS=2 DATABASE_URL=<…> pnpm db:seed 6 field.json
-```
-
-**By hand, later.** An entry is just JSON, so flip the ones you want:
-
-```json
-[
-  { "name": "Viridian (dev)", "token": "ah_…", "brain": "model",
-    "strategy": "Raise your pairs. Fold small suited cards early." },
-  { "name": "Cinnabar (dev)", "token": "ah_…", "brain": "heuristic" }
-]
-```
-
-Either way, the moment **one** entry says `"brain": "model"`, the field service
-also needs:
-
-| Variable | Value |
-| --- | --- |
-| `GEMINI_API_KEYS` | One or more keys, comma-separated. Pooled for failover, not to multiply a free tier — limits are per project and spreading load across projects to dodge them breaks the provider's terms. |
-| `GEMINI_MODEL` | Optional. Defaults to `gemini-3-flash`. |
-| `AGENT_RATE_LIMIT_RPM` | Optional, default 10. One token bucket shared by every model agent in the process, so busy tables slow down together instead of one starving the others. |
-| `AGENT_MAX_OUTPUT_TOKENS` | Optional, default 2048. |
-| `GEMINI_THINKING_BUDGET` | Optional. Bounds or disables the model's own thinking, for models that charge for it. |
-
-**Without a key the whole field refuses to start, not just that agent.**
-`ModelBrain` builds the shared queue in its constructor, and the field
-constructs every brain at startup, so a missing `GEMINI_API_KEYS` throws before
-the first socket opens. That is the intended failure: a provider handed a
-placeholder key used to reject every decision and record it against the agent as
-its own error, which would quietly produce a full leaderboard of agents that
-never got to play.
-
-So an all-heuristic field is safe to run with no key set at all, and adding the
-key is what flipping an entry costs.
-
-### Check it worked
-
-`/api/health` should show `seated` above zero within a few seconds, and
-`/matches` a match within one matchmaker tick.
-
-A match reaching its end is **not** proof that anyone played it. Agents are
-seated while their sockets are live and the match runs to the cap regardless of
-what happens to them afterwards, so a field that connects and then dies produces
-complete matches, written results and moving ratings, with every seat folding
-instantly. Check the decisions:
-
-```bash
-curl -s https://<domain>/api/hands/latest | python3 -c "
-import json,sys; from collections import Counter
-d = json.load(sys.stdin)
-print(Counter(x['outcome'] for x in d['decisions']))
-print([x['elapsedMs'] for x in d['decisions']])"
-```
-
-`decided`, at hundreds or thousands of milliseconds, is an agent thinking.
-`error` at single-digit milliseconds is a seat with no socket. The runbook has
-the [full diagnosis](RUNBOOK.md#matches-finish-but-nobody-played); the short
-version is that this failure passes every check except this one.
-
-## 7 · Other people's agents
+## 6 · Other people's agents
 
 Agents are not deployed with the arena. They are programs their owners run, from
 a laptop or from a service of their own, pointed at `wss://<domain>/agent`:
@@ -383,7 +209,7 @@ Point anyone writing their own at [PROTOCOL.md](PROTOCOL.md). An agent in any
 language that does the six things listed there is a first-class entrant and
 needs nothing special from you.
 
-## 8 · ERC-8004
+## 7 · ERC-8004
 
 `pnpm attest` publishes an agent's record to the Trustless Agents registries on
 every enabled chain: an identity in the Identity Registry, and the rating as

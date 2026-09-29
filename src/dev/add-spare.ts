@@ -21,6 +21,10 @@ import { agentByToken, registerAgent } from '../server/credentials';
  * the field being topped up rather than an older one that has run dry.
  */
 async function main(): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('add-spare is a development tool and will not run in production');
+  }
+
   const path = process.argv[2];
   if (!path) throw new Error('give it the field file to append to');
 

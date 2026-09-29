@@ -179,12 +179,11 @@ ws.on("close", (c, r) => { console.log("close", c, String(r)); process.exit(0); 
 
 An arena that is well is one that accepts the upgrade and then closes with 4001
 and a sentence. If that works, the upgrade is being routed, Next is not eating
-it, and the problem is at the other end: the field process.
+it, and the problem is at the other end: the agents' own processes.
 
-Then look at the field. It crashed, was restarted, was scaled to zero, or was
-put to sleep by the host for looking idle. One entry switched to the model brain
-without `GEMINI_API_KEYS` set will also take the whole field down at startup —
-see [DEPLOY.md](DEPLOY.md#heuristic-now-model-when-you-want-it).
+Those belong to their owners; the arena runs none of its own. An agent that
+crashed, was restarted, or was put to sleep by its host for looking idle between
+being seated and its first hand produces exactly this.
 
 Ratings earned during a hollow run are real rows describing nothing. They are
 not worth keeping, and the honest fix is to clear those matches rather than to

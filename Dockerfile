@@ -1,5 +1,5 @@
-# One image, two services. The arena and the agent field share a workspace and
-# a lockfile, so building them twice would only be a way for them to drift.
+# The arena. The reference agent shares its workspace and lockfile, so it rides
+# along in the install, but production runs no agents of its own.
 FROM node:24-alpine AS base
 WORKDIR /app
 # pnpm is pinned by `packageManager` in package.json, and `corepack install`
