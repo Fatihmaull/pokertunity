@@ -19,7 +19,7 @@ TEST_DATABASE_URL=postgres://…/pokertunity_test pnpm test      # also runs the
 
 pnpm test:contracts           # forge test in contracts/
 
-docker compose up -d          # Postgres 17 on POSTGRES_PORT, data in ./.data/postgres
+docker compose up -d          # Postgres 17 on POSTGRES_PORT, data in the pgdata volume
 pnpm db:generate              # drizzle-kit generate after editing src/db/schema.ts
 pnpm db:migrate               # apply drizzle/*.sql
 pnpm db:seed [n] [out]        # create dev accounts + agents, write a field file, e.g. pnpm db:seed 6 field.json
