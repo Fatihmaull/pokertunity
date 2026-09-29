@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 
 /**
  * The shared control vocabulary. Every button, card, badge and tab in the
@@ -108,15 +109,18 @@ export function Stat({
   label,
   value,
   hint,
+  title,
   className = '',
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
+  /** The longer explanation, for whoever hovers. */
+  title?: string;
   className?: string;
 }) {
   return (
-    <div className={className}>
+    <div className={className} title={title}>
       <dt className="label text-faint">{label}</dt>
       <dd className="mono mt-1 text-lg text-ink tabular-nums">{value}</dd>
       {hint ? <p className="mt-0.5 text-xs text-faint">{hint}</p> : null}
@@ -134,15 +138,148 @@ export function EmptyState({
   action,
 }: {
   title: string;
-  body: string;
+  body?: string;
   action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
       <h3 className="text-base text-ink">{title}</h3>
-      <p className="max-w-[42ch] text-sm text-muted">{body}</p>
+      {body ? <p className="max-w-[42ch] text-sm text-muted">{body}</p> : null}
       {action ? <div className="mt-1">{action}</div> : null}
     </div>
+  );
+}
+
+/**
+ * Closes an open menu on a click outside it or on Escape.
+ *
+ * A menu that stays open after you have clicked elsewhere is a menu you have to
+ * dismiss twice, so the document closes it and Escape does too. The ref it
+ * returns marks what counts as inside.
+ */
+export function useDismissed(
+  open: boolean,
+  setOpen: (open: boolean) => void,
+): RefObject<HTMLDivElement | null> {
+  const wrapper = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, setOpen]);
+
+  return wrapper;
+}
+
+/**
+ * Detail that only some readers want, closed until asked for.
+ *
+ * The contents mount when it opens rather than being hidden, so a closed one
+ * fetches nothing. That matters where the detail is an expensive read made
+ * once per agent on the page.
+ */
+export function Disclosure({
+  summary,
+  defaultOpen = false,
+  className = '',
+  children,
+}: {
+  summary: React.ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const id = useId();
+
+  return (
+    <div className={className}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 text-left text-sm font-medium text-muted transition-colors hover:text-ink"
+      >
+        {summary}
+        <svg
+          aria-hidden
+          viewBox="0 0 16 16"
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        >
+          <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </button>
+      {open ? (
+        <div id={id} className="mt-3">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The top of every page reached from the navigation, so each one opens on the
+ * same left edge with the same title treatment and a visitor moving between
+ * them sees the content change rather than the frame.
+ */
+export function PageHeader({
+  title,
+  badges,
+  sub,
+  action,
+  back,
+}: {
+  title: React.ReactNode;
+  /** State of the thing titled, set on the title's line. */
+  badges?: React.ReactNode;
+  sub?: React.ReactNode;
+  action?: React.ReactNode;
+  back?: React.ReactNode;
+}) {
+  return (
+    <header className="mb-6">
+      {back}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 className="display text-[2rem] text-ink sm:text-[2.5rem]">{title}</h1>
+            {badges}
+          </div>
+          {sub ? <p className="mt-2 max-w-[62ch] text-sm text-muted">{sub}</p> : null}
+        </div>
+        {action}
+      </div>
+    </header>
+  );
+}
+
+/**
+ * The way back up, for a page somebody can land on cold from a shared link.
+ * One step, named after where it goes, because the title below it already says
+ * where they are.
+ */
+export function BackLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="mb-3 inline-flex items-center gap-1.5 text-sm text-faint transition-colors hover:text-ink"
+    >
+      <span aria-hidden>←</span>
+      {children}
+    </Link>
   );
 }
 

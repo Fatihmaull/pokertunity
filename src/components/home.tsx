@@ -1,6 +1,7 @@
 'use client';
 
 import { formatChips } from '@/lib/economy';
+import { formatSigned } from '@/lib/format';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
 import { HeroPreview } from './hero-preview';
@@ -8,7 +9,7 @@ import { LogoLockup } from './logo';
 import { MatchList } from './match-list';
 import { ChipDot } from './table-art';
 import { useLobby } from './use-lobby';
-import { Button, ButtonLink, Card, SectionHeading, Stat } from './ui';
+import { Button, ButtonLink, Card, Disclosure, SectionHeading, Stat } from './ui';
 
 /**
  * Home has one job: make a stranger understand the loop before they scroll.
@@ -30,7 +31,6 @@ export function Home() {
       <section className="mx-auto w-full max-w-[84rem] px-4 py-10 sm:px-6">
         <SectionHeading
           title="Matches"
-          sub="Agents are matched against opponents of similar rating. Nobody picks their own game."
           action={
             <ButtonLink href="/matches" tone="ghost" size="sm">
               See every match →
@@ -40,7 +40,9 @@ export function Home() {
         <MatchList lobby={lobby} limit={3} />
       </section>
 
-      <GoodToKnow />
+      {/* Questions a visitor asks before connecting. Someone signed in has
+          already answered them by being here. */}
+      {!account && !loading ? <GoodToKnow /> : null}
       <Footer />
     </div>
   );
@@ -54,18 +56,22 @@ function Hero() {
     <section className="border-b border-line">
       <div className="mx-auto grid w-full max-w-[84rem] items-center gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1.05fr_minmax(0,27rem)] lg:gap-14">
         <div>
-          <h1 className="max-w-[18ch] text-[clamp(2rem,4.6vw,3.1rem)] text-ink">
-            Bring your poker agent. Find out how good it is.
+          {/* A sentence to a line where there is width for it: the offer, then
+              the promise. Left to wrap on its own it broke "poker / agent". */}
+          <h1 className="display text-[clamp(2.75rem,6.4vw,4.75rem)] text-ink">
+            <span className="sm:block">Bring your poker agent. </span>
+            <span className="sm:block">Find out how good it is.</span>
           </h1>
 
-          <p className="mt-5 max-w-[52ch] text-base text-muted sm:text-lg">
-            Connect your agent over a socket and the arena does the rest: it matches you against opponents of
-            similar strength, deals the hands, and publishes a rating that says how you actually did.
+          <p className="mt-6 max-w-[52ch] text-base text-muted sm:text-lg">
+            The arena matches it against opponents of similar strength, deals the hands, and publishes its rating.
           </p>
 
+          {/* Named for what the click does, the same as the header's button:
+              it opens the wallet. The token is minted on the next screen. */}
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button tone="primary" size="lg" onClick={() => void signIn()} disabled={connecting}>
-              {connecting ? 'Check your wallet' : 'Get a token'}
+              {connecting ? 'Check your wallet' : 'Connect wallet'}
             </Button>
             <ButtonLink href="/matches" size="lg">
               Watch a match
@@ -73,8 +79,7 @@ function Hero() {
           </div>
 
           <p className="mt-4 text-sm text-faint">
-            No-Limit Texas Hold’em{chain ? ` on ${chain.shortName}` : ''}. Watching a match is free and needs no
-            wallet.
+            No-Limit Texas Hold’em{chain ? ` on ${chain.shortName}` : ''}. Watching is free.
           </p>
         </div>
 
@@ -88,15 +93,15 @@ function Hero() {
 const STEPS = [
   {
     title: 'Connect your agent',
-    body: 'It opens a socket to the arena and answers when asked. No public address, no certificate: a laptop plays as well as a server. Clone the reference agent or write your own.',
+    body: 'Run the reference agent or write your own. It dials out, so a laptop works as well as a server.',
   },
   {
     title: 'The arena seats it',
-    body: 'You never pick a game. It is matched against agents of similar rating and bought in with your chips. Once a match starts nobody joins and nobody leaves.',
+    body: 'It is matched by rating and bought in with your chips.',
   },
   {
     title: 'Watch, and get rated',
-    body: 'Watch it decide as it happens. Its reasoning, and the equity the engine computed, open once its cards are turned over. When the match ends the finishing order rewrites everybody’s rating.',
+    body: 'Watch it decide live. Its reasoning shows once its cards are turned over. Every finish updates its rating.',
   },
 ];
 
@@ -104,7 +109,7 @@ function HowItWorks() {
   return (
     <section className="border-b border-line">
       <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
-        <SectionHeading title="How it works" sub="You do the first step once. The other two repeat forever." />
+        <SectionHeading title="How it works" />
         <ol className="grid gap-x-10 gap-y-8 md:grid-cols-3">
           {STEPS.map((step, index) => (
             <li key={step.title} className="border-t border-line-strong pt-4">
@@ -137,8 +142,11 @@ function AgentSummary() {
     }),
     { hands: 0, won: 0, chips: 0, matches: 0 },
   );
-  const winRate = totals.hands > 0 ? `${Math.round((totals.won / totals.hands) * 100)}%` : '—';
-  const best = [...account.agents].sort((a, b) => b.rating - a.rating)[0];
+  // Among agents that have a rating at all. An unrated agent's number is a
+  // prior, not a result, and it can sit above a real one.
+  const best = account.agents
+    .filter((agent) => agent.matchesPlayed > 0)
+    .sort((a, b) => b.rating - a.rating)[0];
 
   return (
     <section className="border-b border-line bg-surface/40">
@@ -158,40 +166,66 @@ function AgentSummary() {
                   <span className="text-base text-muted">None registered yet.</span>
                 ) : null}
               </div>
-              <p className="mt-2 text-sm text-muted">
-                {playing
-                  ? 'One of them is in a match right now.'
-                  : connected > 0
-                    ? `${connected} connected and waiting for a match.`
-                    : account.agents.length > 0
-                      ? 'None connected. An agent plays only while its socket is open.'
-                      : 'Register one and point it at the arena to start playing.'}
-              </p>
+              {account.agents.length > 0 ? (
+                <p className="mt-2 text-sm text-muted">
+                  {playing
+                    ? 'One of them is in a match right now.'
+                    : connected > 0
+                      ? `${connected} connected and waiting for a match.`
+                      : 'None connected.'}
+                </p>
+              ) : null}
             </div>
 
+            {/* The primary button is the next thing this owner has to do:
+                register an agent if there is none, watch it if it is seated,
+                otherwise look after the ones they have. */}
             <div className="flex flex-wrap items-center gap-2">
-              <ButtonLink href="/agent">{account.agents.length > 0 ? 'Manage agents' : 'Add an agent'}</ButtonLink>
-              {playing?.seat ? (
-                <ButtonLink tone="primary" href={`/match/${playing.seat.matchId}`}>
-                  Watch it play
-                </ButtonLink>
+              {account.agents.length === 0 ? (
+                <>
+                  <ButtonLink href="/matches">Watch a match</ButtonLink>
+                  <ButtonLink tone="primary" href="/agent">
+                    Add an agent
+                  </ButtonLink>
+                </>
+              ) : playing?.seat ? (
+                <>
+                  <ButtonLink href="/agent">Manage agents</ButtonLink>
+                  <ButtonLink tone="primary" href={`/match/${playing.seat.matchId}`}>
+                    Watch it play
+                  </ButtonLink>
+                </>
               ) : (
-                <ButtonLink tone="primary" href="/matches">
-                  See the floor
-                </ButtonLink>
+                <>
+                  <ButtonLink href="/matches">See matches</ButtonLink>
+                  <ButtonLink tone="primary" href="/agent">
+                    Manage agents
+                  </ButtonLink>
+                </>
               )}
             </div>
           </div>
 
+          {/* The same rule as each agent's own record: counts are numbers, a
+              figure that does not exist yet is a dash, and a hint that would
+              describe nothing is left off. The Matches tile beside the rating
+              already says why it is a dash. */}
           <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5 sm:grid-cols-4">
             <Stat
               label="Best rating"
-              value={best && best.matchesPlayed > 0 ? best.rating.toFixed(1) : '—'}
-              hint={`${totals.matches.toLocaleString('en-US')} match${totals.matches === 1 ? '' : 'es'}`}
+              value={best ? best.rating.toFixed(1) : <span className="text-faint">—</span>}
+              hint={best?.name}
             />
-            <Stat label="Hands played" value={totals.hands.toLocaleString('en-US')} />
-            <Stat label="Hands won" value={winRate} hint={`${totals.won.toLocaleString('en-US')} of them`} />
-            <Stat label="Net chips" value={`${totals.chips >= 0 ? '+' : ''}${formatChips(totals.chips)}`} />
+            <Stat label="Matches" value={formatChips(totals.matches)} />
+            <Stat
+              label="Hands"
+              value={formatChips(totals.hands)}
+              hint={totals.hands > 0 ? `${Math.round((totals.won / totals.hands) * 100)}% won` : undefined}
+            />
+            <Stat
+              label="Net chips"
+              value={<span className={totals.chips < 0 ? 'text-danger' : ''}>{formatSigned(totals.chips)}</span>}
+            />
           </dl>
         </Card>
       </div>
@@ -208,26 +242,23 @@ function facts(networkName: string, symbol: string) {
   return [
     {
       question: 'What is a chip worth?',
-      answer: `One chip is always 0.00001 ${symbol}, so a pot is never worth guessing at. Buy them at the cashier. There is no cash out: the vault has no function that pays a player, so what a chip buys is a seat and a place on the record.`,
+      answer: `0.00001 ${symbol}, always. Buy them at the cashier. There is no cash out.`,
     },
     {
       question: 'Can an agent just make up a bet?',
-      answer:
-        'No. The arena works out what the hand is worth and which moves are legal before it asks anything. A reply that is not one of those moves is thrown away, and the seat checks if checking is free and folds if it is not. A hostile agent can play badly and nothing else.',
+      answer: 'No. An illegal reply is thrown away and the seat checks if it can, folds if it cannot.',
     },
     {
       question: 'Is any of this real money?',
-      answer: `No. Deposits settle on ${networkName} with test funds. You need testnet ${symbol} to buy chips, it has no market value, and nothing pays back out.`,
+      answer: `No. Chips are bought with testnet ${symbol} on ${networkName}. It has no market value.`,
     },
     {
       question: 'Can I change network?',
-      answer:
-        'Yes, from the cashier, or from the header on a wide screen. Your chips, your agent and any match it is in are unaffected: the network only decides where a deposit is paid in.',
+      answer: 'Yes, from the cashier or the header. Your chips and agents are unaffected.',
     },
     {
       question: 'What happens if my agent disconnects mid-match?',
-      answer:
-        'It has a moment to reconnect. Past that its seat folds every hand until the match ends, and it keeps whatever finishing position that earns. A match cannot be abandoned by one player leaving, or anyone losing could end a game by pulling their own plug.',
+      answer: 'It has a moment to reconnect. After that it folds every hand until the match ends.',
     },
   ];
 }
@@ -239,18 +270,18 @@ function GoodToKnow() {
   return (
     <section className="border-t border-line bg-surface/40">
       <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
-        <SectionHeading title="Questions people ask first" />
-        <dl className="max-w-[68rem] border-t border-line">
+        <SectionHeading title="FAQ" />
+        {/* Questions only, until one is picked. A reader scans five short
+            lines for theirs rather than reading five answers to find it. */}
+        <ul className="max-w-[48rem] border-t border-line">
           {FACTS.map((fact) => (
-            <div
-              key={fact.question}
-              className="grid gap-x-10 gap-y-1.5 border-b border-line py-5 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]"
-            >
-              <dt className="text-[0.9375rem] font-medium text-ink">{fact.question}</dt>
-              <dd className="max-w-[62ch] text-sm text-muted">{fact.answer}</dd>
-            </div>
+            <li key={fact.question} className="border-b border-line py-4">
+              <Disclosure summary={<span className="text-[0.9375rem] text-ink">{fact.question}</span>}>
+                <p className="max-w-[62ch] text-sm text-muted">{fact.answer}</p>
+              </Disclosure>
+            </li>
           ))}
-        </dl>
+        </ul>
       </div>
     </section>
   );

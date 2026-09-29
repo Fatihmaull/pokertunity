@@ -9,11 +9,17 @@ import { ChainProvider } from '@/components/chain-context';
   A grotesque drawn for small sizes and dense listings, which is what a schedule
   of matches, ratings and seat counts is. Chosen over the usual interface default
   because its tighter apertures and squarer figures hold up in a table row.
+
+  Loaded as the variable font with its width axis, because the display voice is
+  this same face narrowed (`.display`), not a second family. A condensed heavy
+  cut is how a card room's tournament board and a televised table's lower third
+  set a name and a bet, and taking it from Archivo keeps every letterform on the
+  page from one drawing.
 */
 const archivo = Archivo({
   variable: '--font-archivo',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  axes: ['wdth'],
   display: 'swap',
 });
 

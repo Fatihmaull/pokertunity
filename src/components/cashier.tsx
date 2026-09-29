@@ -143,8 +143,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
       setStage('confirming');
       setStatus(
         noted
-          ? 'Waiting for the network to confirm. This takes a few blocks.'
-          : 'Waiting for the network to confirm. Keep this window open until it does: the deposit could not be saved to finish later.',
+          ? 'Waiting for the network to confirm.'
+          : 'Waiting for the network to confirm. Keep this window open: the deposit could not be saved to finish later.',
       );
 
       const credited = await pollConfirm(txHash, chain.key, (message) => setStatus(message));
@@ -237,11 +237,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="border-t border-line bg-surface-2 px-6 py-5">
-          <h3 className="label mb-2 text-faint">There is no cash out</h3>
-          <p className="max-w-[68ch] text-sm text-muted">
-            Chips go in and do not come back out. The vault has no function that pays a player, so this is a property
-            of the contract rather than a rule we keep. What a chip buys is table time and a place on the record.
-          </p>
+          <h3 className="label mb-2 text-faint">No cash out</h3>
+          <p className="max-w-[68ch] text-sm text-muted">Chips cannot be withdrawn. The vault has no payout function.</p>
         </div>
 
         {chain && !settles ? (
@@ -252,8 +249,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
                 worse than telling them plainly that there is nowhere to go. */}
             <p className="text-sm text-muted">
               {settlesSomewhere
-                ? `No vault has been deployed on ${chain.name} yet, so chips cannot be bought here. Pick another network above to use the cashier.`
-                : 'No vault has been deployed on any network yet, so chips cannot be bought. Your account was granted chips when it was created.'}
+                ? `No vault on ${chain.name} yet. Pick another network above.`
+                : 'Chips cannot be bought yet: no vault is deployed.'}
             </p>
           </div>
         ) : null}
@@ -378,9 +375,7 @@ async function pollConfirm(txHash: string, chainKey: string, onStatus: (message:
 
     await new Promise((resolve) => setTimeout(resolve, pause));
   }
-  throw new Error(
-    'That deposit has not confirmed yet. It is on record, so reopen the cashier later and it will be finished then.',
-  );
+  throw new Error('Not confirmed yet. Reopen the cashier later to finish it.');
 }
 
 function describe(error: unknown): string {

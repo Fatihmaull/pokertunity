@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatChips } from "@/lib/economy";
 import type { TableView } from "@/server/view";
@@ -11,7 +10,7 @@ import { ThinkingPanel, drawsOf, type BrainState } from "./thinking-panel";
 import { ChipDot, DealerButton, agentHex } from "./table-art";
 import { seatLabel, useMatchStream } from "./use-match-stream";
 import { useLobby } from "./use-lobby";
-import { Badge, ButtonLink, Card, LiveBadge } from "./ui";
+import { BackLink, Badge, ButtonLink, Card, LiveBadge } from "./ui";
 
 type Tab = "thinking" | "players" | "log";
 
@@ -119,10 +118,7 @@ export function Arena({ matchId }: { matchId: string }) {
       <div className="page mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
         <Card className="p-6 text-center">
           <h1 className="text-lg font-semibold">This match is not being dealt here</h1>
-          <p className="mt-2 text-sm text-muted">
-            It has either just finished, or it is running on an instance this page cannot reach. Its result appears on
-            the matches list once it settles.
-          </p>
+          <p className="mt-2 text-sm text-muted">It may have just finished. Its result appears on the matches list.</p>
           <div className="mt-5 flex justify-center">
             <ButtonLink href="/matches">Back to matches</ButtonLink>
           </div>
@@ -135,7 +131,6 @@ export function Arena({ matchId }: { matchId: string }) {
     <div className="page mx-auto w-full max-w-[104rem] px-4 py-4 sm:px-6 sm:py-6">
       <TableBar
         table={table}
-        matchId={matchId}
         connected={connected}
         finished={idleReason !== null}
         seatedHere={lobby.mine.includes(matchId)}
@@ -160,10 +155,34 @@ export function Arena({ matchId }: { matchId: string }) {
           page and dragging the table out from under the reader.
         */}
         <Card className="flex h-[32rem] min-w-0 flex-col overflow-hidden lg:h-[var(--stage-h)]">
+          {/*
+            One tab stop for the row, and the arrow keys move along it, which
+            is how every other tab row a keyboard user meets behaves. Arrowing
+            keeps focus on the tabs rather than handing it to the panel the way
+            a click does, or the next arrow would scroll the panel instead.
+          */}
           <div
             role="tablist"
             aria-label="Table panels"
             className="flex shrink-0 border-b border-line"
+            onKeyDown={(event) => {
+              const current = TABS.findIndex((entry) => entry.id === tab);
+              const next =
+                event.key === "ArrowRight"
+                  ? (current + 1) % TABS.length
+                  : event.key === "ArrowLeft"
+                    ? (current - 1 + TABS.length) % TABS.length
+                    : event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? TABS.length - 1
+                        : null;
+              if (next === null) return;
+              event.preventDefault();
+              picked.current = false;
+              setTab(TABS[next].id);
+              document.getElementById(`tab-${TABS[next].id}`)?.focus();
+            }}
           >
             {TABS.map((entry) => (
               <button
@@ -173,6 +192,7 @@ export function Arena({ matchId }: { matchId: string }) {
                 id={`tab-${entry.id}`}
                 aria-controls={`panel-${entry.id}`}
                 aria-selected={tab === entry.id}
+                tabIndex={tab === entry.id ? 0 : -1}
                 onClick={() => {
                   picked.current = true;
                   setTab(entry.id);
@@ -210,40 +230,30 @@ export function Arena({ matchId }: { matchId: string }) {
 }
 
 /**
- * Everything you need to know about the table before you look at it, and the
- * one control that acts on it. The breadcrumb is here because this is the only
- * page you can reach from a link and land on cold.
+ * Everything you need to know about the table before you look at it. The way
+ * back is here because this is a page people reach from a shared link and land
+ * on cold. It is the only way back: a second "other matches" button beside the
+ * title went to the same place and there is nothing else here to press.
  */
 function TableBar({
   table,
-  matchId,
   connected,
   finished,
   seatedHere,
 }: {
   table: TableView | null;
-  matchId: string;
   connected: boolean;
   finished: boolean;
   seatedHere: boolean;
 }) {
   return (
     <div>
-      <nav
-        aria-label="Breadcrumb"
-        className="mb-3 flex items-center gap-1.5 text-sm text-faint"
-      >
-        <Link href="/matches" className="transition-colors hover:text-ink">
-          Matches
-        </Link>
-        <span aria-hidden>/</span>
-        <span className="text-muted">{table?.label ?? matchId}</span>
-      </nav>
+      <BackLink href="/matches">Matches</BackLink>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl text-ink sm:text-2xl">
+            <h1 className="display text-[1.75rem] text-ink sm:text-[2rem]">
               {table?.label ?? "Loading match…"}
             </h1>
             {finished ? (
@@ -269,14 +279,6 @@ function TableBar({
             )}
           </p>
         </div>
-
-        {/* Nothing to press. An agent is put into a match by the arena, so
-            there is no seat to take and none to give up. */}
-        <div className="ml-auto flex items-center gap-2">
-          <ButtonLink href="/matches" tone="ghost">
-            Other matches
-          </ButtonLink>
-        </div>
       </div>
     </div>
   );
@@ -294,10 +296,6 @@ function PlayersPanel({
 
   return (
     <div className="scroll-y h-full p-3" data-panel-scroll tabIndex={0}>
-      <p className="px-1 pb-2 text-xs text-faint">
-        Every agent at this table and what it has in front of it. Colour is the
-        agent&rsquo;s own, on the felt and here alike.
-      </p>
       <ul className="space-y-1.5">
         {seats.map((seat) => {
           const mine = Boolean(seat.agentId && myAgentIds.has(seat.agentId));
@@ -318,7 +316,9 @@ function PlayersPanel({
                     {seat.agentId ? seatLabel(seat) : `Seat ${seat.index + 1}`}
                   </span>
                   {seat.isDealer ? <DealerButton size={13} /> : null}
-                  {mine ? <Badge tone="accent">You</Badge> : null}
+                  {/* The seat is the agent, not its owner, so it says Yours
+                      the way the result table does. */}
+                  {mine ? <Badge tone="accent">Yours</Badge> : null}
                 </div>
                 <p className="text-xs text-faint">
                   {seat.agentId
@@ -377,7 +377,7 @@ function LogPanel({ table }: { table: TableView | null }) {
     >
       {lines.length === 0 ? (
         <p className="px-1 py-8 text-center text-sm text-muted">
-          No hands played yet. Actions appear here as they happen.
+          No actions yet.
         </p>
       ) : (
         <ol className="space-y-1">

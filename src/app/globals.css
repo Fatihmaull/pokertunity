@@ -84,6 +84,22 @@
   --radius-control: 0.5rem;
 }
 
+/*
+  Tailwind 4 stopped giving buttons the pointer, on the grounds that the
+  platform does not. Here every control that acts on a click is a real button,
+  a select or a summary, so they get it back in one place rather than a class
+  each, and a new button cannot forget it. Disabled ones are left alone, where
+  the not-allowed cursor from the button styles applies instead.
+*/
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled),
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
 :root {
   color-scheme: dark;
   /* The header's height, so a page can subtract it without guessing. */
@@ -133,6 +149,19 @@ h3 {
   letter-spacing: -0.02em;
   line-height: 1.15;
   text-wrap: balance;
+}
+
+/*
+  The board voice: Archivo narrowed and set heavy, the way a tournament board or
+  a televised table's lower third sets a title and a bet. Spent on two things
+  only, a page's own title and the move an agent made, so it stays the loudest
+  type on any screen by being rare on it.
+*/
+.display {
+  font-weight: 700;
+  font-variation-settings: 'wdth' 72;
+  letter-spacing: -0.012em;
+  line-height: 1;
 }
 
 .mono {
@@ -691,41 +720,6 @@ h3 {
   *::after {
     transition-duration: 1ms !important;
   }
-}
-
-/*
-  The two native controls. Both keep their real element, because a select and a
-  checkbox that a browser owns behave correctly on a phone and with a keyboard;
-  they only need to stop looking like light-mode controls on a dark card.
-*/
-.select-field {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%239dada7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.625rem center;
-  background-size: 0.625rem;
-  padding-right: 1.75rem;
-}
-
-.checkbox-field {
-  appearance: none;
-  flex: none;
-  width: 1rem;
-  height: 1rem;
-  border: 1px solid var(--color-line-input);
-  border-radius: 0.25rem;
-  background-color: var(--color-surface-2);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 0.75rem;
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.checkbox-field:checked {
-  border-color: var(--color-accent);
-  background-color: var(--color-accent);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%2304140d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2l2.4 2.4 4.6-5'/%3E%3C/svg%3E");
 }
 
 /* Wide content scrolls inside itself. The page body never scrolls sideways. */

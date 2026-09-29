@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { SEAT_COST, STARTING_GRANT, formatChips } from '@/lib/economy';
+import { useEffect, useRef, useState } from 'react';
+import { SEAT_COST, formatChips } from '@/lib/economy';
+import { formatSigned } from '@/lib/format';
 import { useAccount, type AccountAgent } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
 import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
-import { Badge, Button, ButtonLink, Card, Stat } from './ui';
+import { Badge, Button, ButtonLink, Card, Disclosure, EmptyState, PageHeader, Stat } from './ui';
 
 /**
  * An operations page, not an editor.
@@ -55,15 +56,14 @@ export function AgentConsole() {
   if (!account) {
     return (
       <Shell>
-        <Card className="mx-auto mt-10 max-w-[46rem] p-8 text-center sm:p-12">
-          <h1 className="mx-auto max-w-[26ch] text-2xl text-ink sm:text-3xl">
-            Bring an agent. We run the tournament.
+        <Card className="mt-4 p-8 sm:p-12">
+          <h1 className="display max-w-[20ch] text-[2rem] text-ink sm:text-[2.5rem]">
+            Register an agent and get its token.
           </h1>
-          <p className="mx-auto mt-4 max-w-[56ch] text-base text-muted">
-            Connect a wallet and this page issues the token your agent connects with. It is one signature, not a
-            transaction, so it costs nothing. It proves the wallet is yours so nobody else can spend your chips.
+          <p className="mt-4 max-w-[56ch] text-base text-muted">
+            Connect a wallet first. It takes one signature: no transaction, no cost.
           </p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <div className="mt-7 flex flex-wrap gap-3">
             <Button tone="primary" size="lg" onClick={() => void signIn()} disabled={connecting}>
               {connecting ? 'Check your wallet' : 'Connect wallet'}
             </Button>
@@ -108,82 +108,76 @@ export function AgentConsole() {
 
   return (
     <Shell>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div>
-          <h1 className="text-2xl text-ink sm:text-3xl">Your agents</h1>
-          <p className="mt-1.5 max-w-[62ch] text-sm text-muted">
-            Each agent connects to the arena over a socket using its own token. It plays when it is connected and
-            has asked for a game. You never seat it: the arena matches it against opponents of similar rating.
-          </p>
-        </div>
-        <Button tone="primary" onClick={() => void addAgent()} disabled={busy}>
-          Add an agent
-        </Button>
-      </header>
-
-      {failure ? <p className="mb-4 text-sm text-danger">{failure}</p> : null}
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 space-y-5">
-          {account.agents.length === 0 ? (
-            <Card className="p-8 text-center">
-              <h2 className="text-lg text-ink">No agents yet</h2>
-              <p className="mx-auto mt-2 max-w-[52ch] text-sm text-muted">
-                Add one and you get a token. Point the reference agent at it and you are playing in a minute, or
-                write your own against the protocol.
-              </p>
-            </Card>
-          ) : (
-            account.agents.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                busy={busy}
-                affordable={affordable}
-                token={freshToken?.agentId === agent.id ? freshToken.token : null}
-                onRotate={async () => {
-                  const body = await call(`/api/agents/${agent.id}/rotate`, { method: 'POST' });
-                  if (body) setFreshToken({ agentId: agent.id, token: String(body.token) });
-                }}
-                onRename={(name) => void call(`/api/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ name }) })}
-                onQueue={(enabled) =>
-                  void call(`/api/agents/${agent.id}/queue`, { method: 'POST', body: JSON.stringify({ enabled }) })
-                }
-              />
-            ))
-          )}
-
-          <ConnectGuide />
-        </div>
-
-        <aside className="space-y-5">
-          <Card className="p-5">
-            <h2 className="text-base text-ink">Chips</h2>
-            <p className="mono mt-3 text-2xl text-ink tabular-nums">{formatChips(account.chips)}</p>
-            <p className="mt-2 text-xs text-faint">
-              A seat costs {formatChips(SEAT_COST)}, buy-in and entry fee together. The buy-in comes back with
-              whatever your agent finished on.
-            </p>
-            <p className="mt-2 text-xs text-faint">
-              Every account starts with {formatChips(STARTING_GRANT)}, once. More are bought at the cashier.
-            </p>
-            {/* Loud only when it is the thing standing between an agent and a
-                seat. An owner with chips to spare has no reason to look at it. */}
-            <Button
-              className="mt-3 w-full"
-              tone={affordable ? undefined : 'primary'}
-              onClick={() => setCashierOpen(true)}
-            >
-              Buy chips
+      <PageHeader
+        title="Your agents"
+        sub="Each agent connects to the arena over a socket using its own token. It plays when it is connected and has asked for a game."
+        // With no agents yet the empty card below carries this button, so
+        // the page does not offer the same action twice.
+        action={
+          account.agents.length > 0 ? (
+            <Button tone="primary" onClick={() => void addAgent()} disabled={busy}>
+              Add an agent
             </Button>
-          </Card>
+          ) : null
+        }
+      />
 
-          {/* One per agent. An owner running several strategies is comparing
-              exactly these numbers, so showing only the first hides the answer. */}
-          {account.agents.map((agent) => (
-            <AxesCard key={agent.id} agentId={agent.id} name={agent.name} />
-          ))}
-        </aside>
+      {failure ? (
+        <p role="alert" className="mb-4 text-sm text-danger">
+          {failure}
+        </p>
+      ) : null}
+
+      {/* The balance and the Buy button are in the header on every page. Here
+          it is worth a line only when it is what stands between an agent and
+          a seat. */}
+      {affordable ? null : (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/40 bg-danger-soft px-5 py-4">
+          <p className="text-sm text-ink">
+            Not enough chips for a match. A seat costs {formatChips(SEAT_COST)}.
+          </p>
+          <Button tone="primary" size="sm" onClick={() => setCashierOpen(true)}>
+            Buy chips
+          </Button>
+        </div>
+      )}
+
+      <div className="space-y-5">
+        {account.agents.length === 0 ? (
+          <Card>
+            <EmptyState
+              title="No agents yet"
+              body="Add one to get its token."
+              action={
+                <Button tone="primary" onClick={() => void addAgent()} disabled={busy}>
+                  Add an agent
+                </Button>
+              }
+            />
+          </Card>
+        ) : (
+          account.agents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              busy={busy}
+              affordable={affordable}
+              token={freshToken?.agentId === agent.id ? freshToken.token : null}
+              onRotate={async () => {
+                const body = await call(`/api/agents/${agent.id}/rotate`, { method: 'POST' });
+                if (body) setFreshToken({ agentId: agent.id, token: String(body.token) });
+              }}
+              onRename={(name) => void call(`/api/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ name }) })}
+              onQueue={(enabled) =>
+                void call(`/api/agents/${agent.id}/queue`, { method: 'POST', body: JSON.stringify({ enabled }) })
+              }
+            />
+          ))
+        )}
+
+        {/* Open until an agent has made it in once. After that the owner
+            knows how, and it is only in the way of the agents themselves. */}
+        <ConnectGuide open={account.agents.every((agent) => !agent.connected && !agent.lastSeenAt)} />
       </div>
       {cashierOpen ? <Cashier onClose={() => setCashierOpen(false)} /> : null}
     </Shell>
@@ -209,97 +203,173 @@ function AgentCard({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const name = draft ?? agent.name;
-  const winRate = agent.handsPlayed > 0 ? `${Math.round((agent.handsWon / agent.handsPlayed) * 100)}%` : '—';
 
   return (
     <Card className="p-5">
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      {/* Who it is and when it was last heard from on the left; what it is
+          doing and the one switch that changes that on the right. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 items-center gap-3">
           <ChipDot color={agent.color} size={22} />
-          <input
-            value={name}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => {
-              if (draft !== null && draft.trim() && draft !== agent.name) onRename(draft.trim());
-              setDraft(null);
-            }}
-            // Enter is what everyone presses to finish typing a name, and
-            // leaving the field is what saves it.
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
-            }}
-            maxLength={24}
-            aria-label="Agent name"
-            className="h-9 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
-          />
+          <div className="min-w-0">
+            <input
+              value={name}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={() => {
+                if (draft !== null && draft.trim() && draft !== agent.name) onRename(draft.trim());
+                setDraft(null);
+              }}
+              // Enter is what everyone presses to finish typing a name, and
+              // leaving the field is what saves it.
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+              maxLength={24}
+              aria-label="Agent name"
+              className="-ml-2 h-8 w-full max-w-[18rem] rounded-control border border-transparent bg-transparent px-2 text-lg text-ink outline-none hover:border-line focus:border-accent focus:bg-surface-2"
+            />
+            {/* History, for an agent that has dropped: the badge says what it
+                is doing now, this says why it stopped. Connected, or never
+                connected, there is nothing here the badge has not said. */}
+            {!agent.connected && agent.lastSeenAt ? (
+              <p className="text-xs text-faint">
+                {agent.lastCloseReason
+                  ? `Last disconnect: ${agent.lastCloseReason}`
+                  : `Last connected ${new Date(agent.lastSeenAt).toLocaleString('en-US')}`}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <Status agent={agent} affordable={affordable} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Status agent={agent} affordable={affordable} />
+          <QueueSwitch agent={agent} disabled={busy} onChange={onQueue} />
+        </div>
       </div>
 
-      <QueueSwitch agent={agent} disabled={busy} onChange={onQueue} />
-
-      {/*
-        Shown once, immediately after minting. Only the hash is stored, so this
-        is the only moment the token exists anywhere we can show it. An owner
-        who misses it rotates, which is the honest answer rather than an
-        inconvenience worked around.
-      */}
-      {token ? <FreshToken token={token} connected={agent.connected} /> : null}
-
-      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
-        <Stat
-          label="Rating"
-          value={agent.matchesPlayed > 0 ? agent.rating.toFixed(1) : '—'}
-          hint={`${agent.matchesPlayed} match${agent.matchesPlayed === 1 ? '' : 'es'}`}
-        />
-        <Stat label="Hands" value={agent.handsPlayed.toLocaleString('en-US')} hint={`${winRate} won`} />
-        <Stat label="Net chips" value={`${agent.chipsWon >= 0 ? '+' : ''}${formatChips(agent.chipsWon)}`} />
-        <Stat label="Biggest pot" value={formatChips(agent.biggestPot)} />
-      </dl>
-
-      <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {agent.seat ? (
-          <ButtonLink href={`/match/${agent.seat.matchId}`} tone="primary" size="sm">
-            Watch it play
-          </ButtonLink>
-        ) : null}
+      {/* The token belongs to the agent named just above it, so it sits under
+          that name rather than among the figures, on the card's left edge
+          like everything else below the header. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onRotate} disabled={busy}>
           Rotate token
         </Button>
-        {agent.lastCloseReason ? (
-          <span className="text-xs text-faint">Last disconnect: {agent.lastCloseReason}</span>
-        ) : agent.lastSeenAt ? (
-          <span className="text-xs text-faint">
-            Last seen {new Date(agent.lastSeenAt).toLocaleString('en-US')}
-          </span>
-        ) : (
-          <span className="text-xs text-faint">Never connected</span>
-        )}
+        {/*
+          Keyed on the token so a second rotation starts fresh: not still
+          reading "Copied" from the first.
+        */}
+        <TokenField key={token ?? 'hidden'} token={token} />
       </div>
+
+      {/*
+        Rotation refuses the old token on the next connection and leaves the one
+        already open alone. Whoever rotated because the token leaked needs to
+        hear that here, or they walk away believing the leak is closed. The
+        remedy is connecting on the new token, because a second connection for
+        an agent replaces the first and the seat belongs to the agent.
+      */}
+      {token && agent.connected ? (
+        <p className="mt-2 text-xs text-muted">
+          The open connection still uses the old token. Restart your agent with this one to close it.
+        </p>
+      ) : null}
+
+      <TableRecord
+        hands={agent.handsPlayed}
+        handsWon={agent.handsWon}
+        matches={agent.matchesPlayed}
+        rating={agent.rating}
+        net={agent.chipsWon}
+      />
+
+      {agent.seat ? (
+        <ButtonLink href={`/match/${agent.seat.matchId}`} tone="primary" size="sm" className="mt-5">
+          Watch it play
+        </ButtonLink>
+      ) : null}
+
+      {/* Measured over thousands of hands, so it says little early on and
+          changes slowly after that: worth a look now and then, not a place on
+          screen every time the page is opened. */}
+      <Disclosure summary="Profile and on-chain record" className="mt-4 border-t border-line pt-4">
+        <div className="space-y-5 pb-1">
+          <AxesCard agentId={agent.id} />
+          <OnChainPanel agentId={agent.id} records={agent.onchain} hands={agent.handsPlayed} />
+        </div>
+      </Disclosure>
     </Card>
   );
 }
 
-/** The one thing an owner debugging a silent agent actually needs. */
 /**
- * The token, at the only moment it exists anywhere we can show it.
+ * What an agent has done at the table, under one rule for every figure.
  *
- * Only the hash is stored, so this is one shot. That made the display the
- * least forgiving interaction in the product: 46 characters in a box that
- * scrolls under your finger, with no second chance. A laptop survives it on a
- * triple-click, which is probably why it lasted; a phone does not.
- *
- * The input is the fallback rather than the decoration. A clipboard write can
- * be refused — an insecure origin, a browser that wants a user gesture it did
- * not see — and when it is, a real field the player can select from is the
- * difference between an inconvenience and a lost token.
+ * A count is a number, and zero is a real answer to it. A figure that does not
+ * exist yet, like a rating before any match has finished, is a dash, and the
+ * Matches tile beside it is reason enough without a sentence. A hint that would
+ * describe nothing, a win rate over no hands, is left off rather than dashed. A
+ * change carries a sign only when it is one. The row is there from the first
+ * visit, so a new agent's card has the same shape it will have once it plays.
  */
-function FreshToken({ token, connected }: { token: string; connected: boolean }) {
+function TableRecord({
+  hands,
+  handsWon,
+  matches,
+  rating,
+  net,
+}: {
+  hands: number;
+  handsWon: number;
+  matches: number;
+  rating: number;
+  net: number;
+}) {
+  return (
+    <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-4">
+      <Stat label="Rating" value={matches > 0 ? rating.toFixed(1) : <span className="text-faint">—</span>} />
+      {/* Beside the rating because it is what the rating is made of. */}
+      <Stat label="Matches" value={formatChips(matches)} />
+      <Stat
+        label="Hands"
+        value={formatChips(hands)}
+        hint={hands > 0 ? `${Math.round((handsWon / hands) * 100)}% won` : undefined}
+      />
+      <Stat label="Net chips" value={<span className={net < 0 ? 'text-danger' : ''}>{formatSigned(net)}</span>} />
+    </dl>
+  );
+}
+
+/**
+ * The agent's token, at the one moment it can be shown, and the way to get
+ * there the rest of the time.
+ *
+ * Only the hash is stored, so the real token is on screen once, right after
+ * minting. The rest of the time the box says how to see one, and says "new"
+ * because rotating replaces the token rather than revealing it. The box is
+ * always there so the card does not change shape when a token arrives, and so
+ * an owner who lost theirs can see where one goes and which button makes it.
+ *
+ * Minting made the display the least forgiving interaction in the product:
+ * 46 characters in a box that scrolls under your finger, with no second
+ * chance. The input is the fallback rather than the decoration. A clipboard
+ * write can be refused — an insecure origin, a browser that wants a user
+ * gesture it did not see — and when it is, a real field the player can select
+ * from is the difference between an inconvenience and a lost token.
+ */
+function TokenField({ token }: { token: string | null }) {
   const [copied, setCopied] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+
+  // A new agent's card is added at the foot of the list, often below the fold
+  // of the button that made it. Brought into view and selected, the token is
+  // one Ctrl+C away wherever the owner clicked from.
+  useEffect(() => {
+    if (!token) return;
+    field.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    field.current?.focus({ preventScroll: true });
+  }, [token]);
 
   async function copy() {
+    if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
       setCopied(true);
@@ -309,39 +379,33 @@ function FreshToken({ token, connected }: { token: string; connected: boolean })
     }
   }
 
+  // Beside Rotate token where there is width, under it on a phone, with the
+  // field and its Copy button kept together either way. Disabled until there
+  // is a token, so the empty box takes no focus and no caret.
   return (
-    <div className="mt-4 rounded-control border border-accent/40 bg-accent/5 p-3">
-      <p className="text-xs font-medium text-ink">Copy this now. It is not shown again.</p>
-      <div className="mt-2 flex items-center gap-2">
-        <input
-          readOnly
-          value={token}
-          aria-label="Agent token"
-          onFocus={(event) => event.currentTarget.select()}
-          className="mono min-w-0 flex-1 rounded-control border border-line bg-surface-2 px-2 py-1.5 text-xs text-accent"
-        />
-        <Button onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
-      </div>
-      {/*
-        Rotation refuses the old token on the next connection and leaves the one
-        already open alone. Whoever rotated because the token leaked needs to
-        hear that here, or they walk away believing the leak is closed. The
-        remedy is connecting on the new token, because a second connection for
-        an agent replaces the first and the seat belongs to the agent.
-      */}
-      {connected ? (
-        <p className="mt-2 text-xs text-muted">
-          The connection open now is still on the old token and keeps playing. If you rotated because the token
-          leaked, restart your agent with this one: it takes over the seat and the old connection is closed.
-        </p>
-      ) : null}
+    <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
+      <input
+        ref={field}
+        readOnly
+        disabled={!token}
+        value={token ?? ''}
+        placeholder="Rotate to see a new token"
+        aria-label={token ? 'New agent token' : 'Agent token, hidden'}
+        onFocus={token ? (event) => event.currentTarget.select() : undefined}
+        className={`h-8 min-w-0 flex-1 rounded-control border px-2 text-xs ${
+          token ? 'mono border-accent/40 bg-accent/5 text-accent' : 'border-line bg-surface-2 placeholder:text-faint'
+        }`}
+      />
+      <Button size="sm" tone={token ? 'primary' : 'secondary'} onClick={copy} disabled={!token}>
+        {copied ? 'Copied' : 'Copy'}
+      </Button>
     </div>
   );
 }
 
 function Status({ agent, affordable }: { agent: AccountAgent; affordable: boolean }) {
   if (agent.seat) return <Badge tone="accent">In a match</Badge>;
-  if (!agent.connected) return <Badge>Not connected</Badge>;
+  if (!agent.connected) return <Badge>{agent.lastSeenAt ? 'Not connected' : 'Never connected'}</Badge>;
   if (!agent.queueEnabled) return <Badge>Connected, matches off</Badge>;
   if (!agent.ready) return <Badge>Connected, not queued</Badge>;
   if (!affordable) return <Badge tone="danger">Queued, not enough chips</Badge>;
@@ -366,39 +430,42 @@ function QueueSwitch({
   onChange: (enabled: boolean) => void;
 }) {
   const on = agent.queueEnabled;
-  const label = `Play matches: ${agent.name}`;
+  // What flipping it would mean, for whoever wonders. The badge beside it
+  // already says what it is doing now, so this does not need a line of its own.
+  const hint = on
+    ? agent.seat
+      ? 'Turning this off takes effect after this match.'
+      : `${formatChips(SEAT_COST)} per match.`
+    : 'Connects without being seated or charged.';
 
   return (
-    <div className="mt-4 flex items-start gap-3 rounded-control border border-line bg-surface-2 px-3 py-2.5">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={label}
-        disabled={disabled}
-        onClick={() => onChange(!on)}
-        className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`Play matches: ${agent.name}`}
+      title={hint}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className="inline-flex items-center gap-2.5 text-sm text-muted transition-colors hover:text-ink disabled:opacity-50"
+    >
+      Play matches
+      {/* The thumb is placed absolutely from the track's centre line rather
+          than left in the flow, so it sits dead centre whatever the border and
+          line box around it add up to. */}
+      <span
+        aria-hidden
+        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors ${
           on ? 'border-accent bg-accent' : 'border-line-strong bg-surface-3'
         }`}
       >
         <span
-          aria-hidden
-          className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
-            on ? 'translate-x-[1.125rem] bg-accent-ink' : 'translate-x-0.5 bg-muted'
+          className={`absolute top-1/2 left-0.5 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-transform ${
+            on ? 'translate-x-4 bg-accent-ink' : 'translate-x-0 bg-muted'
           }`}
         />
-      </button>
-      <div className="min-w-0">
-        <p className="text-sm text-ink">Play matches {on ? 'on' : 'off'}</p>
-        <p className="mt-0.5 text-xs text-faint">
-          {on
-            ? agent.seat
-              ? 'It is queued again when this match ends. Turning this off stops the next match, not this one.'
-              : `When connected and asking for a game, it is seated and charged ${formatChips(SEAT_COST)} for each match.`
-            : 'It can connect and be watched answering, but it is never seated and never charged.'}
-        </p>
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }
 
@@ -419,29 +486,34 @@ function unusedName(agents: readonly AccountAgent[]): string {
   return `Agent ${n}`;
 }
 
-function ConnectGuide() {
+function ConnectGuide({ open }: { open: boolean }) {
   return (
     <Card className="p-5">
-      <h2 className="text-base text-ink">Connecting</h2>
-      <p className="mt-2 max-w-[62ch] text-sm text-muted">
-        Your agent opens a socket to the arena and says hello with its token. It is never called back, so it needs
-        no public address and no certificate. A laptop behind a router plays exactly as well as a server.
-      </p>
-      <pre className="scroll-x mono mt-4 rounded-control border border-line bg-surface-2 p-3 text-xs text-muted">
+      <Disclosure summary={<span className="text-base text-ink">How to connect</span>} defaultOpen={open}>
+        <pre className="scroll-x mono rounded-control border border-line bg-surface-2 p-3 text-xs text-muted">
 {`ARENA_URL=wss://<this-host>/agent \\
 AGENT_TOKEN=ah_... \\
 AGENT_BRAIN=heuristic \\
 pnpm --filter @pokertunity/agent start`}
-      </pre>
-      <p className="mt-3 max-w-[62ch] text-xs text-faint">
-        That runs the reference agent, which plays off the equity the arena sends it and needs no model key. Set
-        AGENT_BRAIN=model with a key to have it reason, or write your own against the protocol: a handful of JSON
-        frames, and the reference agent is the documentation.
-      </p>
+        </pre>
+        <p className="mt-3 max-w-[62ch] text-xs text-faint">
+          The heuristic brain needs no model key. Set AGENT_BRAIN=model with a key to have it reason, or write your
+          own against the protocol.
+        </p>
+      </Disclosure>
     </Card>
   );
 }
 
+/**
+ * One column: a sidebar beside the agents only ever held what the header
+ * already shows. The column is narrow for reading but starts on the same left
+ * edge as every other page, so the title does not jump sideways on the way in.
+ */
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="page mx-auto w-full max-w-[76rem] px-4 py-8 sm:px-6 sm:py-10">{children}</div>;
+  return (
+    <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
+      <div className="max-w-[56rem]">{children}</div>
+    </div>
+  );
 }

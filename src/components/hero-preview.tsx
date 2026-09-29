@@ -41,6 +41,8 @@ type Feed =
 export function HeroPreview() {
   const [feed, setFeed] = useState<Feed>({ mode: 'loading' });
   const [step, setStep] = useState(0);
+  /** Held while someone is reading it, so a paragraph is not swapped out mid-sentence. */
+  const [held, setHeld] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,45 +67,61 @@ export function HeroPreview() {
   const shown = feed.mode === 'replay' ? feed.decisions.filter((decision) => !decision.mucked) : [];
   const count = shown.length;
   useEffect(() => {
-    if (count === 0) return;
-    const timer = setInterval(() => setStep((current) => (current + 1) % count), 4200);
+    if (count === 0 || held) return;
+    const timer = setInterval(() => setStep((current) => (current + 1) % count), 5200);
     return () => clearInterval(timer);
-  }, [count]);
+  }, [count, held]);
 
   const brain = build(feed, shown, live, step);
   const matchId = feed.mode === 'live' || feed.mode === 'replay' ? feed.matchId : null;
 
+  // A fixed height, not a minimum. The decisions it cycles through run from a
+  // line to a paragraph, and a card that grew and shrank with each one moved
+  // the headline beside it and everything below it on every turn. Taller where
+  // it is stacked, because the narrower card wraps the same paragraph longer.
   return (
-    <Card className="flex min-h-[30rem] flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-2 px-4 py-2.5">
-        <span className="text-[0.8125rem] font-medium text-ink">What you see while it plays</span>
-        <span className="ml-auto">
-          {feed.mode === 'live' ? (
-            <LiveBadge />
-          ) : feed.mode === 'replay' ? (
-            <Badge>Last hand</Badge>
-          ) : feed.mode === 'empty' ? (
-            <Badge>Example</Badge>
-          ) : null}
-        </span>
-      </div>
+    <Card className="flex h-[32rem] flex-col overflow-hidden lg:h-[28rem]">
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        onPointerEnter={() => setHeld(true)}
+        onPointerLeave={() => setHeld(false)}
+        onFocus={() => setHeld(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHeld(false);
+        }}
+      >
+        <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-2 px-4 py-2.5">
+          <span className="text-[0.8125rem] font-medium text-ink">What you see while it plays</span>
+          <span className="ml-auto">
+            {feed.mode === 'live' ? (
+              <LiveBadge />
+            ) : feed.mode === 'replay' ? (
+              <Badge>Last hand</Badge>
+            ) : feed.mode === 'empty' ? (
+              <Badge>Example</Badge>
+            ) : null}
+          </span>
+        </div>
 
-      <div className="min-h-0 flex-1">
-        <ThinkingPanel
-          brain={brain}
-          deadline={feed.mode === 'live' ? (live.table?.deadline ?? null) : null}
-          footnote={footnote(feed, shown, step)}
-        />
-      </div>
+        <div className="min-h-0 flex-1">
+          <ThinkingPanel
+            brain={brain}
+            live={feed.mode === 'live'}
+            deadline={feed.mode === 'live' ? (live.table?.deadline ?? null) : null}
+            footnote={footnote(feed, shown, step)}
+          />
+        </div>
 
-      {matchId ? (
-        <Link
-          href={`/match/${matchId}`}
-          className="shrink-0 border-t border-line px-4 py-2.5 text-[0.8125rem] font-medium text-accent transition-colors hover:bg-surface-2"
-        >
-          Watch this match →
-        </Link>
-      ) : null}
+        {matchId ? (
+          <Link
+            href={`/match/${matchId}`}
+            className="shrink-0 border-t border-line px-4 py-2.5 text-[0.8125rem] font-medium text-accent transition-colors hover:bg-surface-2"
+          >
+            {/* The same two verbs the match list uses for the same two states. */}
+            {feed.mode === 'live' ? 'Watch this match →' : 'Review this match →'}
+          </Link>
+        ) : null}
+      </div>
     </Card>
   );
 }
@@ -184,15 +202,15 @@ function build(
 }
 
 function footnote(feed: Feed, shown: ReplayDecision[], step: number): string | null {
-  if (feed.mode === 'loading') return 'Looking for a table that is dealing…';
-  if (feed.mode === 'empty') return 'A written example. No hands have been dealt yet.';
+  if (feed.mode === 'loading') return 'Loading…';
+  if (feed.mode === 'empty') return 'No hands dealt yet.';
   if (feed.mode === 'replay') {
     // Says which hand, and does not pretend the mucked seats were not there.
     const mucked = feed.decisions.length - shown.length;
-    if (shown.length === 0) return 'Every hand in that one was mucked, so here is a written example instead.';
+    if (shown.length === 0) return 'Last hand was mucked.';
 
-    const tail = mucked > 0 ? `, ${mucked} more from hands that were mucked` : '';
-    return `Decision ${(step % shown.length) + 1} of ${shown.length}, hand ${feed.handNumber}${tail}`;
+    const tail = mucked > 0 ? ` · ${mucked} mucked, not shown` : '';
+    return `Hand ${feed.handNumber} · decision ${(step % shown.length) + 1} of ${shown.length}${tail}`;
   }
   return null;
 }

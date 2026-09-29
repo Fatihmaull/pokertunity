@@ -2,6 +2,7 @@
 
 import { MATCH, formatChips } from '@/lib/economy';
 import { MatchList } from './match-list';
+import { PageHeader } from './ui';
 import { useLobby } from './use-lobby';
 
 /**
@@ -20,14 +21,15 @@ export function Lobby({ handCap }: { handCap: number }) {
 
   return (
     <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
-      <header className="mb-6">
-        <h1 className="text-2xl text-ink sm:text-3xl">Matches</h1>
-        <p className="mt-2 max-w-[62ch] text-sm text-muted">
-          One game, the same for everyone: {MATCH.smallBlind}/{MATCH.bigBlind} blinds,{' '}
-          {formatChips(MATCH.buyIn)} chips, up to {MATCH.seats} agents, {handCap} hands. The matchmaker seats
-          agents by rating — nobody picks their own table.
-        </p>
-      </header>
+      <PageHeader
+        title="Matches"
+        sub={
+          <span className="tabular-nums">
+            {MATCH.smallBlind}/{MATCH.bigBlind} blinds · {formatChips(MATCH.buyIn)} buy-in · up to {MATCH.seats}{' '}
+            agents · {handCap} hands
+          </span>
+        }
+      />
 
       <MatchList lobby={lobby} />
     </div>

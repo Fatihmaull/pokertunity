@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card } from './ui';
+import { formatSigned } from '@/lib/format';
+import { Stat } from './ui';
 
 interface Axes {
   reading: number | null;
@@ -18,30 +19,42 @@ interface Axes {
  * harder than everyone else does. Published work on poker-playing models found those orderings
  * routinely disagree, which is the whole reason to show both.
  */
-const AXES: Array<{ key: keyof Axes; label: string; asks: string; format: (value: number) => string }> = [
+const AXES: Array<{
+  key: keyof Axes;
+  label: string;
+  /** Under the figure, so the tile says what it measures without a sentence. */
+  hint: string;
+  /** The whole question, on hover. */
+  asks: string;
+  format: (value: number) => string;
+}> = [
   {
     key: 'reading',
     label: 'Reading',
+    hint: 'loose vs tight opponents',
     asks: 'Does it play differently against loose opponents than tight ones?',
-    format: (value) => `${value >= 0 ? '+' : ''}${(value * 100).toFixed(0)} pts`,
+    format: (value) => `${formatSigned(value * 100)} pts`,
   },
   {
     key: 'deception',
     label: 'Deception',
+    hint: 'weak-hand bets that win',
     asks: 'How often does a bet made with a weak hand take the pot down?',
     format: (value) => `${(value * 100).toFixed(0)}%`,
   },
   {
     key: 'adaptation',
     label: 'Adaptation',
+    hint: 'late vs early in a stint',
     asks: 'Does it do better later in a stint than it did at the start of one?',
-    format: (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)} bb/100`,
+    format: (value) => `${formatSigned(value, 1)} bb/100`,
   },
   {
     key: 'exploitation',
     label: 'Exploitation',
+    hint: 'edge on the weakest',
     asks: 'Does it beat the weakest opponents harder than everyone else does?',
-    format: (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)} bb/100`,
+    format: (value) => `${formatSigned(value, 1)} bb/100`,
   },
 ];
 
@@ -67,7 +80,7 @@ function keep(agentId: string, axes: Axes): void {
   }
 }
 
-export function AxesCard({ agentId, name }: { agentId: string; name?: string }) {
+export function AxesCard({ agentId }: { agentId: string }) {
   // Read once, as the card is first drawn. It is only ever drawn in the
   // browser, once the account has loaded, so there is no server render for a
   // remembered answer to disagree with.
@@ -125,41 +138,48 @@ export function AxesCard({ agentId, name }: { agentId: string; name?: string }) 
     };
   }, [agentId]);
 
-  return (
-    <Card className="p-5">
-      <h2 className="truncate text-base text-ink">{name ? `${name} profile` : 'Profile'}</h2>
-      <p className="mt-1 text-xs text-faint">
-        What the record says beyond the money, measured from hands against other agents. Exploitation is compared
-        with how the whole field does against the weakest half of it.
-      </p>
+  // Null is not zero. It means this agent has not played enough for the
+  // measurement to say anything, and a dash beats printing a figure that would
+  // read as a finding. Nor is a measurement not yet fetched a measurement of
+  // nothing, so nothing is claimed until the answer has arrived.
+  const measured = axes === null ? 0 : AXES.filter((axis) => axes[axis.key] !== null).length;
+  const status =
+    axes === null
+      ? unavailable
+        ? 'Unavailable'
+        : 'Loading…'
+      : measured === 0
+        ? 'Needs more hands'
+        : `${measured} of ${AXES.length} measured`;
 
-      <dl className="mt-4 space-y-4">
-        {AXES.map((axis) => {
-          const value = axes?.[axis.key] ?? null;
-          return (
-            <div key={axis.key}>
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[0.8125rem] font-medium text-ink">{axis.label}</dt>
-                {/* Null is not zero. It means this agent has not played enough
-                    for the measurement to say anything, and saying so beats
-                    printing a figure that would read as a finding. Nor is a
-                    measurement not yet fetched a measurement of nothing, so
-                    "not enough hands" waits until the answer has arrived. */}
-                <dd className={`mono text-sm tabular-nums ${value === null ? 'text-faint' : 'text-ink'}`}>
-                  {axes === null
-                    ? unavailable
-                      ? 'unavailable'
-                      : '…'
-                    : value === null
-                      ? 'not enough hands'
-                      : axis.format(value)}
-                </dd>
-              </div>
-              <p className="mt-0.5 text-xs text-faint">{axis.asks}</p>
-            </div>
-          );
-        })}
-      </dl>
-    </Card>
+  return (
+    <section>
+      {/* Label on the left, where it stands on the right: the same line the
+          on-chain record below it uses, so the two read as a pair. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="label text-muted">Play profile</h3>
+        <span className="mono text-xs text-muted tabular-nums">{status}</span>
+      </div>
+
+      {/* No tiles until there is a figure to put in one. Four empty tiles
+          under a row of real ones read as the record being broken, not as the
+          profile being early. */}
+      {measured > 0 ? (
+        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+          {AXES.map((axis) => {
+            const value = axes?.[axis.key] ?? null;
+            return (
+              <Stat
+                key={axis.key}
+                label={axis.label}
+                title={axis.asks}
+                hint={value === null ? 'needs more hands' : axis.hint}
+                value={value === null ? <span className="text-faint">—</span> : axis.format(value)}
+              />
+            );
+          })}
+        </dl>
+      ) : null}
+    </section>
   );
 }

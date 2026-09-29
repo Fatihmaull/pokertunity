@@ -63,24 +63,44 @@ export function OnChainPanel({
   hands: number;
 }) {
   const { chains, chain: active } = useChain();
+  const counted = Math.min(hands, MIN_ATTESTED_HANDS);
 
   return (
-    <section className="mt-4 border-t border-line pt-4">
+    <section>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="label text-faint">ERC-8004</h3>
+        <h3 className="label text-muted">ERC-8004</h3>
         {records.length > 0 ? (
           <span className="text-xs">
             <External href={`/api/agents/${agentId}/registration`}>Registration file</External>
           </span>
-        ) : null}
+        ) : (
+          <span className="mono text-xs text-muted tabular-nums">
+            {counted} / {MIN_ATTESTED_HANDS} hands
+          </span>
+        )}
       </div>
 
+      {/* Before the first record, the only question is how far off it is,
+          which a bar answers at a glance and a sentence has to be read for. */}
       {records.length === 0 ? (
-        <p className="mt-2 text-xs text-faint">
-          {hands < MIN_ATTESTED_HANDS
-            ? `Not on chain yet. Records are published from ${MIN_ATTESTED_HANDS} hands, so a score always has play behind it; ${MIN_ATTESTED_HANDS - hands} to go.`
-            : 'Eligible. It is registered and scored on every network the next time records are published.'}
-        </p>
+        <>
+          <div
+            role="progressbar"
+            aria-label="Hands until the on-chain record is published"
+            aria-valuemin={0}
+            aria-valuemax={MIN_ATTESTED_HANDS}
+            aria-valuenow={counted}
+            className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-3"
+          >
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${(counted / MIN_ATTESTED_HANDS) * 100}%` }}
+            />
+          </div>
+          {hands >= MIN_ATTESTED_HANDS ? (
+            <p className="mt-2 text-xs text-faint">Eligible. Published with the next batch.</p>
+          ) : null}
+        </>
       ) : (
         <ul className="mt-2 space-y-2">
           {chains.map((chain) => (

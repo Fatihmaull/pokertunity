@@ -2,20 +2,25 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useState } from 'react';
 import { formatChips } from '@/lib/economy';
 import { shortAddress } from '@/lib/wallet';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
 import { Cashier } from './cashier';
 import { LogoMark } from './logo';
-import { Button } from './ui';
+import { Button, useDismissed } from './ui';
 
+/*
+  Each label is the title of the page it opens, so a link and the heading it
+  lands on never disagree. The one short form keeps the phone row inside four
+  equal cells; it drops a word rather than swapping in a different one.
+*/
 const NAV = [
   { href: '/', label: 'Home', short: 'Home' },
   { href: '/matches', label: 'Matches', short: 'Matches' },
-  { href: '/standings', label: 'Standings', short: 'Ranks' },
-  { href: '/agent', label: 'Your agent', short: 'Agent' },
+  { href: '/standings', label: 'Standings', short: 'Standings' },
+  { href: '/agent', label: 'Your agents', short: 'Agents' },
 ];
 
 /**
@@ -56,7 +61,7 @@ export function SiteHeader() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex-1 rounded-control px-2.5 py-1.5 text-center text-[0.8125rem] font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm lg:flex-none ${
+                  className={`flex-1 rounded-control px-2 py-1.5 text-center text-[0.8125rem] font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm lg:flex-none ${
                     active ? 'bg-surface-2 text-ink' : 'text-muted hover:text-ink'
                   }`}
                 >
@@ -98,7 +103,10 @@ export function SiteHeader() {
 
       {error ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex justify-center px-4">
-          <div className="entering pointer-events-auto flex max-w-[40rem] items-start gap-4 rounded-card border border-danger/40 bg-surface px-4 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)]">
+          <div
+            role="alert"
+            className="entering pointer-events-auto flex max-w-[40rem] items-start gap-4 rounded-card border border-danger/40 bg-surface px-4 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)]"
+          >
             <p className="text-sm text-ink">{error}</p>
             <button
               type="button"
@@ -114,38 +122,6 @@ export function SiteHeader() {
       {cashierOpen ? <Cashier onClose={() => setCashierOpen(false)} /> : null}
     </>
   );
-}
-
-/**
- * Closes an open menu on a click outside it or on Escape.
- *
- * A menu that stays open after you have clicked elsewhere is a menu you have to
- * dismiss twice, so the document closes it and Escape does too. The ref it
- * returns marks what counts as inside.
- */
-function useDismissed(
-  open: boolean,
-  setOpen: (open: boolean) => void,
-): RefObject<HTMLDivElement | null> {
-  const wrapper = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: MouseEvent) => {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, setOpen]);
-
-  return wrapper;
 }
 
 /**
@@ -213,7 +189,7 @@ function ChainMenu() {
             </button>
           ))}
           <p className="px-2.5 py-2 text-xs text-faint">
-            Your chips do not move. Only where a deposit settles changes.
+            Your chips stay the same on every network.
           </p>
         </div>
       ) : null}
@@ -232,6 +208,9 @@ function WalletMenu({ address, onSignOut }: { address: string; onSignOut: () => 
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="menu"
+        // On a phone the address is hidden and only the dot is left, which
+        // names nothing to a screen reader without this.
+        aria-label={`Wallet ${shortAddress(address)}`}
         className="mono inline-flex h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 text-[0.8125rem] text-muted transition-colors hover:text-ink"
       >
         <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
