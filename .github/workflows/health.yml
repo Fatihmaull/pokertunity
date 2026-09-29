@@ -1,0 +1,34 @@
+name: Health
+
+# Production, read from outside, on a schedule. A failed run is the alert:
+# GitHub emails whoever last changed the schedule, and the run's annotations
+# say which of the D5 conditions tripped. Nothing here can write anything.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A run that is still rechecking should finish, not be replaced by the next.
+  group: health
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Production health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: scripts/health-watch.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: node scripts/health-watch.mjs
+        env:
+          HEALTH_URL: https://pokertunity-production.up.railway.app/api/health

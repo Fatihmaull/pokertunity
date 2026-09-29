@@ -13,6 +13,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/dev/seed-agents.ts",
     "db:spare": "tsx src/dev/add-spare.ts",
+    "ledger:check": "tsx src/dev/ledger-check.ts",
     "agent": "tsx agents/personal-agent.ts",
     "agent:second": "cross-env AGENT_ENV_FILE=agents/.env.second tsx agents/personal-agent.ts",
     "abi": "node scripts/generate-abi.mjs",
