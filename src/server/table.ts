@@ -676,7 +676,6 @@ export class MatchRuntime {
     recorded: RecordedDecision[];
   }): Promise<void> {
     const { lineup, state, deck, startedAt, recorded } = context;
-    const potSize = totalPot(state);
     const dealtIn = state.seats.filter((seat) => !seat.sittingOut);
     const showdown = state.events.some((event) => event.type === 'showdown');
 
@@ -690,7 +689,6 @@ export class MatchRuntime {
           agentId: seat.agentId,
           won: net > 0,
           net,
-          potSize,
           startingStack: seat.stack,
           showdown,
           opponents: dealtIn.length - 1,

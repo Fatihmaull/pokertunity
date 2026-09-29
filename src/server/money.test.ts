@@ -20,7 +20,7 @@ import {
 import type { DecisionRecord } from '../agent/decide';
 import { ENTRY_FEE, MATCH, SEAT_COST, chipsToWei } from '../lib/economy';
 import { DEFAULT_RATING, conservative, type Rating } from '../lib/rating';
-import { applyAction, startHand, totalPot } from '../poker/engine';
+import { applyAction, startHand } from '../poker/engine';
 import { confirmDeposit, startDeposit, type DepositResult } from './actions';
 import type { Session } from './auth';
 import type { observeDeposit } from './chain';
@@ -747,7 +747,6 @@ function foldedHand(matchId: string, field: Candidate[], stacks: [number, number
         agentId: entrant.agentId,
         won: net > 0,
         net,
-        potSize: totalPot(state),
         startingStack: stacks[index],
         showdown: false,
         opponents: 1,

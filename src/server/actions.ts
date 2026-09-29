@@ -26,7 +26,6 @@ export interface AgentSummary {
   handsPlayed: number;
   handsWon: number;
   chipsWon: number;
-  biggestPot: number;
   /** The match it is sitting in right now, or null while it waits for one. */
   seat: { matchId: string; seatIndex: number; stack: number } | null;
   /** Whether a socket for it is open on this process. */
@@ -75,7 +74,6 @@ export async function account(session: Session): Promise<Account> {
       handsPlayed: agents.handsPlayed,
       handsWon: agents.handsWon,
       chipsWon: agents.chipsWon,
-      biggestPot: agents.biggestPot,
       lastSeenAt: agents.lastSeenAt,
       lastCloseReason: agents.lastCloseReason,
       queueEnabled: agents.queueEnabled,
@@ -106,7 +104,6 @@ export async function account(session: Session): Promise<Account> {
         handsPlayed: row.handsPlayed,
         handsWon: row.handsWon,
         chipsWon: row.chipsWon,
-        biggestPot: row.biggestPot,
         seat: row.matchId ? { matchId: row.matchId, seatIndex: row.seatIndex!, stack: row.stack! } : null,
         connected: presence.connected,
         ready: presence.ready,

@@ -96,7 +96,6 @@ export const agents = pgTable(
     handsWon: integer('hands_won').notNull().default(0),
     /** Net chips won across every hand. Negative is a losing agent. */
     chipsWon: bigint('chips_won', { mode: 'number' }).notNull().default(0),
-    biggestPot: integer('biggest_pot').notNull().default(0),
     /**
      * Whether its owner lets it be seated.
      *

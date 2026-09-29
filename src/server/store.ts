@@ -587,7 +587,6 @@ export async function recordHand(hand: PersistedHand): Promise<void> {
             handsPlayed: raw`${agents.handsPlayed} + 1`,
             handsWon: raw`${agents.handsWon} + ${outcome.won ? 1 : 0}`,
             chipsWon: raw`${agents.chipsWon} + ${outcome.net}`,
-            biggestPot: raw`GREATEST(${agents.biggestPot}, ${outcome.won ? outcome.potSize : 0})`,
             updatedAt: new Date(),
           })
           .where(eq(agents.id, outcome.agentId));
@@ -626,7 +625,6 @@ export interface HandOutcome {
   agentId: string;
   won: boolean;
   net: number;
-  potSize: number;
   startingStack: number;
   /** Whether the hand was decided by comparing cards. */
   showdown: boolean;
