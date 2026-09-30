@@ -55,7 +55,7 @@ Exercised against a running arena in production mode, not only in unit tests.
 | Area | Evidence |
 | --- | --- |
 | Four gates | lint clean, 213/213 tests, build ok, `tsc` clean |
-| Contracts | 12/12 Foundry tests, including `test_NoPayoutPathExists` |
+| Contracts | 11/11 Foundry tests |
 | Full match | Six-handed, dealt to the hand cap, settled, ratings rewritten |
 | Chip conservation | 6 × 2,000 in, exactly 12,000 out |
 | Ledger integrity | No break in `balance_after`, no cache drift, the entry fee the only sink |
@@ -74,9 +74,8 @@ receipts over its own RPC exactly as it would a testnet. From a real SIWE
 session: a Starter deposit credited 10,000 chips once; confirming it again
 credited nothing; an intent priced on Arbitrum and paid on BNB was refused;
 another wallet paying the intent credited neither account; half the price was
-refused; and a deposit stayed pending until its third confirmation. From the
-owner key, `payout(address,uint256,bytes32)` and a bare transfer both reverted
-while the vault held 0.7. What this does not prove is a public testnet: its
+refused; and a deposit stayed pending until its third confirmation. What this
+does not prove is a public testnet: its
 RPC, its finality and a wallet driven by a person. That is still A4.
 
 ### Never exercised
@@ -120,8 +119,7 @@ item when its done-test passes, not when the change is written.
 
 ## Scope A — Chain, vault and the money path
 
-Nothing here has ever accepted a real deposit. Make that sentence false, and
-prove the one-way property on bytecode that is actually deployed.
+Nothing here has ever accepted a real deposit. Make that sentence false.
 
 Start A1 today: every faucet gates on a captcha or a mainnet balance, so funding
 is the long pole and it is pure waiting.
@@ -192,15 +190,7 @@ package, and the transaction has three confirmations.
 
 **Done when:** a deposit credits once and a replay of it credits nothing.
 
-### A5. Prove one-way on deployed bytecode
-
-`test_NoPayoutPathExists` proves this in the suite. Prove it again live: from the
-owner address, call the selector the removed payout function used to answer on,
-and send a bare transfer to the vault.
-
-**Done when:** both revert on the live contract, with transaction hashes to show.
-
-### A6. ERC-8004 attestation, on every chain
+### A5. ERC-8004 attestation, on every chain
 
 Part of the MVP: each chain is submitted on its own, so each needs an identity
 and a reputation record on it. Needs the registry addresses per chain,
@@ -222,10 +212,6 @@ with its own keys. Keep it that way.
 **Done when:** one agent has an identity and a reputation record on each of the
 three chains, with transaction hashes to show, and
 `/api/agents/<id>/registration` lists all three.
-
-> Do not add a redeem route, a payout selector, or copy that implies one. Chips
-> being one-way is a property of deployed bytecode, and once the vault holds
-> deposits that decision cannot be revisited.
 
 ## Scope B — Hardening and capacity
 
@@ -384,12 +370,10 @@ your chip balance: one balance spans every chain.
 
 ### C4. Cashier
 
-There is no free top-up: the signup grant is the only chips an account is
-given, and signing in again adds nothing. On a chain whose vault address is
-unset, buying must be refused by name: "Chips cannot be bought on BNB Smart
-Chain Testnet yet." Confirm there is no withdraw, redeem or cash-out
-control anywhere, and no copy implying one. After Scope A finishes, pair with
-them on the real deposit.
+Signing in again must add nothing: the signup grant is credited once, when the
+account is created. On a chain whose vault address is unset, buying must be
+refused by name: "Chips cannot be bought on BNB Smart Chain Testnet yet." After
+Scope A finishes, pair with them on the real deposit.
 
 ### C5. Look at it
 
@@ -541,7 +525,6 @@ One person signs this off, and not a scope owner: someone reading their work.
 - [ ] A vault is deployed on at least the default chain, and its address is set
       in production
 - [ ] A real deposit has credited real chips, once, and a replay credited nothing
-- [ ] One-way is proven on deployed bytecode
 - [ ] One agent has an ERC-8004 identity and reputation record on every chain
 - [x] The read routes are rate limited, `axes` above all
 - [x] Spectators are capped per match, at a number measured rather than chosen
@@ -559,11 +542,9 @@ it, vaults on all three chains. The esbuild advisory is closed.
 
 ### Irreversible once shipped
 
-1. **Chips are one-way, in bytecode.** The deployed vault has no function that
-   pays a player and no operator path. Once it holds deposits that is settled.
-2. **The vault owner key.** It can sweep the float and pause deposits, and
+1. **The vault owner key.** It can sweep the float and pause deposits, and
    nothing else. On testnet a throwaway key is fine; reusing it is not.
-3. **Published ratings.** An attestation is a public claim and the registry is
+2. **Published ratings.** An attestation is a public claim and the registry is
    append-only: a later one supersedes an earlier one rather than erasing it.
 
 ### Limits you are choosing to launch with

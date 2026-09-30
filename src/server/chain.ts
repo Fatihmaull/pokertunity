@@ -18,9 +18,9 @@ import { chipVaultAbi } from './vault-abi';
  * deployment's own registry, so a chain that viem has never heard of works as
  * soon as it has a row in `src/lib/chains.ts`.
  *
- * Read-only by design. Chips are one-way, so nothing in the running server ever
- * signs a transaction and there is no wallet client here to do it with. The
- * treasury key exists for deploying a vault and is never loaded by the app.
+ * Read-only by design: nothing in the running server signs a transaction, and
+ * there is no wallet client here to do it with. The treasury key exists for
+ * deploying a vault and is never loaded by the app.
  */
 
 /** Confirmations required before a deposit is credited. One block is not final. */

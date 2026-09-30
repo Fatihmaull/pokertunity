@@ -72,7 +72,7 @@ export function requireChain(key: string): DeployedChain {
 }
 
 /**
- * The vault a deposit is paid into. Nothing is ever paid out of one.
+ * The vault a deposit is paid into.
  *
  * Separate from `requireChain` because a chain can be enabled before its vault
  * exists, and the difference between "no such network" and "nothing deployed

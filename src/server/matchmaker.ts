@@ -133,10 +133,6 @@ async function tick(): Promise<void> {
   // the chips land, so every tick one waits is a tick those agents cannot queue.
   for (const matchId of [...unsettled().keys()]) await settle(matchId);
 
-  // Chips are not topped up here. An account is granted chips once, when it is
-  // created, and buys the rest. A refill that happened on its own would quietly
-  // hand chips to accounts nobody is using.
-
   // Readiness is a fact about the sockets this process holds, so it is read
   // from the connections rather than from a column. An agent that is not here
   // cannot be seated, because a match cannot be left once it starts.

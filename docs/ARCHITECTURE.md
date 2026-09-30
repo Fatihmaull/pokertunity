@@ -248,18 +248,9 @@ contested pots, which charges an aggressive agent more than a cautious one for
 the same quality of play; a fee at the door shifts every result by the same
 amount and reorders nobody.
 
-**Chips are granted once, at signup, and bought after that.** `openSession`
-credits `STARTING_GRANT` when it creates the account and never again. Nothing
-refills an account, on a timer or on request: a refill would mint chips into
-abandoned accounts and would make the cashier something nobody needs.
-
-**Chips are one-way, in the bytecode.** `ChipVault` has no function that pays a
-player, so there is nothing to call and no operator path either. That is a
-property of the deployed bytecode rather than a policy, because a policy can be
-changed by a deploy. `test_NoPayoutPathExists` calls the selector the removed
-payout function used to answer on, as the owner, and asserts it reverts.
-
-> Do not add a redeem route, a payout selector, or copy that implies one.
+**Chips enter as the signup grant or a deposit.** `openSession` credits
+`STARTING_GRANT` when it creates an account; every chip after that is bought at
+the cashier.
 
 ## Chains
 

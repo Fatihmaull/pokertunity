@@ -147,8 +147,6 @@ everything still compiles.
 - **Money is integers.** Pots and balances are chip counts and never touch a
   float or a wei value. Every balance change writes a `ledgerEntries` row with
   `balanceAfter`, in the same transaction as the change.
-- **Chips are one-way.** No redeem route, no payout selector, no copy implying
-  one.
 - **Business logic does not go in a route.** API handlers parse the body, get a
   session, call one function in `src/server/actions.ts` and turn an
   `ActionError` into a 400.

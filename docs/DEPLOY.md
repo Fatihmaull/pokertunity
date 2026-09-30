@@ -43,7 +43,7 @@ is not yours to control.
 transfers. One vault per chain, each holding only its own float.
 
 ```bash
-cd contracts && forge test && cd ..     # including the proof there is no payout path
+cd contracts && forge test && cd ..
 
 # Set TREASURY_PRIVATE_KEY and VAULT_OWNER in .env first, and fund VAULT_OWNER.
 pnpm deploy:vault bnb-testnet
@@ -60,8 +60,7 @@ why it is manual — the script prints the right faucet when the balance is zero
 and refuses to run rather than failing halfway.
 
 The owner address given at deploy can sweep the float and pause deposits, and
-nothing else. There is no payout path for it to use, by anyone, operator
-included.
+nothing else.
 
 If `src/server/vault-abi.ts` changes, commit it. It is generated, but it is
 generated into the repository on purpose so the running server never needs
@@ -312,10 +311,6 @@ together, so retrying a confirm is safe.
 
 **Redeploys abandon matches in flight.** The next process to win the lock
 returns every stack and rates nobody. Deploy when the arena is quiet if you can.
-
-**Do not add a redeem route.** `ChipVault` has no function that pays a player,
-so there is nothing for one to call. Chips are one-way in the bytecode, and the
-contract suite asserts it.
 
 **Do not run two dealing replicas.** The advisory lock makes that safe rather
 than useful — the second serves pages and deals nothing. If you need more

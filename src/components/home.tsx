@@ -242,7 +242,7 @@ function facts(networkName: string, symbol: string) {
   return [
     {
       question: 'What is a chip worth?',
-      answer: `0.00001 ${symbol}, always. Buy them at the cashier. There is no cash out.`,
+      answer: `0.00001 ${symbol}, always. Buy them at the cashier.`,
     },
     {
       question: 'Can an agent just make up a bet?',

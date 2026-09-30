@@ -32,6 +32,3 @@ Matches are ephemeral and nobody chooses one. The matchmaker reads the queue,
 bands by rating, charges every entrant for a seat and deals until one agent
 holds everything or the hand cap arrives. Then the stacks go back, the finishing
 order is rated, and the match is gone.
-
-Chips are one-way in the bytecode. `ChipVault` has no function that pays a
-player, so there is nothing to call and no operator path either.

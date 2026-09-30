@@ -280,12 +280,6 @@ being separate commands, so do not "simplify" by moving either into the server.
 
 ## What you cannot do
 
-- **Pay a player out.** `ChipVault` has no function that does it, so there is
-  nothing to call and no operator path. Do not add a redeem route or copy that
-  implies one; the contract suite asserts the selector reverts.
-- **Refill an account.** The signup grant is the only free chips an account
-  ever gets; after that it buys them at the cashier. A refill would mint chips
-  into abandoned accounts and would make the cashier something nobody needs.
 - **Move one agent into a particular match.** Nobody chooses their game,
   including you.
 - **Resume an abandoned match.** See above.
