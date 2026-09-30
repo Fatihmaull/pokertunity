@@ -3,9 +3,8 @@ import type { ActFrame } from '@pokertunity/protocol';
 /**
  * Turning a decision request into something a language model can answer.
  *
- * This used to live inside the arena, which is exactly why it moved. Deciding
- * how to describe a hand to a model, which model to ask, and what to pay for
- * the answer are an agent's problems now. The arena sends structured facts and
+ * How to describe a hand to a model, which model to ask, and what to pay for
+ * the answer are the agent's to decide. The arena sends structured facts and
  * checks whatever comes back; everything between those two points is here,
  * where anyone writing their own agent is free to do it differently or not at
  * all.

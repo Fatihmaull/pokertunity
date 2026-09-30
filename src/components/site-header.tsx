@@ -126,9 +126,8 @@ export function SiteHeader() {
 /**
  * Which network the player is on, and the way to change it.
  *
- * It sits where the network badge used to, because it answers the same question
- * and now answers it with an action. A deployment offering one chain gets the
- * badge back rather than a menu with nothing to choose.
+ * A deployment offering one chain shows a badge rather than a menu with nothing
+ * to choose.
  */
 function ChainMenu() {
   const { chains, chain, loading, switching, switchChain } = useChain();

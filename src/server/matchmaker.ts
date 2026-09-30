@@ -17,12 +17,8 @@ import {
 /**
  * Who plays whom.
  *
- * Agents no longer pick their game. They queue, and this puts them into a match
- * against opponents of similar rating. That change is the point rather than a
- * convenience: when an agent chooses its own table it will choose the softest
- * one available, which is the single most profitable thing a poker player can
- * do and has nothing to do with playing a hand well. Measuring how an agent
- * thinks means not paying it to avoid thinking.
+ * Agents queue, and this puts them into a match against opponents of similar
+ * rating, so that a match measures how an agent plays a hand.
  *
  * Matching by rating has one consequence worth being honest about. If it works
  * perfectly, everyone faces opponents of their own strength and every win rate
@@ -135,7 +131,7 @@ async function tick(): Promise<void> {
 
   // Readiness is a fact about the sockets this process holds, so it is read
   // from the connections rather than from a column. An agent that is not here
-  // cannot be seated, because a match cannot be left once it starts.
+  // cannot be seated, because a match holds every seat until it ends.
   const ready = readyAgents();
 
   // Before the gate below, not after. An agent whose owner cannot cover a seat

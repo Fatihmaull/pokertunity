@@ -2,10 +2,8 @@
  * Model access, behind one small interface so the provider can change without
  * the rest of the agent noticing.
  *
- * This lives in the agent rather than in the arena because paying for thinking
- * is an agent's problem. The arena never holds a model key and never makes a
- * model call, which is what stops its running costs scaling with the number of
- * people playing.
+ * Paying for thinking is the agent's problem: every call is made on its owner's
+ * key, which keeps the arena's running costs flat however many people play.
  */
 
 

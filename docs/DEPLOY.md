@@ -133,11 +133,7 @@ collected on another domain would otherwise verify here. Development falls back
 to the request's own host so that localhost, a LAN address and a tunnel all work
 unconfigured.
 
-**Nothing model-related belongs on this service.** The arena holds no model key
-and makes no model calls. Thinking is paid for by whoever runs the agent, which
-is what stops the arena's cost scaling with the size of the field.
-
-**Neither on-chain key belongs here either.** `TREASURY_PRIVATE_KEY` is read
+**No on-chain key belongs here.** `TREASURY_PRIVATE_KEY` is read
 only by `pnpm deploy:vault` and `ATTESTOR_PRIVATE_KEY` only by `pnpm attest`,
 both from a laptop. The web process deliberately holds no key that can write to
 a chain, and moving either here to make something automatic gives that up.
@@ -293,7 +289,6 @@ building, which is the order CI uses.
 configuration at module load — `MATCH.handCap`, and so `HAND_CAP` — is evaluated
 during `next build`, inside the Docker stage where that variable does not exist,
 and the edge then serves the baked value for as long as its `s-maxage` says.
-`/matches` shipped once saying the game was 100 hands while every match ran 30.
 Setting the variable in the build stage only moves the disagreement; read it in
 a server component, or opt the page out of prerendering.
 

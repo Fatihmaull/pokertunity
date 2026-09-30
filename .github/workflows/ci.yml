@@ -58,10 +58,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # A workspace package's node_modules was committed once and nothing
-      # noticed for weeks. The symlinks in it point at one developer's absolute
-      # paths, so every `pnpm install` afterwards rewrites them and every commit
-      # carries the noise. .gitignore does not help once a file is tracked.
+      # A tracked node_modules holds symlinks to one developer's absolute paths,
+      # so every `pnpm install` rewrites them and every commit carries the noise.
+      # .gitignore does not help once a file is tracked.
       - name: No dependencies are committed
         run: |
           if git ls-files | grep -E '(^|/)node_modules/'; then

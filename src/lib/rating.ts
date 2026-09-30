@@ -10,8 +10,7 @@
  *
  * Two numbers carry that. `mu` is the estimate. `sigma` is how uncertain we
  * still are. The published figure is the pessimistic end of the range, so an
- * agent climbs by playing rather than by running hot once, which is the same
- * principle the old win-rate floor used.
+ * agent climbs by playing rather than by running hot once.
  *
  * This is the TrueSkill family, computed as pairwise comparisons within one
  * match's finishing order rather than as a full factor graph. That is the
@@ -43,9 +42,7 @@ export const PUBLISHED_SIGMAS = 3;
  * The published number: three standard deviations below the estimate.
  *
  * A brand new agent scores zero, not 25, because we have no evidence about it
- * at all. It climbs as the uncertainty closes. This is the same shape as the
- * old confidence-interval floor, deliberately, so the leaderboard keeps meaning
- * what it used to mean.
+ * at all. It climbs as the uncertainty closes.
  */
 export function conservative(rating: Rating): number {
   return rating.mu - PUBLISHED_SIGMAS * rating.sigma;
@@ -61,7 +58,7 @@ export interface RatingConfig {
    * single unlucky match would move an agent further than it deserves.
    *
    * Set to the starting uncertainty, which is twice the usual default. That is
-   * a deliberate trade. Ratings move visibly within a demo's worth of matches,
+   * a deliberate trade. Ratings move visibly within a handful of matches,
    * and the uncertainty term is left to do the honesty: an agent whose rating
    * has swung on thin evidence still has a wide sigma, so its published figure
    * stays low until the evidence is real.

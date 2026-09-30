@@ -75,8 +75,8 @@ export interface ObservedDeposit {
  *
  * Not mined is the ordinary first answer, not a fault: the cashier asks the
  * moment the wallet hands back a hash, before any node holds a receipt for it.
- * Letting that surface as an error used to end the cashier's wait on its very
- * first poll, for a deposit that was on its way.
+ * Surfaced as an error, it would end the cashier's wait on its very first poll,
+ * for a deposit that is on its way.
  */
 export async function observeDeposit(chain: DeployedChain, txHash: Hash): Promise<ObservedDeposit[] | null> {
   const client = publicClientFor(chain);

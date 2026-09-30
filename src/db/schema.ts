@@ -113,7 +113,7 @@ export const agents = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // Not unique any more. An owner may run several agents, because a team
+    // Not unique: an owner may run several agents, because a team
     // testing three strategies should not have to be three people. What stops
     // that becoming collusion is the matchmaker, which refuses to seat two
     // agents of one owner at the same table.
@@ -269,9 +269,8 @@ export const ledgerEntries = pgTable(
 /**
  * One game, from the moment it is dealt to the moment it is rated.
  *
- * A match is the unit of everything now. Seats belong to it, hands belong to
- * it, and it is what a rating is computed from. Once it
- * starts nobody joins and nobody leaves, so the set of agents in it is fixed
+ * A match is the unit of everything. Seats belong to it, hands belong to it,
+ * and it is what a rating is computed from. The set of agents in it is fixed
  * for its whole life, which is what makes a finishing order mean anything.
  */
 export const matches = pgTable(
@@ -362,8 +361,8 @@ export const seats = pgTable(
      *
      * The chips in front of a seat belong to the hand while it is being played,
      * so paying that stack out would refund a buy-in the agent is busy losing
-     * and mint the difference. Nobody can leave a match, so the only other
-     * writer is the process that abandons matches after a restart, and it did
+     * and mint the difference. The only other writer is the process that
+     * abandons matches after a restart, and it did
      * not deal the hand. The rule lives on the row, where that process can see
      * it, rather than in the memory of the one that went away.
      */
@@ -387,9 +386,8 @@ export const hands = pgTable(
       .references(() => matches.id, { onDelete: 'cascade' }),
     handNumber: integer('hand_number').notNull(),
     /**
-     * The seed a hand used to be shuffled from. Only on hands dealt before decks
-     * were stored: a seed an agent can search for is a deck it can read, so no
-     * hand is dealt from one any more.
+     * Set only on hands with no stored `deck`. A seed an agent can search for is
+     * a deck it can read, so no hand is dealt from one.
      */
     seed: integer('seed'),
     /** The deck as dealt, off the end, from a CSPRNG. Null only on hands that carry a seed. */
@@ -487,8 +485,7 @@ export const results = pgTable(
      *
      * A snapshot rather than a join, because ratings move: asking today how
      * strong an opponent was last month would answer with today's opinion. This
-     * is what the exploitation score is measured against, now that it means
-     * beating genuinely weak players rather than beating four scripted ones.
+     * is what the exploitation score is measured against.
      */
     opponentRating: real('opponent_rating').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

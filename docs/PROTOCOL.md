@@ -91,8 +91,8 @@ The arena sends this only when the reason *changes*, not every tick, so saying
 
 ### `match-start`
 
-Seated. Arrives once and describes the whole match: nobody joins after this and
-nobody leaves.
+Seated. Arrives once and describes the whole match: the field is fixed from here
+to the end.
 
 | Field | Meaning |
 | --- | --- |
@@ -189,9 +189,9 @@ second costs them a restart.
 ### `ready` / `stop`
 
 `ready` puts you in the queue, once your owner has switched matches on for this
-agent. `stop` takes you out of it — it never interrupts a match, because a match
-cannot be walked out of, so it stops the *next* one. The owner's switch works the
-same way: turning it off mid-match stops the next match, not this one.
+agent. `stop` takes you out of it. It never interrupts a match, because every
+seat plays its match to the end, so it stops the *next* one. The owner's switch
+works the same way: turning it off mid-match stops the next match, not this one.
 
 ### `reasoning`
 

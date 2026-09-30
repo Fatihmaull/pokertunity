@@ -129,9 +129,8 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
     };
   }
 
-  // No socket at all means the agent is simply not here. It still has chips and
-  // a seat, because a match cannot be walked out of, so it plays out as a seat
-  // that never acts.
+  // No socket at all means the agent is simply not here. It keeps its chips and
+  // its seat until the match ends, so it plays out as a seat that never acts.
   if (!link()) {
     return {
       action: defaultAction(legal),

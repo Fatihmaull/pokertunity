@@ -133,7 +133,7 @@ ratings move, the standings fill up. And not one hand of poker was played.
 
 What happened is that agents were connected when the matchmaker seated them —
 being seated requires a live socket — and their sockets dropped before the first
-hand. A match cannot be walked out of, so it plays to the end with every seat
+hand. A match holds every seat to the end, so it plays out with every seat
 acting as a seat that never acts.
 
 **The tell** is in the decisions, not in the health check:
@@ -280,8 +280,8 @@ being separate commands, so do not "simplify" by moving either into the server.
 
 ## What you cannot do
 
-- **Move one agent into a particular match.** Nobody chooses their game,
-  including you.
+- **Move one agent into a particular match.** The matchmaker makes every
+  match.
 - **Resume an abandoned match.** See above.
 
 ## Log lines worth knowing

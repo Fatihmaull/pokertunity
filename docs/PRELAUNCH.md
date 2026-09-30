@@ -90,17 +90,15 @@ RPC, its finality and a wallet driven by a person. That is still A4.
 
 ### Closed since this list was first written
 
-1. The read routes are rate limited (B1), and strangers are now counted by the
+1. The read routes are rate limited (B1), and strangers are counted by the
    address Railway's edge appended rather than the first entry of
-   `x-forwarded-for`, which the caller writes. Before that, a random header
-   walked past every signed-out limit.
+   `x-forwarded-for`, which the caller writes.
 2. Spectators are capped per match, per caller and per process (B2, B3).
 3. The esbuild advisory is patched, not accepted (B4).
 4. Rotation's effect on a live socket is decided and documented (C3 step 9).
-5. A deposit paid on the wrong chain is told the truth: it cannot be credited,
-   rather than to switch networks and poll a transaction that is not there.
-   The deposit transaction now names its `chainId`, so a wallet switched
-   while the prompt was open refuses it instead of paying the wrong vault.
+5. A deposit paid on the wrong chain is told the truth: it cannot be credited.
+   The deposit transaction names its `chainId`, so a wallet switched while the
+   prompt was open refuses it instead of paying the wrong vault.
 
 ## The four scopes
 
@@ -281,14 +279,6 @@ what a person loading a page would feel.
 
 Repeat this on the deployed instance before raising either number.
 
-What was originally asked:
-
-Open subscribers against one live match in steps of 10, 50, 100, 250. At each
-step record hand duration, `idleSeconds` from `/api/health`, and the dealing
-process's CPU and memory. Find where pacing starts to slip and set the cap below
-it. Put the numbers in the pull request: whoever raises the cap later needs to
-know what it was measured against.
-
 ### B4. The esbuild advisory
 
 GHSA-67mh-4wv8-2f99, via `drizzle-kit > @esbuild-kit/esm-loader > esbuild`.
@@ -425,8 +415,7 @@ refuses to deal, which is right but pointless.
 | `<CHAIN>_VAULT_ADDRESS` | from Scope A | Without one a chain is watchable but not buyable |
 | `HAND_CAP` | see D4 | |
 
-`PORT` is Railway's. Nothing model-related belongs here: the arena holds no model
-key, and that is what stops its cost scaling with the number of players.
+`PORT` is Railway's.
 
 ### D3. Secrets
 
@@ -444,11 +433,10 @@ rather than investigate.
 Unset it is 100, roughly two hours with pacing. `30` is about twenty-five minutes,
 which a visitor can watch reach an end.
 
-There is a trap here that has already shipped once. A statically prerendered page
-evaluates `process.env` at build time, inside the Docker build stage where
-`HAND_CAP` is not set: `/matches` once told visitors the game was 100 hands while
-every match ran 30. A page whose copy depends on configuration must read it in a
-server component or opt out of prerendering. Adding the variable to the build
+A statically prerendered page evaluates `process.env` at build time, inside the
+Docker build stage where `HAND_CAP` is not set, so it advertises the default. A
+page whose copy depends on configuration must read it in a server component or
+opt out of prerendering. Adding the variable to the build
 stage looks like a fix and only moves the disagreement.
 
 **Done when:** the number on the page and the number in the engine agree.

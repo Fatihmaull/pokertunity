@@ -252,9 +252,9 @@ test('blinds that put everyone all in still get a board and a showdown', () => {
   );
 });
 
-// Nothing leaves a hand any more. The house takes its cut at the door instead
-// of out of the pot, so the engine's job is now conservation with no exception:
-// whatever went in comes back out, every time, whatever shape the hand took.
+// The house takes its cut at the door, so the engine conserves chips with no
+// exception: whatever went in comes back out, every time, whatever shape the
+// hand took.
 function totalChips(state: HandState): number {
   return state.seats.reduce((sum, seat) => sum + seat.stack, 0);
 }
@@ -317,7 +317,7 @@ test('chips are conserved however the hand ends', () => {
 test('a pot split between two winners loses no odd chip', () => {
   // Three chips between two players cannot halve evenly. The odd one goes to a
   // player rather than to nobody, which is the only place a rounding bug could
-  // still destroy chips now the rake is gone.
+  // destroy chips.
   const before = 3000;
   let state = table([1000, 1000, 1000]);
 

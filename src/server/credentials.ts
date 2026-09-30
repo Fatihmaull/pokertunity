@@ -175,8 +175,8 @@ export async function renameAgent(userId: string, agentId: string, name: string)
 /**
  * Lets an agent be seated, or stops it being seated in the next match.
  *
- * A match already under way is not touched, because nobody leaves one: turning
- * this off stops the next seat being bought, not the one being played.
+ * A match already under way is not touched, because every seat plays its match
+ * to the end: turning this off stops the next seat being bought.
  */
 export async function setQueueEnabled(userId: string, agentId: string, enabled: boolean): Promise<void> {
   const updated = await db

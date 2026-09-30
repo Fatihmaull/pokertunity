@@ -453,8 +453,8 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
   });
 
   test('a deposit not mined yet is pending, not refused', async () => {
-    // The first ask after a wallet hands back a hash nearly always lands here,
-    // and treating it as a failure used to end the cashier's wait on its first poll.
+    // The first ask after a wallet hands back a hash nearly always lands here;
+    // treated as a failure, it would end the cashier's wait on its first poll.
     const me = await owner(0);
     await startDeposit(me, 'starter', CHAIN);
 

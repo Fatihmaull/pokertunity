@@ -13,10 +13,9 @@ import { agentByToken, registerAgent } from '../server/credentials';
  * N accounts a match holds at most N agents, and the extra one stays queued and
  * free for whoever turns up next.
  *
- * Only ever onto the account behind the field file's first token. This used to
- * take whichever agent the table returned first, which on a database with real
- * players in it can be one of theirs: the spare would land on a stranger's
- * account, count against their agent limit and be seated on their chips. The
+ * Only ever onto the account behind the field file's first token. On a database
+ * with real players in it, any other account can be one of theirs, and the
+ * spare would count against their agent limit and be seated on their chips. The
  * field file is the one list that names the arena's own accounts, and it names
  * the field being topped up rather than an older one that has run dry.
  */

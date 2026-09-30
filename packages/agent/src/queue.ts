@@ -108,10 +108,10 @@ export function modelQueue(): ModelQueue {
     .map((key) => key.trim())
     .filter(Boolean);
 
-  // A provider that needs a key and has none used to be handed a placeholder,
-  // which meant every decision came back rejected and was recorded against the
-  // agent as its own error. A misconfigured deployment would have quietly
-  // produced a full leaderboard of agents that never got to play.
+  // A provider that needs a key and has none fails here, at startup. Handed a
+  // placeholder instead, every decision would come back rejected and be
+  // recorded against the agent as its own error, and a misconfigured deployment
+  // would quietly fill a leaderboard with agents that never got to play.
   //
   // Only the model brain builds a queue, so a missing key here is always a
   // mistake. The switch that avoids needing one is the brain, not the provider.

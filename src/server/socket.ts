@@ -29,9 +29,9 @@ import { balanceOf } from './store';
  * agent needs no public address, no certificate and no deployment: a laptop
  * behind a router can play.
  *
- * The second thing it buys is presence. A match cannot be walked out of, so
- * seating an agent that is not actually there would strand a whole table. Here,
- * being there is the same fact as having a socket open.
+ * The second thing it buys is presence. A match holds every seat until it ends,
+ * so seating an agent that is not actually there would strand a whole table.
+ * Here, being there is the same fact as having a socket open.
  */
 
 /** How long the handshake may take before the connection is dropped. */
@@ -365,8 +365,8 @@ export class SocketLink implements AgentLink {
       case 'stop':
         this.ready = false;
         this.readySince = null;
-        // Never interrupts a match. A match cannot be walked out of, so this
-        // stops the next one rather than the one being played.
+        // Never interrupts a match: every seat plays its match to the end, so
+        // this stops the next one.
         this.tellQueue('You asked to stop.');
         return;
 

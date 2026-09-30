@@ -84,9 +84,8 @@ export class MatchRuntime {
   /**
    * Reads the roster once, when the match opens.
    *
-   * Nobody joins and nobody leaves a match: the set of agents is fixed from the
-   * first hand to the last, which is the whole reason a finishing order means
-   * anything.
+   * The set of agents is fixed from the first hand to the last, which is the
+   * whole reason a finishing order means anything.
    */
   private async loadRoster(): Promise<void> {
     this.seated = await loadSeats(this.matchId);
@@ -727,8 +726,8 @@ export class MatchRuntime {
 
     // Carry the result back onto the roster this runtime deals from.
     //
-    // The roster is read once, when the match opens, because nobody joins or
-    // leaves after that. Which means nothing else ever updates it: without this
+    // The roster is read once, when the match opens, because it is fixed from
+    // then on. Which means nothing else ever updates it: without this
     // every hand would be dealt with everyone back at their buy-in, chips would
     // appear and vanish between hands, and the stored results would all claim a
     // starting stack of exactly the buy-in. The lineup entries are the same

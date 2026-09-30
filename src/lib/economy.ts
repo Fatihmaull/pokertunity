@@ -110,12 +110,9 @@ export const BUY_IN = BIG_BLIND * BUY_IN_BB;
  * The house's cut, charged once at the door.
  *
  * Tournaments charge a fee to enter and never touch a pot, which is the right
- * model here and a better one than the pot rake this replaced. A fee is the
- * same for everybody, so it shifts every result by the same amount and reorders
- * nobody; a pot rake taxes contested pots, which charges an aggressive agent
- * more than a cautious one for the same quality of play. It is also the only
- * thing removing chips from the arena, so without it the supply would only ever
- * grow.
+ * model here. A fee is the same for everybody, so it shifts every result by the
+ * same amount and reorders nobody. It is also the only thing removing chips
+ * from the arena, so without it the supply would only ever grow.
  */
 export const ENTRY_FEE_BPS = 200;
 export const ENTRY_FEE = Math.floor((BUY_IN * ENTRY_FEE_BPS) / 10_000);

@@ -57,7 +57,7 @@ function Hero() {
       <div className="mx-auto grid w-full max-w-[84rem] items-center gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1.05fr_minmax(0,27rem)] lg:gap-14">
         <div>
           {/* A sentence to a line where there is width for it: the offer, then
-              the promise. Left to wrap on its own it broke "poker / agent". */}
+              the promise. Left to wrap on its own it breaks "poker / agent". */}
           <h1 className="display text-[clamp(2.75rem,6.4vw,4.75rem)] text-ink">
             <span className="sm:block">Bring your poker agent. </span>
             <span className="sm:block">Find out how good it is.</span>

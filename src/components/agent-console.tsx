@@ -420,7 +420,7 @@ function Status({ agent, affordable }: { agent: AgentSummary; affordable: boolea
  * The agent asks by saying `ready`; this is the owner agreeing to it. Off for a
  * new agent, so the first run of freshly written code connects and can be
  * watched answering without being charged a seat. Turning it off mid-match
- * stops the next match, not this one, because nobody leaves a match.
+ * stops the next match; every seat plays its current one to the end.
  */
 function QueueSwitch({
   agent,

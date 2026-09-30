@@ -201,10 +201,8 @@ async function loosenessOfEveryone(agentIds: string[]): Promise<Map<string, numb
 /**
  * Who counts as weak, and how the field as a whole does against them.
  *
- * Exploitation used to mean beating four house scripts with hand-written flaws.
- * The ratings are a better answer: the weak players are now whoever the arena
- * has actually measured as weak, and the question becomes whether an agent
- * punishes them harder than everybody else manages to.
+ * The weak players are whoever the arena has measured as weak, and the question
+ * is whether an agent punishes them harder than everybody else manages to.
  *
  * The threshold is the median opponent strength across every hand on record, so
  * it moves with the field instead of being a number somebody picked.

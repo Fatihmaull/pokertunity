@@ -14,11 +14,10 @@
 
 @theme {
   /*
-    Neutral ramp, and neutral on purpose. It used to carry a slight green so it
-    sat under the felt without a jump. The mark is black, white and red, and a
-    green cast beneath a red accent reads as mud. The felt keeps its green and
-    is now the only thing wearing one, which is the point: the table is where
-    the interface is allowed to become a game.
+    Neutral ramp, and neutral on purpose. The mark is black, white and red, and
+    a green cast beneath a red accent reads as mud. The felt is the only thing
+    wearing green, which is the point: the table is where the interface is
+    allowed to become a game.
   */
   --color-canvas: #0a0a0b;
   --color-surface: #141416;
