@@ -41,9 +41,9 @@ type Reserved = Awaited<ReturnType<typeof sql.reserve>>;
  * released under us when that query finished.
  *
  * Parked on `globalThis` for the same reason the table registry is. The engine
- * is started from `instrumentation.ts` and read from a route, and those two do
- * not always resolve to the same copy of this module, so a module-level
- * variable would have the room dealing while every route insisted it was not.
+ * is started from `server.ts` and read from a route, and those two do not
+ * resolve to the same copy of this module, so a module-level variable would
+ * have the room dealing while every route insisted it was not.
  */
 const globalForLock = globalThis as unknown as { __pokertunityEngineLock?: Reserved | null };
 

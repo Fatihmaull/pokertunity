@@ -166,7 +166,12 @@ export async function axesFor(agentId: string, window = 5_000): Promise<Axes> {
 }
 
 /**
- * How often each of these agents pays to enter a pot.
+ * How often each of these agents pays to enter a pot: voluntary preflop entry,
+ * the oldest read in poker.
+ *
+ * Counted from decisions rather than from money, because posting a blind is not
+ * a choice and calling one is. A high number is a loose player, whose bets mean
+ * less and who can be called wider.
  *
  * Computed over everyone at once rather than per opponent, because the same
  * handful of players recur across a window of hands and asking about each one
@@ -196,10 +201,8 @@ async function loosenessOfEveryone(agentIds: string[]): Promise<Map<string, numb
 /**
  * Who counts as weak, and how the field as a whole does against them.
  *
- * Exploitation used to mean beating four house scripts with hand-written flaws.
- * The ratings are a better answer: the weak players are now whoever the arena
- * has actually measured as weak, and the question becomes whether an agent
- * punishes them harder than everybody else manages to.
+ * The weak players are whoever the arena has measured as weak, and the question
+ * is whether an agent punishes them harder than everybody else manages to.
  *
  * The threshold is the median opponent strength across every hand on record, so
  * it moves with the field instead of being a number somebody picked.

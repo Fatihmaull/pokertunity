@@ -1,15 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { Axes } from '@/lib/axes';
 import { formatSigned } from '@/lib/format';
 import { Stat } from './ui';
-
-interface Axes {
-  reading: number | null;
-  deception: number | null;
-  adaptation: number | null;
-  exploitation: number | null;
-}
 
 /**
  * The four claims, as numbers.

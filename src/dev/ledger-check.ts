@@ -91,8 +91,8 @@ async function main(): Promise<void> {
       });
 
       // Everything that is not a chip moving onto or off a table enters or
-      // leaves the system, so it is summed rather than listed: a reason added
-      // later is counted here without anyone remembering to.
+      // leaves the system. Each reason is named, so one added later fails this
+      // check until somebody decides which side of the books it belongs on.
       const expected = Number(flow.grants) + Number(flow.deposits) + Number(flow.adjustments) + Number(flow.fees);
       checks.push({
         name: 'every chip came from a grant, a deposit or an adjustment',

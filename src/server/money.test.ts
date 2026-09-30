@@ -20,7 +20,7 @@ import {
 import type { DecisionRecord } from '../agent/decide';
 import { ENTRY_FEE, MATCH, SEAT_COST, chipsToWei } from '../lib/economy';
 import { DEFAULT_RATING, conservative, type Rating } from '../lib/rating';
-import { applyAction, startHand, totalPot } from '../poker/engine';
+import { applyAction, startHand } from '../poker/engine';
 import { confirmDeposit, startDeposit, type DepositResult } from './actions';
 import type { Session } from './auth';
 import type { observeDeposit } from './chain';
@@ -453,8 +453,8 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
   });
 
   test('a deposit not mined yet is pending, not refused', async () => {
-    // The first ask after a wallet hands back a hash nearly always lands here,
-    // and treating it as a failure used to end the cashier's wait on its first poll.
+    // The first ask after a wallet hands back a hash nearly always lands here;
+    // treated as a failure, it would end the cashier's wait on its first poll.
     const me = await owner(0);
     await startDeposit(me, 'starter', CHAIN);
 
@@ -634,7 +634,6 @@ async function candidate(
     ownerId: account.userId,
     rating,
     published: conservative(rating),
-    demo: false,
     matchesPlayed,
   };
 }
@@ -724,7 +723,6 @@ function foldedHand(matchId: string, field: Candidate[], stacks: [number, number
     read: { made: 'high card', category: 0, flushDraw: false, openEnded: false, gutshot: false, overcards: false },
     outcome: 'decided',
     elapsedMs: 5,
-    source: 'agent',
     failure: null,
   };
 
@@ -749,7 +747,6 @@ function foldedHand(matchId: string, field: Candidate[], stacks: [number, number
         agentId: entrant.agentId,
         won: net > 0,
         net,
-        potSize: totalPot(state),
         startingStack: stacks[index],
         showdown: false,
         opponents: 1,

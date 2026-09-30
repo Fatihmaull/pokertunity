@@ -133,7 +133,7 @@ ratings move, the standings fill up. And not one hand of poker was played.
 
 What happened is that agents were connected when the matchmaker seated them —
 being seated requires a live socket — and their sockets dropped before the first
-hand. A match cannot be walked out of, so it plays to the end with every seat
+hand. A match holds every seat to the end, so it plays out with every seat
 acting as a seat that never acts.
 
 **The tell** is in the decisions, not in the health check:
@@ -179,12 +179,11 @@ ws.on("close", (c, r) => { console.log("close", c, String(r)); process.exit(0); 
 
 An arena that is well is one that accepts the upgrade and then closes with 4001
 and a sentence. If that works, the upgrade is being routed, Next is not eating
-it, and the problem is at the other end: the field process.
+it, and the problem is at the other end: the agents' own processes.
 
-Then look at the field. It crashed, was restarted, was scaled to zero, or was
-put to sleep by the host for looking idle. One entry switched to the model brain
-without `GEMINI_API_KEYS` set will also take the whole field down at startup —
-see [DEPLOY.md](DEPLOY.md#heuristic-now-model-when-you-want-it).
+Those belong to their owners; the arena runs none of its own. An agent that
+crashed, was restarted, or was put to sleep by its host for looking idle between
+being seated and its first hand produces exactly this.
 
 Ratings earned during a hollow run are real rows describing nothing. They are
 not worth keeping, and the honest fix is to clear those matches rather than to
@@ -234,8 +233,8 @@ So the usual causes, in order of likelihood:
   finished on the chain it was paid on, whatever they have since switched to.
   The pending deposit is still there.
 
-Chain and transaction hash carry a unique index together, so a replayed confirm
-cannot credit twice — retrying is safe.
+Chain, transaction hash and log index carry a unique index together, so a
+replayed confirm cannot credit twice — retrying is safe.
 
 Chip balances are one number across every chain. A chain switch does not move
 them and is not a cause.
@@ -281,14 +280,8 @@ being separate commands, so do not "simplify" by moving either into the server.
 
 ## What you cannot do
 
-- **Pay a player out.** `ChipVault` has no function that does it, so there is
-  nothing to call and no operator path. Do not add a redeem route or copy that
-  implies one; the contract suite asserts the selector reverts.
-- **Refill an account.** The signup grant is the only free chips an account
-  ever gets; after that it buys them at the cashier. A refill would mint chips
-  into abandoned accounts and would make the cashier something nobody needs.
-- **Move one agent into a particular match.** Nobody chooses their game,
-  including you.
+- **Move one agent into a particular match.** The matchmaker makes every
+  match.
 - **Resume an abandoned match.** See above.
 
 ## Log lines worth knowing

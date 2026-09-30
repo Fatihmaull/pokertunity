@@ -6,10 +6,8 @@ import { BackLink, Badge, ButtonLink, Card, PageHeader } from './ui';
 /**
  * A match that is over.
  *
- * This exists because "over" used to have no screen. The feed for a settled
- * match answers 503 — its runtime was dropped the moment its chips went back —
- * and the live table sat on "Loading match…" retrying it forever. Everything
- * here was already stored; it simply had nowhere to be read.
+ * Read from what is stored, because the feed for a settled match answers 503:
+ * its runtime is dropped the moment its chips go back.
  *
  * An abandoned match is shown as emphatically as a finished one. It is the case
  * an entrant is most likely to be confused by: their chips left, the hands were

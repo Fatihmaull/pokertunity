@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { SEAT_COST, formatChips } from '@/lib/economy';
 import { formatSigned } from '@/lib/format';
-import { useAccount, type AccountAgent } from './account-context';
+import type { AgentSummary } from '@/server/actions';
+import { useAccount } from './account-context';
 import { ChipDot } from './table-art';
 import { AxesCard } from './axes-card';
 import { OnChainPanel } from './onchain';
 import { Cashier } from './cashier';
+import { ConnectGuide } from './connect-guide';
 import { Badge, Button, ButtonLink, Card, Disclosure, EmptyState, PageHeader, Stat } from './ui';
 
 /**
@@ -193,7 +195,7 @@ function AgentCard({
   onRename,
   onQueue,
 }: {
-  agent: AccountAgent;
+  agent: AgentSummary;
   busy: boolean;
   affordable: boolean;
   token: string | null;
@@ -403,7 +405,7 @@ function TokenField({ token }: { token: string | null }) {
   );
 }
 
-function Status({ agent, affordable }: { agent: AccountAgent; affordable: boolean }) {
+function Status({ agent, affordable }: { agent: AgentSummary; affordable: boolean }) {
   if (agent.seat) return <Badge tone="accent">In a match</Badge>;
   if (!agent.connected) return <Badge>{agent.lastSeenAt ? 'Not connected' : 'Never connected'}</Badge>;
   if (!agent.queueEnabled) return <Badge>Connected, matches off</Badge>;
@@ -418,14 +420,14 @@ function Status({ agent, affordable }: { agent: AccountAgent; affordable: boolea
  * The agent asks by saying `ready`; this is the owner agreeing to it. Off for a
  * new agent, so the first run of freshly written code connects and can be
  * watched answering without being charged a seat. Turning it off mid-match
- * stops the next match, not this one, because nobody leaves a match.
+ * stops the next match; every seat plays its current one to the end.
  */
 function QueueSwitch({
   agent,
   disabled,
   onChange,
 }: {
-  agent: AccountAgent;
+  agent: AgentSummary;
   disabled: boolean;
   onChange: (enabled: boolean) => void;
 }) {
@@ -479,30 +481,11 @@ const STATUS_POLL_MS = 5_000;
  * holding "Agent 1" and a renamed "Agent 3" would be offered "Agent 3" again,
  * refused, and offered it again on every click.
  */
-function unusedName(agents: readonly AccountAgent[]): string {
+function unusedName(agents: readonly AgentSummary[]): string {
   const taken = new Set(agents.map((agent) => agent.name.toLowerCase()));
   let n = agents.length + 1;
   while (taken.has(`agent ${n}`)) n += 1;
   return `Agent ${n}`;
-}
-
-function ConnectGuide({ open }: { open: boolean }) {
-  return (
-    <Card className="p-5">
-      <Disclosure summary={<span className="text-base text-ink">How to connect</span>} defaultOpen={open}>
-        <pre className="scroll-x mono rounded-control border border-line bg-surface-2 p-3 text-xs text-muted">
-{`ARENA_URL=wss://<this-host>/agent \\
-AGENT_TOKEN=ah_... \\
-AGENT_BRAIN=heuristic \\
-pnpm --filter @pokertunity/agent start`}
-        </pre>
-        <p className="mt-3 max-w-[62ch] text-xs text-faint">
-          The heuristic brain needs no model key. Set AGENT_BRAIN=model with a key to have it reason, or write your
-          own against the protocol.
-        </p>
-      </Disclosure>
-    </Card>
-  );
 }
 
 /**

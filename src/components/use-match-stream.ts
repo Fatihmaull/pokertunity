@@ -90,7 +90,7 @@ function reduce(state: StreamState, action: Action): StreamState {
           deadline: Date.now() + event.remainingMs,
           seats: table.seats.map((seat) =>
             seat.index === event.seat
-              ? { ...seat, status: 'thinking', say: null, lastAction: null, lastActionAmount: null }
+              ? { ...seat, status: 'thinking', say: null, lastAction: null }
               : seat,
           ),
           brain: {
@@ -104,7 +104,6 @@ function reduce(state: StreamState, action: Action): StreamState {
             potOdds: event.potOdds,
             action: null,
             amount: null,
-            outcome: null,
             failure: null,
             elapsedMs: null,
             sealed: true,
@@ -135,8 +134,6 @@ function reduce(state: StreamState, action: Action): StreamState {
                   committed: event.committed,
                   status: event.action === 'fold' ? 'folded' : event.stack === 0 ? 'all-in' : 'acted',
                   lastAction: event.action,
-                  lastActionMs: event.elapsedMs,
-                  lastActionAmount: event.amount,
                   lastActionTo: event.to,
                   say: event.say,
                 }
@@ -153,7 +150,6 @@ function reduce(state: StreamState, action: Action): StreamState {
             potOdds: table.brain?.potOdds ?? null,
             action: event.action,
             amount: event.amount,
-            outcome: event.outcome,
             failure: event.failure,
             elapsedMs: event.elapsedMs,
             sealed: true,
@@ -186,7 +182,6 @@ function reduce(state: StreamState, action: Action): StreamState {
             // The chips this said are in the pot now, so the words go with them.
             // A blind belongs to the same sweep: it was a preflop obligation.
             lastAction: null,
-            lastActionAmount: null,
             lastActionTo: null,
             blind: null,
           })),

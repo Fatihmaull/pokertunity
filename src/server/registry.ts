@@ -53,8 +53,9 @@ export function openMatch(
 /**
  * Takes a finished match off the floor.
  *
- * Only called once its chips have been returned and its result recorded.
- * Dropping a runtime before that would abandon whatever it was holding.
+ * Called the moment its runtime says it is done, before the chips go back. The
+ * runtime holds nothing the seat rows do not, and the settlement that returns
+ * them is retried by the matchmaker until it lands.
  */
 export function closeMatch(id: string): void {
   const runtime = registry().get(id);

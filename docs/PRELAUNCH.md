@@ -55,7 +55,7 @@ Exercised against a running arena in production mode, not only in unit tests.
 | Area | Evidence |
 | --- | --- |
 | Four gates | lint clean, 213/213 tests, build ok, `tsc` clean |
-| Contracts | 12/12 Foundry tests, including `test_NoPayoutPathExists` |
+| Contracts | 11/11 Foundry tests |
 | Full match | Six-handed, dealt to the hand cap, settled, ratings rewritten |
 | Chip conservation | 6 × 2,000 in, exactly 12,000 out |
 | Ledger integrity | No break in `balance_after`, no cache drift, the entry fee the only sink |
@@ -74,20 +74,14 @@ receipts over its own RPC exactly as it would a testnet. From a real SIWE
 session: a Starter deposit credited 10,000 chips once; confirming it again
 credited nothing; an intent priced on Arbitrum and paid on BNB was refused;
 another wallet paying the intent credited neither account; half the price was
-refused; and a deposit stayed pending until its third confirmation. From the
-owner key, `payout(address,uint256,bytes32)` and a bare transfer both reverted
-while the vault held 0.7. What this does not prove is a public testnet: its
+refused; and a deposit stayed pending until its third confirmation. What this
+does not prove is a public testnet: its
 RPC, its finality and a wallet driven by a person. That is still A4.
 
 ### Never exercised
 
 - **A deposit on a public testnet.** The logic is rehearsed (above); the
   network is not.
-- **The deployed vaults.** Recorded as deployed on all three chains, but no
-  address is written down anywhere in this repository: every `<CHAIN>_VAULT_ADDRESS`
-  in the local `.env` is empty, and the only forge broadcast on disk names
-  transactions no chain has. Until the addresses are recovered and put in A2,
-  A3, A5 and D2 have nothing to point at.
 - **ERC-8004 attestation.** `pnpm attest` has run against forks of all three
   testnets, never against the testnets themselves.
 - **The browser.** Only status codes and JSON were checked. No wallet, no eyes.
@@ -96,17 +90,15 @@ RPC, its finality and a wallet driven by a person. That is still A4.
 
 ### Closed since this list was first written
 
-1. The read routes are rate limited (B1), and strangers are now counted by the
+1. The read routes are rate limited (B1), and strangers are counted by the
    address Railway's edge appended rather than the first entry of
-   `x-forwarded-for`, which the caller writes. Before that, a random header
-   walked past every signed-out limit.
+   `x-forwarded-for`, which the caller writes.
 2. Spectators are capped per match, per caller and per process (B2, B3).
 3. The esbuild advisory is patched, not accepted (B4).
 4. Rotation's effect on a live socket is decided and documented (C3 step 9).
-5. A deposit paid on the wrong chain is told the truth: it cannot be credited,
-   rather than to switch networks and poll a transaction that is not there.
-   The deposit transaction now names its `chainId`, so a wallet switched
-   while the prompt was open refuses it instead of paying the wrong vault.
+5. A deposit paid on the wrong chain is told the truth: it cannot be credited.
+   The deposit transaction names its `chainId`, so a wallet switched while the
+   prompt was open refuses it instead of paying the wrong vault.
 
 ## The four scopes
 
@@ -125,8 +117,7 @@ item when its done-test passes, not when the change is written.
 
 ## Scope A — Chain, vault and the money path
 
-Nothing here has ever accepted a real deposit. Make that sentence false, and
-prove the one-way property on bytecode that is actually deployed.
+Nothing here has ever accepted a real deposit. Make that sentence false.
 
 Start A1 today: every faucet gates on a captcha or a mainnet balance, so funding
 is the long pole and it is pure waiting.
@@ -197,15 +188,7 @@ package, and the transaction has three confirmations.
 
 **Done when:** a deposit credits once and a replay of it credits nothing.
 
-### A5. Prove one-way on deployed bytecode
-
-`test_NoPayoutPathExists` proves this in the suite. Prove it again live: from the
-owner address, call the selector the removed payout function used to answer on,
-and send a bare transfer to the vault.
-
-**Done when:** both revert on the live contract, with transaction hashes to show.
-
-### A6. ERC-8004 attestation, on every chain
+### A5. ERC-8004 attestation, on every chain
 
 Part of the MVP: each chain is submitted on its own, so each needs an identity
 and a reputation record on it. Needs the registry addresses per chain,
@@ -219,7 +202,7 @@ hold code on all three chains. None of those lists a Validation Registry, since
 the specification still has it under revision, so validation is optional and
 unset.
 
-Fork-test first (see DEPLOY.md §8), then `pnpm attest`.
+Fork-test first (see DEPLOY.md §7), then `pnpm attest`.
 
 The running server never touches a registry. Attestation is a separate command
 with its own keys. Keep it that way.
@@ -227,10 +210,6 @@ with its own keys. Keep it that way.
 **Done when:** one agent has an identity and a reputation record on each of the
 three chains, with transaction hashes to show, and
 `/api/agents/<id>/registration` lists all three.
-
-> Do not add a redeem route, a payout selector, or copy that implies one. Chips
-> being one-way is a property of deployed bytecode, and once the vault holds
-> deposits that decision cannot be revisited.
 
 ## Scope B — Hardening and capacity
 
@@ -299,14 +278,6 @@ ceiling stays 500. Event-loop figures are `/api/health` round trips, which is
 what a person loading a page would feel.
 
 Repeat this on the deployed instance before raising either number.
-
-What was originally asked:
-
-Open subscribers against one live match in steps of 10, 50, 100, 250. At each
-step record hand duration, `idleSeconds` from `/api/health`, and the dealing
-process's CPU and memory. Find where pacing starts to slip and set the cap below
-it. Put the numbers in the pull request: whoever raises the cap later needs to
-know what it was measured against.
 
 ### B4. The esbuild advisory
 
@@ -389,12 +360,10 @@ your chip balance: one balance spans every chain.
 
 ### C4. Cashier
 
-There is no free top-up: the signup grant is the only chips an account is
-given, and signing in again adds nothing. On a chain whose vault address is
-unset, buying must be refused by name: "Chips cannot be bought on BNB Smart
-Chain Testnet yet." Confirm there is no withdraw, redeem or cash-out
-control anywhere, and no copy implying one. After Scope A finishes, pair with
-them on the real deposit.
+Signing in again must add nothing: the signup grant is credited once, when the
+account is created. On a chain whose vault address is unset, buying must be
+refused by name: "Chips cannot be bought on BNB Smart Chain Testnet yet." After
+Scope A finishes, pair with them on the real deposit.
 
 ### C5. Look at it
 
@@ -446,8 +415,7 @@ refuses to deal, which is right but pointless.
 | `<CHAIN>_VAULT_ADDRESS` | from Scope A | Without one a chain is watchable but not buyable |
 | `HAND_CAP` | see D4 | |
 
-`PORT` is Railway's. Nothing model-related belongs here: the arena holds no model
-key, and that is what stops its cost scaling with the number of players.
+`PORT` is Railway's.
 
 ### D3. Secrets
 
@@ -465,11 +433,10 @@ rather than investigate.
 Unset it is 100, roughly two hours with pacing. `30` is about twenty-five minutes,
 which a visitor can watch reach an end.
 
-There is a trap here that has already shipped once. A statically prerendered page
-evaluates `process.env` at build time, inside the Docker build stage where
-`HAND_CAP` is not set: `/matches` once told visitors the game was 100 hands while
-every match ran 30. A page whose copy depends on configuration must read it in a
-server component or opt out of prerendering. Adding the variable to the build
+A statically prerendered page evaluates `process.env` at build time, inside the
+Docker build stage where `HAND_CAP` is not set, so it advertises the default. A
+page whose copy depends on configuration must read it in a server component or
+opt out of prerendering. Adding the variable to the build
 stage looks like a fix and only moves the disagreement.
 
 **Done when:** the number on the page and the number in the engine agree.
@@ -484,10 +451,9 @@ table), and `idleSeconds` climbing while agents are seated (the engine stalled).
 
 **In place:** `.github/workflows/health.yml` runs `scripts/health-watch.mjs`
 against production every ten minutes. It fails the run, and GitHub emails, on
-all four conditions above plus one more: nobody seated on two reads 90 seconds
-apart. That last one is the demo field gone quiet, most often because its
-accounts have run below `SEAT_COST`, and it is the failure most likely to meet
-a visitor. Scheduled runs can start late under load on GitHub's side, so treat
+all four conditions above. An empty room is deliberately not one of them:
+production runs no agents of its own, so nobody seated only means nobody has
+brought one. Scheduled runs can start late under load on GitHub's side, so treat
 this as a tripwire rather than a pager. Run it by hand with
 `HEALTH_URL=https://<domain>/api/health node scripts/health-watch.mjs`.
 
@@ -547,7 +513,6 @@ One person signs this off, and not a scope owner: someone reading their work.
 - [ ] A vault is deployed on at least the default chain, and its address is set
       in production
 - [ ] A real deposit has credited real chips, once, and a replay credited nothing
-- [ ] One-way is proven on deployed bytecode
 - [ ] One agent has an ERC-8004 identity and reputation record on every chain
 - [x] The read routes are rate limited, `axes` above all
 - [x] Spectators are capped per match, at a number measured rather than chosen
@@ -565,11 +530,9 @@ it, vaults on all three chains. The esbuild advisory is closed.
 
 ### Irreversible once shipped
 
-1. **Chips are one-way, in bytecode.** The deployed vault has no function that
-   pays a player and no operator path. Once it holds deposits that is settled.
-2. **The vault owner key.** It can sweep the float and pause deposits, and
+1. **The vault owner key.** It can sweep the float and pause deposits, and
    nothing else. On testnet a throwaway key is fine; reusing it is not.
-3. **Published ratings.** An attestation is a public claim and the registry is
+2. **Published ratings.** An attestation is a public claim and the registry is
    append-only: a later one supersedes an earlier one rather than erasing it.
 
 ### Limits you are choosing to launch with

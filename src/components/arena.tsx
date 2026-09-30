@@ -97,7 +97,6 @@ export function Arena({ matchId }: { matchId: string }) {
         draws: drawsOf(table.brain.handRead),
         action: table.brain.action,
         amount: table.brain.amount ?? 0,
-        outcome: table.brain.outcome,
         failure: table.brain.failure,
         elapsedMs: table.brain.elapsedMs,
         say:

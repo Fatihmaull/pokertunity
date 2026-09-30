@@ -57,7 +57,6 @@ function move(action: DecisionFrame['action'], extra: Partial<DecisionFrame> = {
 
 const base = {
   seatIndex: 0,
-  bigBlind: 20,
   matchId: 'm1',
   handNumber: 1,
   chairs: [0, 1],
@@ -84,7 +83,6 @@ test('takes a legal action and keeps the streamed reasoning', async () => {
   const record = await decide({ ...base, link: () => link, state: heads(), clockMs: 5000 });
 
   assert.equal(record.outcome, 'decided');
-  assert.equal(record.source, 'agent');
   assert.deepEqual(record.action, { type: 'call' });
   assert.equal(record.reasoning, 'The price is right and I have position.');
   assert.equal(record.say, 'Let us see a flop.');
@@ -162,9 +160,8 @@ test('facing an all-in, the agent is still asked, because folding is a real choi
   state = applyAction(state, { type: 'raise', to: 1000 });
   const record = await decide({ ...base, link: () => link, state, seatIndex: 1, clockMs: 5000 });
 
-  assert.equal(record.source, 'agent');
   assert.deepEqual(record.action, { type: 'fold' });
-  assert.equal(link.seen.length, 1);
+  assert.equal(link.seen.length, 1, 'the agent was asked rather than the arena folding for it');
   assert.ok(link.seen[0].legal.call !== null, 'calling is on offer, capped at what it has');
 });
 

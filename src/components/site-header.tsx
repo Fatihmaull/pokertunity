@@ -39,10 +39,9 @@ export function SiteHeader() {
         {/*
           Below the lg breakpoint the navigation takes a row of its own.
           Sharing one row with the balance and the wallet left it short of the
-          width its four links need: on a phone "Ranks" was cut to "Ra" and
-          "Agent" sat under the chips, and on a tablet "Your agent" was cut
-          off, all reachable only by knowing to swipe. --header-h follows the
-          taller header so pages still fill the screen beneath it.
+          width its four links need, and the labels it cut off were reachable
+          only by knowing to swipe. --header-h follows the taller header so
+          pages still fill the screen beneath it.
         */}
         <div className="mx-auto flex h-[var(--header-h)] w-full max-w-[84rem] flex-wrap content-center items-center gap-x-2 gap-y-1 px-4 sm:gap-x-6 sm:px-6 lg:flex-nowrap">
           <Link href="/" className="flex shrink-0 items-center gap-2 text-[0.9375rem] font-semibold text-ink">
@@ -127,9 +126,8 @@ export function SiteHeader() {
 /**
  * Which network the player is on, and the way to change it.
  *
- * It sits where the network badge used to, because it answers the same question
- * and now answers it with an action. A deployment offering one chain gets the
- * badge back rather than a menu with nothing to choose.
+ * A deployment offering one chain shows a badge rather than a menu with nothing
+ * to choose.
  */
 function ChainMenu() {
   const { chains, chain, loading, switching, switchChain } = useChain();

@@ -1,5 +1,5 @@
 import { type Card, DECK_SIZE, rankOf, suitOf } from './cards';
-import { CATEGORY, categoryOf, evaluate } from './evaluate';
+import { CATEGORY, CATEGORY_NAMES, categoryOf, evaluate } from './evaluate';
 
 export interface Equity {
   /** Share of the pot this hand expects to win, ties counted as half. */
@@ -98,18 +98,6 @@ export interface HandRead {
   overcards: boolean;
 }
 
-const CATEGORY_LABEL: Record<number, string> = {
-  [CATEGORY.HIGH_CARD]: 'high card',
-  [CATEGORY.PAIR]: 'pair',
-  [CATEGORY.TWO_PAIR]: 'two pair',
-  [CATEGORY.TRIPS]: 'three of a kind',
-  [CATEGORY.STRAIGHT]: 'straight',
-  [CATEGORY.FLUSH]: 'flush',
-  [CATEGORY.FULL_HOUSE]: 'full house',
-  [CATEGORY.QUADS]: 'four of a kind',
-  [CATEGORY.STRAIGHT_FLUSH]: 'straight flush',
-};
-
 /**
  * Plain facts about a hand, in the vocabulary a player would use. These reach
  * both the model's prompt and the Brain Visualizer, so they must be true rather
@@ -138,7 +126,7 @@ export function readHand(hole: readonly [Card, Card], board: readonly Card[]): H
   const boardHigh = board.length ? Math.max(...board.map(rankOf)) : -1;
   const overcards = board.length > 0 && rankOf(hole[0]) > boardHigh && rankOf(hole[1]) > boardHigh;
 
-  return { made: CATEGORY_LABEL[category] ?? 'high card', category, flushDraw, openEnded, gutshot, overcards };
+  return { made: CATEGORY_NAMES[category], category, flushDraw, openEnded, gutshot, overcards };
 }
 
 /**

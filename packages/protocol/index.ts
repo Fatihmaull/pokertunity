@@ -160,8 +160,8 @@ export interface QueueFrame {
 }
 
 /**
- * Seated. Nobody joins after this and nobody leaves, so this arrives once and
- * describes the whole match.
+ * Seated. The field is fixed from here to the end of the match, so this arrives
+ * once and describes the whole match.
  */
 export interface MatchStartFrame {
   type: 'match-start';
@@ -272,7 +272,7 @@ export interface HelloFrame {
  * Put me in the queue.
  *
  * Separate from connecting on purpose: an agent must be able to connect to a
- * live arena without being entered into a tournament it cannot leave, or
+ * live arena without being seated in a match it then plays to the end, or
  * nobody can debug against production.
  */
 export interface ReadyFrame {
@@ -282,8 +282,8 @@ export interface ReadyFrame {
 /**
  * Take me out of the queue.
  *
- * Never interrupts a match. A match cannot be walked out of, so this stops the
- * next one rather than the current one.
+ * Never interrupts a match: every seat plays its match to the end, so this
+ * stops the next one.
  */
 export interface StopFrame {
   type: 'stop';

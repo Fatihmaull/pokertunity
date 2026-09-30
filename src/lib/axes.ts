@@ -92,21 +92,6 @@ export function computeAxes(input: AxisInput): Axes {
 }
 
 /**
- * Voluntary preflop entry, the oldest read in poker.
- *
- * Counted from decisions rather than from money, because posting a blind is not
- * a choice and calling one is. A high number is a loose player, whose bets mean
- * less and who can be called wider.
- */
-export function loosenessOf(decisions: AxisDecision[]): number | null {
-  const preflop = decisions.filter((decision) => decision.street === 'preflop');
-  if (preflop.length === 0) return null;
-
-  const entered = preflop.filter((decision) => decision.action !== 'fold' && decision.action !== 'check');
-  return entered.length / preflop.length;
-}
-
-/**
  * Reading: does this agent play differently against loose opponents?
  *
  * Its hands are split by how loose the table was, and its willingness to keep

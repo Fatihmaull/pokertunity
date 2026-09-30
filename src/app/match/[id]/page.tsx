@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { Arena } from '@/components/arena';
 import { MatchResult } from '@/components/match-result';
 import { stakesLabel } from '@/lib/economy';
-import { account } from '@/server/actions';
 import { getSession } from '@/server/auth';
 import { matchSummary } from '@/server/store';
 
@@ -24,21 +23,18 @@ export const dynamic = 'force-dynamic';
  *
  * A live match gets the table and its feed. A finished one gets its result,
  * read from the database, because its runtime is gone and its feed answers 503
- * forever. Deciding here rather than in the browser is what removes the failure
- * this page used to have: the client could not tell "this match is over" from
- * "this instance is not the one dealing it", so it retried a stream that was
- * never going to open and sat on "Loading match…" until the tab was closed.
+ * forever. Deciding here rather than in the browser matters: the client cannot
+ * tell "this match is over" from "this instance is not the one dealing it", and
+ * would retry a stream that is never going to open.
  */
 export default async function Page(props: PageProps<'/match/[id]'>) {
   const { id } = await props.params;
 
   const session = await getSession();
-  const viewer = session ? await account(session).catch(() => null) : null;
   const summary = await matchSummary(id, session?.userId ?? null).catch(() => null);
 
   if (!summary) notFound();
   if (summary.status !== 'playing') return <MatchResult summary={summary} />;
 
-  void viewer;
   return <Arena matchId={id} />;
 }

@@ -31,11 +31,11 @@ import { leaderboard } from './metrics';
  * Publishing this arena's records to ERC-8004.
  *
  * Nothing here runs inside the web server. Attestations are posted by an
- * operator running `pnpm attest`, for the same reason the vault has no payout:
- * the process serving pages holds no key and signs nothing, so a bug in a route
- * cannot move anything on chain. It also matches what an attestation is. A win
- * rate is a claim about a body of play, not about the last hand, and republishing
- * it every hand would cost gas to say almost nothing new.
+ * operator running `pnpm attest`, because the process serving pages holds no
+ * key and signs nothing, so a bug in a route
+ * cannot move anything on chain. It also matches what an attestation is. A
+ * rating is a claim about a body of play, not about the last hand, and
+ * republishing it every hand would cost gas to say almost nothing new.
  *
  * The addresses are per-chain and come from the environment the same way vaults
  * do, named after the chain's own key: `MONAD_TESTNET_IDENTITY_REGISTRY` and its

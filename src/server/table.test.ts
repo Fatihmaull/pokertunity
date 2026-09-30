@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 // Must come before anything that reaches the database module. Nothing here
 // runs a query, but that module refuses to load without a connection string.
 import '../dev/test-env';
+import { cardName } from '../poker/cards';
 import { applyAction, startHand } from '../poker/engine';
 import { MATCH } from '../lib/economy';
 import { MatchRuntime, amountOf, describeAction, tablePalette } from './table';
@@ -11,7 +12,7 @@ import type { BrainView } from './view';
 
 const config = MATCH;
 
-/** Chairs 1 and 2 occupied, chair 0 vacated: what a seat change leaves behind. */
+/** Chairs 1 and 2 occupied, chair 0 vacated: what a bust leaves behind. */
 function sparseTable() {
   const runtime = new MatchRuntime('m-1', config, () => {});
   const internals = runtime as unknown as Record<string, unknown>;
@@ -43,7 +44,7 @@ test('a viewer sees its own cards and nobody else’s when chairs are sparse', (
   const bob = seats.find((seat) => seat.agentId === 'bob')!;
 
   assert.equal(alice.index, 1, 'Alice is drawn in the chair she is sitting in');
-  assert.deepEqual(alice.hole, state.seats[0].hole!.map(nameOf), 'her own cards, not the next seat along');
+  assert.deepEqual(alice.hole, state.seats[0].hole!.map(cardName), 'her own cards, not the next seat along');
   assert.equal(bob.hole, null, 'an opponent’s cards stay hidden');
 });
 
@@ -81,11 +82,6 @@ test('two agents wearing one colour are told apart at the table', () => {
   const colors = runtime.view(null).seats.filter((seat) => seat.agentId).map((seat) => seat.color);
   assert.equal(new Set(colors).size, colors.length, 'no two seated agents draw in the same colour');
 });
-
-function nameOf(card: number): string {
-  const ranks = '23456789TJQKA';
-  return ranks[(card / 4) | 0] + 'cdhs'[card % 4];
-}
 
 test('a seat with no chips is not dealt into the next hand', () => {
   const { runtime } = sparseTable();
@@ -130,14 +126,6 @@ test('a match announces itself finished exactly once', () => {
   finish.call(runtime, 'abandoned');
 
   assert.deepEqual(endings, ['elimination'], 'the first ending is the one that counts');
-});
-
-test('an agent that is not in this match is never treated as being in its hand', () => {
-  const { runtime } = sparseTable();
-  (runtime as unknown as Record<string, unknown>).handLive = true;
-
-  assert.equal(runtime.isInLiveHand('alice'), true);
-  assert.equal(runtime.isInLiveHand('carol'), false, 'a stranger to this lineup is nothing to do with it');
 });
 
 test('a decision in a live hand reaches every viewer sealed, its own owner included', () => {
@@ -214,7 +202,6 @@ function thinking(): BrainView {
     potOdds: 0.25,
     action: 'raise',
     amount: 600,
-    outcome: 'decided',
     failure: null,
     elapsedMs: 2100,
     sealed: false,

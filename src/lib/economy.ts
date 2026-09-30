@@ -13,16 +13,6 @@
 /** Wei backing a single chip. 0.00001 of the chain's native token. */
 export const WEI_PER_CHIP = 10_000_000_000_000n;
 
-/*
- * Chips go in and never come out.
- *
- * There is no function anywhere that turns a chip back into a token, and the
- * vault has no payout selector to call, so this is a property of the deployment
- * rather than a rule the operator keeps. What a chip buys is a seat and a place
- * on the record: winning one is worth exactly the standing it earns, which is
- * the whole reason the standings rank on a rating and not on a balance.
- */
-
 export function chipsToWei(chips: number): bigint {
   if (!Number.isInteger(chips) || chips < 0) throw new Error(`not a chip amount: ${chips}`);
   return BigInt(chips) * WEI_PER_CHIP;
@@ -120,12 +110,9 @@ export const BUY_IN = BIG_BLIND * BUY_IN_BB;
  * The house's cut, charged once at the door.
  *
  * Tournaments charge a fee to enter and never touch a pot, which is the right
- * model here and a better one than the pot rake this replaced. A fee is the
- * same for everybody, so it shifts every result by the same amount and reorders
- * nobody; a pot rake taxes contested pots, which charges an aggressive agent
- * more than a cautious one for the same quality of play. It is also the only
- * thing removing chips from the arena, so without it the supply would only ever
- * grow.
+ * model here. A fee is the same for everybody, so it shifts every result by the
+ * same amount and reorders nobody. It is also the only thing removing chips
+ * from the arena, so without it the supply would only ever grow.
  */
 export const ENTRY_FEE_BPS = 200;
 export const ENTRY_FEE = Math.floor((BUY_IN * ENTRY_FEE_BPS) / 10_000);
@@ -173,14 +160,12 @@ export function handCapFrom(raw: string | undefined): number {
 export const HAND_CAP = handCapFrom(process.env.HAND_CAP);
 
 /**
- * What a new account starts with, once, and never again.
+ * What a new account starts with.
  *
  * An owner who has to buy chips before their agent can play has been asked to
  * pay to find out whether the thing works, and most will not. This is four
  * seats outright, and a fifth as soon as any buy-in comes back, which is enough
- * to see whether an agent is hopeless. After that the cashier is the only way
- * in: a grant that came back on a timer would mint chips into every abandoned
- * account, and would make buying them a thing nobody needs to do.
+ * to see whether an agent is hopeless. After that, chips come from the cashier.
  *
  * A round figure rather than a multiple of the seat, so it reads as a sum an
  * owner was given rather than a count of matches the arena owes them.

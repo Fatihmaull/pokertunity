@@ -43,7 +43,6 @@ export interface DecideOptions {
   link: () => Askable | null;
   state: HandState;
   seatIndex: number;
-  bigBlind: number;
   /** Hard ceiling on the act clock. Expiry checks or folds. */
   clockMs: number;
   matchId: string;
@@ -78,8 +77,6 @@ export interface DecisionRecord extends AgentDecision {
   read: HandRead;
   outcome: DecisionOutcome;
   elapsedMs: number;
-  /** Whether the arena decided this itself or an agent did. */
-  source: 'rules' | 'agent';
   /** Plain statement of what went wrong, or null when nothing did. */
   failure: string | null;
 }
@@ -128,14 +125,12 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
       read,
       outcome: 'decided',
       elapsedMs: Date.now() - started,
-      source: 'rules',
       failure: null,
     };
   }
 
-  // No socket at all means the agent is simply not here. It still has chips and
-  // a seat, because a match cannot be walked out of, so it plays out as a seat
-  // that never acts.
+  // No socket at all means the agent is simply not here. It keeps its chips and
+  // its seat until the match ends, so it plays out as a seat that never acts.
   if (!link()) {
     return {
       action: defaultAction(legal),
@@ -145,7 +140,6 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
       read,
       outcome: 'error',
       elapsedMs: Date.now() - started,
-      source: 'agent',
       failure: 'not connected',
     };
   }
@@ -237,7 +231,6 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
       read,
       outcome: timedOut ? 'timeout' : 'error',
       elapsedMs: Date.now() - started,
-      source: 'agent',
       failure: timedOut ? 'ran out of time' : 'sent no usable answer',
     };
   }
@@ -254,7 +247,6 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
       read,
       outcome: 'error',
       elapsedMs: Date.now() - started,
-      source: 'agent',
       failure: `asked for ${reply.action}, which is not legal here`,
     };
   }
@@ -265,7 +257,6 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
     read,
     outcome: 'decided',
     elapsedMs: Date.now() - started,
-    source: 'agent',
     failure: null,
   };
 }
@@ -330,9 +321,9 @@ function describeOpponents(
   names: ReadonlyMap<string, string>,
   timing: ReadonlyMap<number, number>,
 ): OpponentSeat[] {
-  const lastAction = new Map<number, { action: string; to: number }>();
+  const lastAction = new Map<number, string>();
   for (const event of state.events) {
-    if (event.type === 'action') lastAction.set(event.seat, { action: event.action, to: event.to });
+    if (event.type === 'action') lastAction.set(event.seat, event.action);
   }
 
   return state.seats
@@ -343,7 +334,7 @@ function describeOpponents(
       stack: seat.stack,
       committed: seat.committed,
       status: seat.folded ? 'folded' : seat.allIn ? 'all-in' : 'in',
-      lastAction: lastAction.get(seat.index)?.action ?? null,
+      lastAction: lastAction.get(seat.index) ?? null,
       // How long a seat took is public at a real table. Why it took that long
       // is not, and never travels.
       lastActionMs: timing.get(chairOf(seat.index)) ?? null,

@@ -2,9 +2,13 @@
 // reasons when the room is not dealing. Run on a schedule by
 // .github/workflows/health.yml; runnable by hand with HEALTH_URL set.
 //
-// A 200 is not the check. The route answers 200 while the engine is stalled,
-// while stacks sit on a closed table, and while nobody at all is seated, and
-// each of those is an arena a visitor cannot use.
+// A 200 is not the check. The route answers 200 while the engine is stalled and
+// while stacks sit on a closed table, and each of those is an arena a visitor
+// cannot use.
+//
+// An empty room is not on the list. Nobody runs agents on the arena's behalf,
+// so nobody seated only means nobody has brought one, and alerting on it would
+// fire on every quiet hour.
 
 const url = process.env.HEALTH_URL;
 if (!url) {
@@ -15,9 +19,8 @@ if (!url) {
 // How long a hand may go unfinished while agents are seated. A paced hand runs
 // about a minute; five is an engine that has stopped, not a slow table.
 const STALL_SECONDS = Number(process.env.STALL_SECONDS ?? 300);
-// Between one match ending and the next being formed, nobody is seated for a
-// matchmaker tick or two, and settlement is in flight for the same moment. Both
-// conditions are read again after this long before they count.
+// Settlement is in flight for a moment after every match ends, so stacks still
+// on a closed table are read again after this long before they count.
 const RECHECK_MS = Number(process.env.RECHECK_MS ?? 90_000);
 
 async function read() {
@@ -43,17 +46,12 @@ if (first.status !== 200 || first.body?.ok !== true) {
     problems.push(`stalled: ${health.seated} seated and no hand finished for ${health.idleSeconds}s`);
   }
 
-  if (health.unsettled > 0 || health.seated === 0) {
+  if (health.unsettled > 0) {
     await new Promise((resolve) => setTimeout(resolve, RECHECK_MS));
     const again = await read();
     console.log('recheck:', again.status, JSON.stringify(again.body ?? again.error));
-    if (health.unsettled > 0 && again.body?.unsettled > 0) {
+    if (again.body?.unsettled > 0) {
       problems.push(`unsettled: ${again.body.unsettled} finished match(es) still holding stacks`);
-    }
-    if (health.seated === 0 && again.body?.seated === 0) {
-      problems.push(
-        'empty: nobody seated on two reads. The demo field is down or its accounts are below SEAT_COST; see DEPLOY §6',
-      );
     }
   }
 }

@@ -11,10 +11,9 @@ import { useLobby } from './use-lobby';
  * There is nothing to press. An agent is put into a game by the matchmaker
  * rather than choosing one, so this page reports rather than offers.
  *
- * `handCap` arrives as a prop rather than being read from `MATCH` here. This
- * page is prerendered, so anything it read from the environment would be frozen
- * at build time — and was: it told visitors the game was a hundred hands while
- * every match ran thirty, because HAND_CAP does not exist in the build stage.
+ * `handCap` arrives as a prop rather than being read from `MATCH` here. HAND_CAP
+ * is server configuration that no browser bundle carries, so read here it
+ * would advertise the default whatever the arena actually plays.
  */
 export function Lobby({ handCap }: { handCap: number }) {
   const lobby = useLobby();

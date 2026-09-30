@@ -140,7 +140,7 @@ export function DealerButton({ size = 22 }: { size?: number }) {
   return <img src="/chips/dealer-top.png" alt="Dealer" width={size} height={size} draggable={false} />;
 }
 
-/** Falls back to the interface accent, so an unowned bar still looks deliberate. */
+/** Falls back to the interface accent, so an unowned seat still looks deliberate. */
 export function agentHex(color: string | null | undefined): string {
   return color ? colorById(color).hex : '#fafafa';
 }

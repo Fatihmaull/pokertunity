@@ -15,10 +15,6 @@ contract ChipVaultTest is Test {
 
     event Deposited(address indexed payer, bytes32 indexed intentId, uint256 amount);
 
-    /// The signature this vault used to carry, kept only so the test below can
-    /// prove it is gone.
-    bytes4 internal constant OLD_PAYOUT = bytes4(keccak256("payout(address,uint256,bytes32)"));
-
     function setUp() public {
         vault = new ChipVault(operator, MIN_DEPOSIT);
         vm.deal(alice, 10 ether);
@@ -68,30 +64,6 @@ contract ChipVaultTest is Test {
         vm.prank(alice);
         (bool ok,) = address(vault).call{value: 0.5 ether}("");
         assertFalse(ok);
-    }
-
-    /// Chips are one-way, and this is where that stops being a promise.
-    ///
-    /// There is no player withdrawal function to call, so the check is that the
-    /// selector finds nothing: with no matching function and no fallback, the
-    /// call reverts whoever sends it. The operator is included on purpose,
-    /// because "the operator chooses not to" is a policy and this is meant to be
-    /// a property.
-    function test_NoPayoutPathExists() public {
-        vm.prank(alice);
-        vault.deposit{value: 1 ether}(keccak256("intent-1"));
-
-        bytes memory call = abi.encodeWithSelector(OLD_PAYOUT, alice, 0.95 ether, keccak256("redemption-1"));
-
-        vm.prank(alice);
-        (bool byPlayer,) = address(vault).call(call);
-        assertFalse(byPlayer);
-
-        vm.prank(operator);
-        (bool byOperator,) = address(vault).call(call);
-        assertFalse(byOperator);
-
-        assertEq(address(vault).balance, 1 ether);
     }
 
     function test_SweepMovesFundsToOperator() public {

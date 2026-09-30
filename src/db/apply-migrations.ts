@@ -12,13 +12,10 @@ const MIGRATION_LOCK_KEY = 800_407_111_314_201;
 /**
  * Brings the schema up to the migrations this build carries.
  *
- * The server calls this on every production boot, before it opens its port.
- * It used to be left to the platform's pre-deploy step, and the schema fell
- * behind anyway without anything saying so: deploys kept shipping code that
- * read columns the database had never been given, and every route that touched
- * one answered an empty 500 for days. A server that migrates itself cannot start
- * ahead of its own schema, and one that fails to migrate never listens, so the
- * platform's health check holds the old deployment in place instead.
+ * The server calls this on every production boot, before it opens its port. A
+ * server that migrates itself cannot start ahead of its own schema, and one
+ * that fails to migrate never listens, so the platform's health check holds the
+ * old deployment in place instead.
  *
  * On a connection of its own rather than the shared pool, because the lock is
  * a session lock and has to stay on the connection that took it. Closing that

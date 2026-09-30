@@ -17,12 +17,8 @@ import {
 /**
  * Who plays whom.
  *
- * Agents no longer pick their game. They queue, and this puts them into a match
- * against opponents of similar rating. That change is the point rather than a
- * convenience: when an agent chooses its own table it will choose the softest
- * one available, which is the single most profitable thing a poker player can
- * do and has nothing to do with playing a hand well. Measuring how an agent
- * thinks means not paying it to avoid thinking.
+ * Agents queue, and this puts them into a match against opponents of similar
+ * rating, so that a match measures how an agent plays a hand.
  *
  * Matching by rating has one consequence worth being honest about. If it works
  * perfectly, everyone faces opponents of their own strength and every win rate
@@ -131,15 +127,11 @@ export async function abandonOrphanedMatches(): Promise<number> {
 async function tick(): Promise<void> {
   // Settlements that failed last time go first. Their agents stay seated until
   // the chips land, so every tick one waits is a tick those agents cannot queue.
-  for (const matchId of [...unsettled.keys()]) await settle(matchId);
-
-  // Chips are not topped up here. An account is granted chips once, when it is
-  // created, and buys the rest. A refill that happened on its own would quietly
-  // hand chips to accounts nobody is using.
+  for (const matchId of [...unsettled().keys()]) await settle(matchId);
 
   // Readiness is a fact about the sockets this process holds, so it is read
   // from the connections rather than from a column. An agent that is not here
-  // cannot be seated, because a match cannot be left once it starts.
+  // cannot be seated, because a match holds every seat until it ends.
   const ready = readyAgents();
 
   // Before the gate below, not after. An agent whose owner cannot cover a seat
@@ -200,6 +192,8 @@ async function explain(ready: readonly string[]): Promise<void> {
   }
 }
 
+type Entrant = Candidate & { waitingSince: number };
+
 /**
  * Splits the queue into the matches that should start right now.
  *
@@ -208,8 +202,6 @@ async function explain(ready: readonly string[]): Promise<void> {
  * waiting forever for a neighbour who never arrives. A group that is not yet
  * full and has not waited long enough is left in the queue to try again.
  */
-type Entrant = Candidate & { waitingSince: number };
-
 function groupsFrom(waiting: readonly Entrant[], now = Date.now()): Entrant[][] {
   // Longest wait first: the queue is already in that order, and rebuilding it
   // by rating would quietly prioritise whoever happened to rate highest.
@@ -256,22 +248,35 @@ function groupsFrom(waiting: readonly Entrant[], now = Date.now()): Entrant[][] 
   return groups;
 }
 
+type Pending = { ending: MatchEnding; hands: number };
+
 /**
  * Matches whose runtime has finished but whose chips have not gone back yet.
  *
- * Kept and retried every tick rather than given up on. A settlement that failed
- * once used to be dropped along with the runtime, which left the seats written
- * and the match marked as playing: its agents were never queued again, and
- * their stacks sat on a table nobody was dealing until the process restarted.
+ * Kept and retried every tick until it lands. Until then the seats stay written
+ * and the match stays marked as playing, so its agents cannot queue and their
+ * stacks sit on a table nobody is dealing.
+ *
+ * Parked on `globalThis` because the health check counts it from a route, and a
+ * route does not resolve to the copy of this module the engine runs in: a
+ * module-level map would be filled by the engine while `/api/health` counted an
+ * empty one, and stacks stuck on a closed table would be reported as none.
  */
-const unsettled = new Map<string, { ending: MatchEnding; hands: number }>();
+const globalForSettlement = globalThis as unknown as {
+  __pokertunityUnsettled?: Map<string, Pending>;
+};
+
+function unsettled(): Map<string, Pending> {
+  if (!globalForSettlement.__pokertunityUnsettled) globalForSettlement.__pokertunityUnsettled = new Map();
+  return globalForSettlement.__pokertunityUnsettled;
+}
 
 /** Settlements running right now, so a retry never overlaps the attempt it retries. */
 const settling = new Set<string>();
 
 /** How many finished matches are still holding chips, for the health check. */
 export function unsettledMatches(): number {
-  return unsettled.size;
+  return unsettled().size;
 }
 
 /**
@@ -284,18 +289,18 @@ export function unsettledMatches(): number {
  */
 function onFinished(matchId: string, ending: MatchEnding, hands: number): void {
   closeMatch(matchId);
-  unsettled.set(matchId, { ending, hands });
+  unsettled().set(matchId, { ending, hands });
   void settle(matchId);
 }
 
 async function settle(matchId: string): Promise<void> {
-  const pending = unsettled.get(matchId);
+  const pending = unsettled().get(matchId);
   if (!pending || settling.has(matchId)) return;
 
   settling.add(matchId);
   try {
     const settlement = await settleMatch(matchId, pending.ending, pending.hands);
-    unsettled.delete(matchId);
+    unsettled().delete(matchId);
     announce(matchId, pending.ending, pending.hands, settlement);
   } catch (error) {
     console.error(`[matchmaker] could not settle ${matchId}, trying again next tick`, error);

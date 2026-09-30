@@ -68,7 +68,6 @@ export type HandEvent =
 export interface SeatConfig {
   agentId: string;
   stack: number;
-  sittingOut?: boolean;
 }
 
 export interface HandOptions {
@@ -104,9 +103,9 @@ export function startHand(options: HandOptions): HandState {
     committed: 0,
     contributed: 0,
     hole: null,
-    folded: config.sittingOut === true || config.stack <= 0,
+    folded: config.stack <= 0,
     allIn: false,
-    sittingOut: config.sittingOut === true || config.stack <= 0,
+    sittingOut: config.stack <= 0,
     hasActed: false,
     needsToAct: false,
     mayRaise: true,
@@ -502,7 +501,6 @@ function settle(state: HandState): void {
     stacks: state.seats.map((seat) => ({ seat: seat.index, stack: seat.stack })),
   });
 }
-
 
 function sameSeats(a: readonly number[], b: readonly number[]): boolean {
   return a.length === b.length && a.every((seat, i) => seat === b[i]);

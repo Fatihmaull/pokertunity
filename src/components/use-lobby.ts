@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export interface LobbySeat {
   index: number;
@@ -16,8 +16,6 @@ export interface LobbyMatch {
   id: string;
   label: string;
   status: string;
-  /** Every entrant was one of the arena's own seeded agents. */
-  demo: boolean;
   seatCount: number;
   smallBlind: number;
   bigBlind: number;
@@ -37,13 +35,10 @@ export interface Lobby {
   matches: LobbyMatch[];
   /** Matches this account has an agent in. One owner holds at most one seat in each. */
   mine: string[];
-  /** Whether any of this account's agents is connected and asking for a game. */
-  queued: boolean;
   /** False until the first poll lands, when nothing about the floor is known. */
   loaded: boolean;
   /** The last poll was refused or never answered. */
   failed: boolean;
-  reload: () => void;
 }
 
 /**
@@ -56,12 +51,8 @@ export interface Lobby {
 export function useLobby(): Lobby {
   const [matches, setMatches] = useState<LobbyMatch[]>([]);
   const [mine, setMine] = useState<string[]>([]);
-  const [queued, setQueued] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [reloads, setReloads] = useState(0);
-
-  const reload = useCallback(() => setReloads((count) => count + 1), []);
 
   // The floor is external state, so it is polled and applied in a callback
   // rather than assigned while the effect body runs.
@@ -75,7 +66,7 @@ export function useLobby(): Lobby {
       // screen to keep, and "loading" would otherwise be shown forever.
       fetch('/api/matches', { cache: 'no-store' })
         .then((response) =>
-          response.ok ? (response.json() as Promise<{ matches: LobbyMatch[]; mine: string[]; queued: boolean }>) : null,
+          response.ok ? (response.json() as Promise<{ matches: LobbyMatch[]; mine: string[] }>) : null,
         )
         .then((body) => {
           if (cancelled) return;
@@ -85,7 +76,6 @@ export function useLobby(): Lobby {
           }
           setMatches(body.matches);
           setMine(body.mine);
-          setQueued(body.queued);
           setLoaded(true);
           setFailed(false);
         })
@@ -100,9 +90,9 @@ export function useLobby(): Lobby {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [reloads]);
+  }, []);
 
-  return { matches, mine, queued, loaded, failed, reload };
+  return { matches, mine, loaded, failed };
 }
 
 export function seatsTaken(match: LobbyMatch): number {

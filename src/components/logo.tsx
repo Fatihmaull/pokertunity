@@ -1,6 +1,5 @@
 /*
-  The brand in one place. It was a private `Suit()` inside the header, which
-  left the footer and the tab icon with no way to reach it.
+  The brand in one place, for the header and the footer alike.
 
   The source artwork is one JPEG of the full lockup on black. JPEG carries no
   alpha channel, so that black is part of the file and cannot be cut out of it.

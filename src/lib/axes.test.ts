@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { type AxisDecision, type AxisResult, bbPer100, computeAxes, loosenessOf, stints } from './axes';
+import { type AxisDecision, type AxisResult, bbPer100, computeAxes, stints } from './axes';
 
 const decision = (over: Partial<AxisDecision> = {}): AxisDecision => ({
   handId: 'h1',
@@ -31,7 +31,7 @@ const empty = {
   looseness: new Map<string, number>(),
   opponentsByHand: new Map<string, string[]>(),
   weakOpponentRating: null,
-    fieldVersusWeak: null,
+  fieldVersusWeak: null,
 };
 
 test('every axis is null until there is enough to measure', () => {
@@ -41,21 +41,6 @@ test('every axis is null until there is enough to measure', () => {
     adaptation: null,
     exploitation: null,
   });
-});
-
-test('looseness counts paying to play, not being made to post', () => {
-  assert.equal(
-    loosenessOf([
-      decision({ street: 'preflop', action: 'call' }),
-      decision({ street: 'preflop', action: 'fold' }),
-      decision({ street: 'preflop', action: 'raise' }),
-      decision({ street: 'preflop', action: 'fold' }),
-      // A later street says nothing about entering a pot.
-      decision({ street: 'river', action: 'call' }),
-    ]),
-    0.5,
-  );
-  assert.equal(loosenessOf([]), null);
 });
 
 test('a bluff that got called and won at showdown does not count as deception', () => {

@@ -50,9 +50,8 @@ export async function loadSeats(matchId: string): Promise<SeatedAgent[]> {
  * Marks the seats a hand is being played with, so nothing else settles one from
  * under it.
  *
- * Nobody can leave a match any more, so the only other writer is the code that
- * abandons a match after a restart. That is rare, and this is what makes it
- * safe rather than merely unlikely.
+ * The only other writer is the code that abandons a match after a restart. That
+ * is rare, and this is what makes it safe rather than merely unlikely.
  */
 export async function markInHand(matchId: string, seatIndexes: number[]): Promise<number[]> {
   if (seatIndexes.length === 0) return [];
@@ -112,8 +111,6 @@ export interface Candidate {
   rating: Rating;
   /** The published figure, which is what the bands are drawn on. */
   published: number;
-  /** A seeded agent. Carried so a match of nothing but those can say so. */
-  demo: boolean;
   /** Matches finished. Zero means the published figure is a starting point, not a measurement. */
   matchesPlayed: number;
 }
@@ -121,7 +118,7 @@ export interface Candidate {
 /**
  * Everyone waiting for a game, out of those currently connected and ready.
  *
- * Readiness is not a column any more: an agent is looking for a game when it
+ * Readiness is not a column: an agent is looking for a game when it
  * has a socket open and has said so on it. The caller passes in who that is,
  * because only the process holding the sockets knows, and this adds the three
  * conditions the database owns: its owner has switched matches on, it is not
@@ -141,7 +138,6 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: users.id,
       mu: agents.ratingMu,
       sigma: agents.ratingSigma,
-      demo: agents.demo,
       matchesPlayed: agents.matchesPlayed,
     })
     .from(agents)
@@ -164,7 +160,6 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
       ownerId: row.ownerId,
       rating,
       published: conservative(rating),
-      demo: row.demo,
       matchesPlayed: row.matchesPlayed,
     };
   });
@@ -211,10 +206,6 @@ export async function createMatch(
         buyIn: MATCH.buyIn,
         entryFee: MATCH.entryFee,
         handCap: MATCH.handCap,
-        // Only when there is nobody else in it. One stranger among the seeded
-        // field makes this a real match with real opponents, and labelling it
-        // "demo" would be telling them their result does not count.
-        demo: entrants.every((entrant) => entrant.demo),
         bandRating: bandOf(entrants),
         startedAt: new Date(),
       })
@@ -271,9 +262,9 @@ export async function createMatch(
       return null;
     }
 
-    // The table is as big as the field that turned up. Nobody joins a match in
-    // progress, so a chair nobody is sitting in is not an open seat, it is a
-    // drawing of one, and every screen counting seats would report a table
+    // The table is as big as the field that turned up. The field is fixed for
+    // the whole match, so a chair nobody is sitting in is not an open seat, it
+    // is a drawing of one, and every screen counting seats would report a table
     // waiting for players that will never come.
     await tx.update(matches).set({ seatCount: seated }).where(eq(matches.id, match.id));
 
@@ -515,12 +506,13 @@ export interface PersistedHand {
  *
  * The hand, its decisions, the results and counters, the stacks it left, the
  * seats it knocked out and the release of the seats land together or not at
- * all. Written separately, a failure between them left results and counters
- * describing a hand whose stacks never moved: numbers published about chips that
- * stayed where they were, and a table that dealt on from the old stacks.
+ * all. Written separately, a failure between them would leave results and
+ * counters describing a hand whose stacks never moved: numbers published about
+ * chips that stayed where they were, and a table that dealt on from the old
+ * stacks.
  */
-export async function recordHand(hand: PersistedHand): Promise<string> {
-  return db.transaction(async (tx) => {
+export async function recordHand(hand: PersistedHand): Promise<void> {
+  await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(hands)
       .values({
@@ -595,7 +587,6 @@ export async function recordHand(hand: PersistedHand): Promise<string> {
             handsPlayed: raw`${agents.handsPlayed} + 1`,
             handsWon: raw`${agents.handsWon} + ${outcome.won ? 1 : 0}`,
             chipsWon: raw`${agents.chipsWon} + ${outcome.net}`,
-            biggestPot: raw`GREATEST(${agents.biggestPot}, ${outcome.won ? outcome.potSize : 0})`,
             updatedAt: new Date(),
           })
           .where(eq(agents.id, outcome.agentId));
@@ -627,8 +618,6 @@ export async function recordHand(hand: PersistedHand): Promise<string> {
       .update(matches)
       .set({ handsPlayed: hand.handNumber })
       .where(eq(matches.id, hand.matchId));
-
-    return row.id;
   });
 }
 
@@ -636,7 +625,6 @@ export interface HandOutcome {
   agentId: string;
   won: boolean;
   net: number;
-  potSize: number;
   startingStack: number;
   /** Whether the hand was decided by comparing cards. */
   showdown: boolean;
@@ -691,7 +679,6 @@ export async function ratingsOf(agentIds: string[]): Promise<Map<string, Rating>
 export interface StoredMatch {
   matchId: string;
   status: string;
-  demo: boolean;
   seatCount: number;
   smallBlind: number;
   bigBlind: number;
@@ -715,10 +702,10 @@ export interface StoredMatch {
  */
 export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
   const rows = await db
-    // Abandoned matches belong here too. They were dropped once, which meant a
-    // match somebody had chips in simply vanished from the floor the moment the
-    // process dealing it went away: the stacks went back, nothing said so, and
-    // the entrant was left looking at a lobby that had never heard of it.
+    // Abandoned matches belong here too. Without them, a match somebody had
+    // chips in would vanish from the floor the moment the process dealing it
+    // went away, and the entrant would be left looking at a lobby that had never
+    // heard of it.
     .select()
     .from(matches)
     .where(inArray(matches.status, ['playing', 'elimination', 'cap', 'abandoned']))
@@ -784,7 +771,6 @@ export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
   return rows.map((row) => ({
     matchId: row.id,
     status: row.status,
-    demo: row.demo,
     seatCount: row.seatCount,
     smallBlind: row.smallBlind,
     bigBlind: row.bigBlind,
@@ -857,10 +843,8 @@ export interface MatchSummary {
 /**
  * A match that is over, as something a reader can actually be shown.
  *
- * The page used to have nothing for this. A finished match's runtime is gone,
- * so its feed answers 503, and the interface sat on "Loading match…" forever
- * while retrying a stream that was never going to open. Everything needed was
- * already in the database; nothing was reading it.
+ * A finished match's runtime is gone and its feed answers 503, so this reads
+ * everything from the database.
  *
  * Two shapes come back, because two things can have happened. A match that ran
  * to an elimination or to the cap has a finishing order in `matchResults`. One

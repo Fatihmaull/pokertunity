@@ -71,11 +71,6 @@ export function confidenceIn(rating: Rating): number {
   return Math.max(0, Math.min(100, Math.round(closed * 100)));
 }
 
-/** The rating as the signed fixed-point integer `giveFeedback` wants. */
-export function reputationValue(rating: Rating): bigint {
-  return BigInt(Math.round(conservative(rating) * 10 ** REPUTATION_DECIMALS));
-}
-
 /**
  * The document a reader fetches to check the claim.
  *

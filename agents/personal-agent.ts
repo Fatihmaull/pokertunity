@@ -16,7 +16,7 @@ const builtInStrategy = readFileSync(new URL('./strategy.md', import.meta.url), 
  * Your personal AI player.
  *
  * The connection and protocol remain shared with the reference agent. This
- * entrypoint exists so your wallet token, model key, and strategy can live in
+ * entrypoint exists so your agent token, model key, and strategy can live in
  * `agents/.env` rather than in the arena's configuration or the seeded field.
  */
 

@@ -7,7 +7,6 @@ import {
   confidenceIn,
   publishPlan,
   REPUTATION_DECIMALS,
-  reputationValue,
 } from './erc8004';
 import { DEFAULT_RATING, conservative, updateRatings, type Rating } from './rating';
 
@@ -67,25 +66,6 @@ test('confidence stays inside the range the standard allows', () => {
   }
 });
 
-test('an agent that keeps finishing last posts a negative value', () => {
-  // The registry takes a signed value for exactly this reason. An agent rated
-  // below where it started has to be able to say so.
-  const poor = settled(6, 3);
-  assert.ok(conservative(poor) < 0);
-  assert.equal(reputationValue(poor), BigInt(Math.round(conservative(poor) * 100)));
-  assert.ok(reputationValue(poor) < 0n);
-  assert.equal(REPUTATION_DECIMALS, 2);
-});
-
-test('the value on chain is the published rating, not the raw estimate', () => {
-  // Publishing mu would let an agent with three lucky matches outrank one with
-  // three hundred honest ones, which is the whole thing this guards against.
-  const lucky = settled(40, 8);
-  const proven = settled(30, 1);
-
-  assert.ok(reputationValue(proven) > reputationValue(lucky), 'evidence beats a hot streak');
-});
-
 const RECORD = {
   agentId: 'a-1',
   name: 'Viridian',
@@ -131,7 +111,7 @@ test('the attestation carries what it took to earn the record, not just the scor
 const ATTESTOR = '0x00000000000000000000000000000000000a77e5' as const;
 const HASH = `0x${'ab'.repeat(32)}` as const;
 
-function planFor(validation: boolean) {
+function planFor(validation: boolean, rating: Rating = settled(30, 2)) {
   return publishPlan({
     registryId: 7n,
     attestor: ATTESTOR,
@@ -140,7 +120,7 @@ function planFor(validation: boolean) {
     attestation: buildAttestation({
       agentId: 'a',
       name: 'Ace',
-      rating: settled(30, 2),
+      rating,
       matches: 40,
       wins: 9,
       hands: 1200,
@@ -150,6 +130,12 @@ function planFor(validation: boolean) {
     }),
     validation,
   });
+}
+
+/** The value `giveFeedback` is sent for a rating, read off the plan that publishes it. */
+function feedbackValue(rating: Rating): bigint {
+  const feedback = planFor(false, rating).find((write) => write.functionName === 'giveFeedback')!;
+  return feedback.args[1] as bigint;
 }
 
 test('feedback is never signed by the key that owns the identity', () => {
@@ -189,6 +175,25 @@ test('the feedback value is the published rating at the published precision', ()
   assert.equal(feedback.args[1], BigInt(Math.round(conservative(settled(30, 2)) * 10 ** REPUTATION_DECIMALS)));
   assert.equal(feedback.args[2], REPUTATION_DECIMALS);
   assert.equal(feedback.args[7], HASH);
+});
+
+test('an agent that keeps finishing last posts a negative value', () => {
+  // The registry takes a signed value for exactly this reason. An agent rated
+  // below where it started has to be able to say so.
+  const poor = settled(6, 3);
+  assert.ok(conservative(poor) < 0);
+  assert.equal(feedbackValue(poor), BigInt(Math.round(conservative(poor) * 100)));
+  assert.ok(feedbackValue(poor) < 0n);
+  assert.equal(REPUTATION_DECIMALS, 2);
+});
+
+test('the value on chain is the published rating, not the raw estimate', () => {
+  // Publishing mu would let an agent with three lucky matches outrank one with
+  // three hundred honest ones, which is the whole thing this guards against.
+  const lucky = settled(40, 8);
+  const proven = settled(30, 1);
+
+  assert.ok(feedbackValue(proven) > feedbackValue(lucky), 'evidence beats a hot streak');
 });
 
 test('one registration file names the agent on every chain it was minted on', () => {
