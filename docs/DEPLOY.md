@@ -319,4 +319,4 @@ contract suite asserts it.
 
 **Do not run two dealing replicas.** The advisory lock makes that safe rather
 than useful — the second serves pages and deals nothing. If you need more
-throughput, shard matches across processes; see the root README's *Not built*.
+throughput, shard matches across processes.

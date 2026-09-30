@@ -83,11 +83,6 @@ RPC, its finality and a wallet driven by a person. That is still A4.
 
 - **A deposit on a public testnet.** The logic is rehearsed (above); the
   network is not.
-- **The deployed vaults.** Recorded as deployed on all three chains, but no
-  address is written down anywhere in this repository: every `<CHAIN>_VAULT_ADDRESS`
-  in the local `.env` is empty, and the only forge broadcast on disk names
-  transactions no chain has. Until the addresses are recovered and put in A2,
-  A3, A5 and D2 have nothing to point at.
 - **ERC-8004 attestation.** `pnpm attest` has run against forks of all three
   testnets, never against the testnets themselves.
 - **The browser.** Only status codes and JSON were checked. No wallet, no eyes.
