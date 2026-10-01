@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { chainByKey } from '@/lib/chains';
-import { chipsToWei, formatChips, formatNative, formatUsd, purchaseRefusal } from '@/lib/economy';
+import { chipsToWei, formatChips, formatNative, purchaseRefusal } from '@/lib/economy';
 import { sendDeposit } from '@/lib/wallet';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
@@ -172,7 +172,6 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   const chips = Number(amount);
   const refusal = purchaseRefusal(chips);
   const wei = refusal ? null : chipsToWei(chips);
-  const usd = wei === null ? null : formatUsd(wei, chain?.notionalUsd);
 
   return (
     <div
@@ -225,18 +224,12 @@ export function Cashier({ onClose }: { onClose: () => void }) {
             />
           </label>
 
-          <div aria-live="polite" className="mono min-h-10 tabular-nums">
-            {wei === null ? (
-              <p className="text-[0.8125rem] text-faint">{refusal}</p>
-            ) : (
-              <>
-                <p className="text-[0.8125rem] text-muted">
-                  {formatNative(wei)} {symbol}
-                </p>
-                {usd ? <p className="text-xs text-faint">{usd} at a fixed testnet rate</p> : null}
-              </>
-            )}
-          </div>
+          <p
+            aria-live="polite"
+            className={`mono text-[0.8125rem] tabular-nums ${wei === null ? 'text-faint' : 'text-muted'}`}
+          >
+            {wei === null ? refusal : `${formatNative(wei)} ${symbol}`}
+          </p>
 
           <button
             type="submit"

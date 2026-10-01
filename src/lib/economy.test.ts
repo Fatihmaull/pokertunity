@@ -19,7 +19,6 @@ import {
   STARTING_GRANT,
   chipsToWei,
   formatNative,
-  formatUsd,
   purchaseRefusal,
   weiToChips,
   WEI_PER_CHIP,
@@ -106,11 +105,6 @@ test('formats the native token without trailing noise', () => {
   assert.equal(formatNative(chipsToWei(12_345)), '0.12345', 'every chip shows, so the label is what the wallet asks');
   assert.equal(formatNative(chipsToWei(1)), '0.00001');
   assert.equal(formatNative(0n), '0');
-});
-
-test('a dollar hint is shown only where the chain carries a reference price', () => {
-  assert.equal(formatUsd(chipsToWei(10_000), undefined), null, 'no rate means no figure, not a zero');
-  assert.equal(formatUsd(chipsToWei(10_000), 600), '$60.00');
 });
 
 test('a hand cap that is not a hand count plays the default rather than an unplayable match', () => {

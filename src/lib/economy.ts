@@ -59,24 +59,6 @@ export function formatNative(wei: bigint): string {
 }
 
 /**
- * A dollar hint for the Cashier, at the notional rate the chain carries.
- *
- * Test tokens have no market, so the rate is a fixed reference rather than an
- * oracle and the interface says so on screen. A chain with no plausible
- * reference price returns null and the figure is left off entirely rather than
- * invented.
- */
-export function formatUsd(wei: bigint, notionalUsd: number | undefined): string | null {
-  if (notionalUsd === undefined) return null;
-  const tokens = Number(wei) / 1e18;
-  return (tokens * notionalUsd).toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  });
-}
-
-/**
  * The match.
  *
  * Every game in the arena is the same game: one blind level, one buy-in, the
