@@ -7,6 +7,7 @@ import { CHIP_PACKAGES, chipsToWei, formatChips, formatNative, formatUsd } from 
 import { sendDeposit } from '@/lib/wallet';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
+import { ChainMenu } from './chain-menu';
 
 type Stage = 'idle' | 'signing' | 'confirming' | 'done';
 
@@ -23,7 +24,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose();
+        // An open menu inside the dialog takes the first Escape.
+        if (!event.defaultPrevented) onClose();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -186,7 +188,9 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-6 py-5">
           <h2 className="text-2xl text-ink">Cashier</h2>
           <p className="mono text-xs text-faint">1 chip = 0.00001 {symbol || 'native token'}</p>
-          {chain ? <NetworkPicker disabled={busy} /> : null}
+          {/* Shown at every width: on a phone, where the header hides it, this
+              is the way off a network that has no vault. */}
+          <ChainMenu align="left" disabled={busy} />
           <button
             type="button"
             onClick={onClose}
@@ -261,45 +265,6 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         ) : null}
       </div>
     </div>
-  );
-}
-
-/**
- * Which network the deposit is paid on, and the way to change it.
- *
- * Here as well as in the header because the header's menu only fits on a wide
- * screen, and this is the one place the choice actually matters: on a phone it
- * was otherwise impossible to leave a network that has no vault.
- */
-function NetworkPicker({ disabled }: { disabled: boolean }) {
-  const { chains, chain, switching, switchChain } = useChain();
-  const [failure, setFailure] = useState<string | null>(null);
-  if (!chain) return null;
-  if (chains.length < 2) return <p className="text-xs text-faint">on {chain.name}</p>;
-
-  return (
-    <label className="flex items-center gap-1.5 text-xs text-faint">
-      on
-      <select
-        value={chain.key}
-        disabled={disabled || switching}
-        aria-label="Network"
-        onChange={(event) => {
-          setFailure(null);
-          switchChain(event.target.value).catch((error: unknown) =>
-            setFailure(error instanceof Error ? error.message : 'That network is unavailable.'),
-          );
-        }}
-        className="h-7 rounded-control border border-line bg-surface-2 px-1.5 text-xs text-ink disabled:opacity-50"
-      >
-        {chains.map((entry) => (
-          <option key={entry.key} value={entry.key}>
-            {entry.name}
-          </option>
-        ))}
-      </select>
-      {failure ? <span className="text-danger">{failure}</span> : null}
-    </label>
   );
 }
 

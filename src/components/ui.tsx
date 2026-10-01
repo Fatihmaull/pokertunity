@@ -168,7 +168,10 @@ export function useDismissed(
       if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      // Claimed, so a dialog this menu sits in stays open.
+      event.preventDefault();
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);

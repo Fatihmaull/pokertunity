@@ -151,11 +151,9 @@ export function Standings() {
  */
 const RANKED = {
   grid: 'grid-cols-[1.75rem_minmax(0,1fr)_auto] lg:grid-cols-[2.5rem_minmax(9rem,1.6fr)_6rem_6rem_6rem_7rem]',
-  head: '#',
 };
 const YOURS = {
   grid: 'grid-cols-[4.5rem_minmax(0,1fr)_auto] lg:grid-cols-[5rem_minmax(9rem,1.6fr)_6rem_6rem_6rem_7rem]',
-  head: 'Rank',
 };
 
 type Layout = typeof RANKED;
@@ -163,12 +161,12 @@ type Layout = typeof RANKED;
 function Heads({ layout }: { layout: Layout }) {
   return (
     <div className={`hidden ${layout.grid} items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid`}>
-      <span className="label text-faint">{layout.head}</span>
+      <span className="label text-center text-faint">Rank</span>
       <span className="label text-faint">Agent</span>
-      <span className="label text-right text-faint">Rating</span>
-      <span className="label text-right text-faint">Matches</span>
-      <span className="label text-right text-faint">Won</span>
-      <span className="label text-right text-faint">Earnings</span>
+      <span className="label text-center text-faint">Rating</span>
+      <span className="label text-center text-faint">Matches</span>
+      <span className="label text-center text-faint">Won</span>
+      <span className="label text-center text-faint">Earnings</span>
     </div>
   );
 }
@@ -186,9 +184,9 @@ function Row({ row, layout, mine }: { row: Standing; layout: Layout; mine: boole
       }`}
     >
       {row.place === null ? (
-        <span className="text-xs text-faint">Unranked</span>
+        <span className="text-center text-xs text-faint">Unranked</span>
       ) : (
-        <span className="mono text-sm text-faint tabular-nums">{row.place}</span>
+        <span className="mono text-center text-sm text-faint tabular-nums">{row.place}</span>
       )}
       <span className="min-w-0">
         <span className="block truncate text-[0.9375rem] font-semibold text-ink">{row.name}</span>
@@ -206,7 +204,7 @@ function Row({ row, layout, mine }: { row: Standing; layout: Layout; mine: boole
           how wide the doubt still is are on hover: they qualify the rating
           rather than competing with it. */}
       <span
-        className={`mono text-right text-sm tabular-nums ${row.place === null ? 'text-faint' : 'text-ink'}`}
+        className={`mono text-center text-sm tabular-nums ${row.place === null ? 'text-faint' : 'text-ink'}`}
         title={row.place === null ? undefined : `Estimate ${row.ratingMu.toFixed(1)} ±${row.ratingSigma.toFixed(1)}`}
       >
         {row.place === null ? '—' : row.rating.toFixed(1)}
@@ -220,5 +218,5 @@ function Row({ row, layout, mine }: { row: Standing; layout: Layout; mine: boole
 
 /** A wide-screen column. On a phone its figure is in the line under the name. */
 function Cell({ value, className = 'text-ink' }: { value: string; className?: string }) {
-  return <span className={`mono hidden text-right text-sm tabular-nums lg:block ${className}`}>{value}</span>;
+  return <span className={`mono hidden text-center text-sm tabular-nums lg:block ${className}`}>{value}</span>;
 }
