@@ -6,7 +6,7 @@ import { allMatches } from '@/server/registry';
 import { storedMatches } from '@/server/store';
 
 /**
- * The floor: every match being dealt, and the ones that just finished.
+ * The floor: every match being dealt, and a page of the ones that have ended.
  *
  * Built from the match rows rather than from this process's own runtimes. Only
  * one instance deals, so only that one has runtimes, and a floor read off them
@@ -23,44 +23,16 @@ export async function GET(request: Request): Promise<Response> {
   if (!allowed.ok) return tooMany(allowed.retryAfterMs);
 
   const mine = session ? await account(session).catch(() => null) : null;
-
-  // One owner can hold at most one seat in any match, so a set of their agent
-  // ids is enough to answer "is that me" without picking between them.
-  const myAgentIds = new Set((mine?.agents ?? []).map((agent) => agent.id));
   const myMatchIds = new Set(
     (mine?.agents ?? []).flatMap((agent) => (agent.seat ? [agent.seat.matchId] : [])),
   );
 
-  const stored = await storedMatches();
+  const floor = await storedMatches(Number(new URL(request.url).searchParams.get('page')) || 1);
   const live = new Map(allMatches().map((runtime) => [runtime.matchId, runtime]));
 
-  const matches = stored.map((row) => {
+  const matches = floor.matches.map((row) => {
     const runtime = live.get(row.matchId);
     const view = runtime?.view(mine?.agents.find((agent) => agent.seat?.matchId === row.matchId)?.id ?? null) ?? null;
-
-    const seats = view?.seats.length
-      ? view.seats.map((seat) => ({
-          index: seat.index,
-          name: seat.name,
-          color: seat.color,
-          stack: seat.stack,
-          // Read off the seat row, which is written in the same transaction as
-          // the hand that knocked it out. The live view has no notion of out:
-          // a seat that busted still has an occupant, so it never reads empty.
-          busted: row.seats.find((entry) => entry.index === seat.index)?.busted ?? false,
-          isMine: seat.agentId !== null && myAgentIds.has(seat.agentId),
-        }))
-      : Array.from({ length: row.seatCount }, (_, index) => {
-          const seat = row.seats.find((entry) => entry.index === index);
-          return {
-            index,
-            name: seat?.name ?? null,
-            color: seat?.color ?? null,
-            stack: seat?.stack ?? 0,
-            busted: seat?.busted ?? false,
-            isMine: seat !== undefined && seat.agentId !== null && myAgentIds.has(seat.agentId),
-          };
-        });
 
     return {
       id: row.matchId,
@@ -78,12 +50,14 @@ export async function GET(request: Request): Promise<Response> {
       bandRating: row.bandRating,
       startedAt: row.startedAt?.toISOString() ?? null,
       endedAt: row.endedAt?.toISOString() ?? null,
-      seats,
     };
   });
 
   return Response.json({
     matches,
+    // Of the ended matches. The live ones are not paged.
+    page: floor.page,
+    pages: floor.pages,
     // Which matches the viewer has an agent in, so the interface can point at
     // them rather than making somebody find their own name in a list.
     mine: [...myMatchIds],

@@ -46,8 +46,10 @@ interface Limit {
  *   computes in memory. The console asks once per agent and an account runs at
  *   most eight, so the burst covers a full console and a reload. The rate after
  *   that is the tightest of the reads, because this is the query that costs most.
- * - `leaderboard` aggregates every result ever recorded. The standings page
- *   polls it every fifteen seconds.
+ * - `leaderboard` places every agent, then aggregates the results of one page
+ *   of them and of the viewer's own. The standings page polls it every fifteen
+ *   seconds and asks again on every page turned, so the burst lets somebody
+ *   page through quickly.
  * - `attestation` runs that same aggregate for one agent when nothing has been
  *   published for it yet. Verifiers fetch it after reading the chain, rarely.
  *   A single published attestation by id shares the bucket.
@@ -56,9 +58,10 @@ interface Limit {
  *   aggregates for that reason and because it is cheap.
  * - `hands-latest` reads a whole hand and its decisions when nothing is live.
  *   The landing page asks once per load.
- * - `matches` is a handful of rows, and every open lobby polls it every five
- *   seconds. Loose on purpose, since signed-out people behind one address share
- *   a bucket.
+ * - `matches` is a handful of rows: every live match and one page of ended
+ *   ones. Every open lobby polls it every five seconds, and the matches page
+ *   asks again on every page of history turned. Loose on purpose, since
+ *   signed-out people behind one address share a bucket.
  */
 export const LIMITS = {
   'deposit-confirm': { perMinute: 10, burst: 5 },
@@ -66,7 +69,7 @@ export const LIMITS = {
   'sign-in': { perMinute: 30, burst: 10 },
   write: { perMinute: 30, burst: 10 },
   axes: { perMinute: 10, burst: 16 },
-  leaderboard: { perMinute: 20, burst: 10 },
+  leaderboard: { perMinute: 40, burst: 20 },
   attestation: { perMinute: 20, burst: 10 },
   registration: { perMinute: 60, burst: 20 },
   'hands-latest': { perMinute: 30, burst: 10 },

@@ -256,7 +256,7 @@ function TableBar({
               {table?.label ?? "Loading match…"}
             </h1>
             {finished ? (
-              <Badge>Finished</Badge>
+              <Badge>Ended</Badge>
             ) : connected ? (
               <LiveBadge
                 label={table && table.street !== "idle" ? "Live" : "Connected"}

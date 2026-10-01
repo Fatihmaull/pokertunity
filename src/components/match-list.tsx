@@ -1,20 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { ChipDot } from './table-art';
-import { seatsTaken, type Lobby, type LobbyMatch } from './use-lobby';
+import { MATCH } from '@/lib/economy';
+import type { Lobby, LobbyMatch } from './use-lobby';
 import { Badge, ButtonLink, Card, EmptyState, LiveBadge } from './ui';
 
 /**
- * What the arena is dealing.
+ * What the arena is dealing, or, with `ended`, what it has dealt.
  *
  * There is nothing to choose here and no button to press. Agents are matched by
  * rating rather than picking their own game, so this is a schedule rather than
- * a lobby: it says which matches are running, who is in them, and how far along
- * they are.
+ * a lobby: it says which matches are running, how many agents are in them, and
+ * how far along they are.
  */
-export function MatchList({ lobby, limit }: { lobby: Lobby; limit?: number }) {
-  const visible = limit ? lobby.matches.slice(0, limit) : lobby.matches;
+export function MatchList({ lobby, ended = false, limit }: { lobby: Lobby; ended?: boolean; limit?: number }) {
+  const listed = lobby.matches.filter((match) => match.live !== ended);
+  const visible = limit ? listed.slice(0, limit) : listed;
 
   return (
     <Card className="overflow-hidden">
@@ -32,38 +33,11 @@ export function MatchList({ lobby, limit }: { lobby: Lobby; limit?: number }) {
       </div>
 
       {visible.length === 0 ? (
-        <EmptyState
-          title={
-            lobby.loaded
-              ? 'Nothing is being dealt yet'
-              : lobby.failed
-                ? 'Matches could not be loaded'
-                : 'Loading matches…'
-          }
-          body={
-            lobby.loaded
-              ? 'A match starts once two agents are queued.'
-              : lobby.failed
-                ? 'The arena did not answer. This list asks again every few seconds.'
-                : undefined
-          }
-          action={
-            lobby.loaded ? (
-              <ButtonLink href="/agent" size="sm">
-                Add an agent
-              </ButtonLink>
-            ) : undefined
-          }
-        />
+        <Empty lobby={lobby} ended={ended} />
       ) : (
         <ul>
           {visible.map((match) => (
-            <MatchRow
-              key={match.id}
-              match={match}
-              loaded={lobby.loaded}
-              mine={lobby.mine.includes(match.id)}
-            />
+            <MatchRow key={match.id} match={match} mine={lobby.mine.includes(match.id)} />
           ))}
         </ul>
       )}
@@ -71,10 +45,34 @@ export function MatchList({ lobby, limit }: { lobby: Lobby; limit?: number }) {
   );
 }
 
-function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean; mine: boolean }) {
-  const taken = seatsTaken(match);
-  const finished = match.status !== 'playing';
+function Empty({ lobby, ended }: { lobby: Lobby; ended: boolean }) {
+  if (!lobby.loaded) {
+    return lobby.failed ? (
+      <EmptyState
+        title="Matches could not be loaded"
+        body="The arena did not answer. This list asks again every few seconds."
+      />
+    ) : (
+      <EmptyState title="Loading matches…" />
+    );
+  }
 
+  if (ended) return <EmptyState title="No match has ended yet" />;
+
+  return (
+    <EmptyState
+      title="Nothing is being dealt right now"
+      body="A match starts once two agents are queued."
+      action={
+        <ButtonLink href="/agent" size="sm">
+          Add an agent
+        </ButtonLink>
+      }
+    />
+  );
+}
+
+function MatchRow({ match, mine }: { match: LobbyMatch; mine: boolean }) {
   return (
     <li className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 border-b border-line px-4 py-4 transition-colors last:border-b-0 hover:bg-surface-2/60 sm:px-5 lg:grid-cols-[minmax(11rem,1.6fr)_minmax(8rem,1fr)_7rem_7rem] lg:gap-4 lg:py-3.5">
       <div className="min-w-0">
@@ -89,18 +87,8 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
           >
             {match.label}
           </Link>
-          {match.live ? <LiveBadge /> : null}
+          {match.live ? <LiveBadge label="Ongoing" /> : <Badge>Ended</Badge>}
           {mine ? <Badge tone="accent">Your agent</Badge> : null}
-          {/* Abandoned is its own answer, not a hand limit that happened to stop early. */}
-          {finished ? (
-            <Badge tone={match.status === 'abandoned' ? 'warning' : 'neutral'}>
-              {match.status === 'elimination'
-                ? 'Won outright'
-                : match.status === 'abandoned'
-                  ? 'Abandoned'
-                  : 'Hand limit'}
-            </Badge>
-          ) : null}
         </div>
         <p className="mt-0.5 text-xs text-faint">
           {/* The band: how strong the company is, which is what a spectator
@@ -109,24 +97,12 @@ function MatchRow({ match, loaded, mine }: { match: LobbyMatch; loaded: boolean;
         </p>
       </div>
 
-      <div className="col-start-1 flex min-w-0 items-center gap-2 lg:col-start-auto">
-        <span className="flex items-center gap-1" aria-hidden>
-          {Array.from({ length: match.seatCount }, (_, index) => {
-            const seat = match.seats.find((entry) => entry.index === index);
-            return (
-              <ChipDot
-                key={index}
-                color={seat?.isMine ? 'white' : seat?.color}
-                // An eliminated agent reads as an empty chair, because that is
-                // what it is: still on the record, no longer in the hand.
-                empty={!seat?.name || seat.busted}
-                size={14}
-              />
-            );
-          })}
-        </span>
+      {/* The field that sat down, counted against the most a table seats, so a
+          match short of a full table reads as one. */}
+      <div className="col-start-1 lg:col-start-auto">
         <span className="mono text-xs text-muted tabular-nums">
-          {loaded ? `${taken}/${match.seatCount}` : `–/${match.seatCount}`}
+          {match.seatCount}/{MATCH.seats}
+          <span className="lg:hidden"> agents</span>
         </span>
       </div>
 

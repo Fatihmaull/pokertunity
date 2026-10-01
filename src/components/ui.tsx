@@ -310,3 +310,28 @@ export function SectionHeading({
     </div>
   );
 }
+
+/**
+ * Back and forward through a list the server hands over a page at a time.
+ * Nothing is drawn while one page holds everything: a pager with nowhere to go
+ * is two buttons that do nothing.
+ */
+export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
+  if (pages <= 1) return null;
+
+  return (
+    <nav aria-label="Pages" className="mt-3 flex items-center justify-between gap-4">
+      <Button tone="ghost" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+        <span aria-hidden>←</span>
+        Previous
+      </Button>
+      <span className="mono text-xs text-faint tabular-nums">
+        Page {page} of {pages}
+      </span>
+      <Button tone="ghost" size="sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+        Next
+        <span aria-hidden>→</span>
+      </Button>
+    </nav>
+  );
+}

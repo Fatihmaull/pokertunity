@@ -226,7 +226,7 @@ will run on, once D1 exists.
 | Route | Why it matters |
 | --- | --- |
 | `/api/agents/[id]/axes` | Worst. Public, unauthenticated, scans up to 5,000 rows, then computes in memory |
-| `/api/leaderboard` | Aggregate over every hand ever played |
+| `/api/leaderboard` | Places every agent, then aggregates every hand a page of them played |
 | `/api/hands/latest` | Reads a whole hand plus its decisions |
 | `/api/matches` | Polled by every open lobby |
 
@@ -372,9 +372,9 @@ Nobody has. Each screen, light and dark, laptop and phone.
 | Screen | Watch for |
 | --- | --- |
 | `/` | The live hand hero, and what it shows when no match is running |
-| `/matches` | Live and finished matches; a finished one must name who played |
+| `/matches` | Ongoing and History as separate lists, and History paging |
 | `/match/[id]` | The felt, the Brain Visualizer, the clock, the pacing |
-| `/standings` | An unrated agent reads "unrated" rather than 0.0 |
+| `/standings` | Your own agents tinted in the ranks; an unranked one reads "Unranked" under Your agents |
 | `/agent` | Token handling, the agent list, the cashier |
 
 No horizontal scrolling on a phone, text readable in both themes, nothing

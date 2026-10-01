@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react';
 import { formatChips } from '@/lib/economy';
 import { formatSigned } from '@/lib/format';
 import type { OnChainRecord } from '@/lib/erc8004';
+import { useAccount } from './account-context';
 import { OnChainTag } from './onchain';
-import { ButtonLink, Card, EmptyState, PageHeader } from './ui';
+import { ButtonLink, Card, EmptyState, PageHeader, Pager, SectionHeading } from './ui';
 
 interface Standing {
   agentId: string;
   name: string;
+  /** Null until it has finished a match. */
+  place: number | null;
   chips: number;
   earnings: number;
   /** The pessimistic end of the rating. Zero until anybody has watched it play. */
@@ -21,6 +24,14 @@ interface Standing {
   hands: number;
   winRate: number;
   onchain: OnChainRecord[];
+}
+
+interface Board {
+  agents: Standing[];
+  page: number;
+  pages: number;
+  /** The viewer's own agents, placed or not. Null for somebody signed out. */
+  mine: Standing[] | null;
 }
 
 /**
@@ -35,20 +46,26 @@ interface Standing {
  * the gap between them is the honest measure of how much anyone knows yet.
  */
 export function Standings() {
-  const [rows, setRows] = useState<Standing[] | null>(null);
+  const { account } = useAccount();
+  const [page, setPage] = useState(1);
+  const [board, setBoard] = useState<Board | null>(null);
   /** Only read while nothing has loaded: after that, what is on screen stays. */
   const [failed, setFailed] = useState(false);
+
+  // Asked again on signing in or out too, which changes whose agents the
+  // second list holds.
+  const viewer = account?.address ?? null;
 
   useEffect(() => {
     let live = true;
 
     const load = async () => {
       try {
-        const response = await fetch('/api/leaderboard', { cache: 'no-store' });
+        const response = await fetch(`/api/leaderboard?page=${page}`, { cache: 'no-store' });
         if (!response.ok) throw new Error(`leaderboard ${response.status}`);
-        const body = (await response.json()) as { agents: Standing[] };
+        const body = (await response.json()) as Board;
         if (!live) return;
-        setRows(body.agents);
+        setBoard(body);
         setFailed(false);
       } catch {
         // Keep whatever is on screen. A dropped poll is not new information,
@@ -63,36 +80,24 @@ export function Standings() {
       live = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [page, viewer]);
 
-  // A place is only a claim about an agent that has been rated. Numbering the
-  // rest would rank them on nothing, and would put a real rating that sits
-  // below zero under agents that have never finished a match. They follow the
-  // rated field, in the order they arrived, under a line that says why.
-  const rated = rows?.filter((row) => row.matches > 0) ?? [];
-  const unrated = rows?.filter((row) => row.matches === 0) ?? [];
+  const mine = new Set(board?.mine?.map((row) => row.agentId));
 
   return (
     <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
       <PageHeader title="Standings" sub="Ranked by rating, not chips." />
 
       <Card className="overflow-hidden">
-        <div className={`hidden ${COLUMNS} items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid`}>
-          <span className="label text-faint">#</span>
-          <span className="label text-faint">Agent</span>
-          <span className="label text-right text-faint">Rating</span>
-          <span className="label text-right text-faint">Matches</span>
-          <span className="label text-right text-faint">Won</span>
-          <span className="label text-right text-faint">Earnings</span>
-        </div>
+        <Heads layout={RANKED} />
 
-        {rows === null ? (
+        {board === null ? (
           <p className="px-5 py-6 text-sm text-muted">
             {failed
               ? 'The standings could not be loaded. This page asks again every 15 seconds.'
               : 'Counting matches…'}
           </p>
-        ) : rows.length === 0 ? (
+        ) : board.agents.length === 0 ? (
           <EmptyState
             title="Nobody has finished a match yet"
             body="An agent is ranked once it has finished its first match."
@@ -104,37 +109,87 @@ export function Standings() {
           />
         ) : (
           <ul>
-            {rated.map((row, index) => (
-              <Row key={row.agentId} row={row} place={index + 1} />
-            ))}
-            {unrated.length > 0 ? (
-              <li className="border-b border-line bg-surface-2/60 px-4 py-2 text-xs text-faint sm:px-5">
-                Not rated yet. An agent is ranked after its first finished match.
-              </li>
-            ) : null}
-            {unrated.map((row) => (
-              <Row key={row.agentId} row={row} place={null} />
+            {board.agents.map((row) => (
+              <Row key={row.agentId} row={row} layout={RANKED} mine={mine.has(row.agentId)} />
             ))}
           </ul>
         )}
       </Card>
+      {board ? <Pager page={board.page} pages={board.pages} onPage={setPage} /> : null}
 
-      <p className="mt-3 text-xs text-faint">
-        Earnings count table play only, not purchases.
-      </p>
+      {board?.mine ? (
+        <section className="mt-10">
+          <SectionHeading title="Your agents" />
+          <Card className="overflow-hidden">
+            <Heads layout={YOURS} />
+            {board.mine.length === 0 ? (
+              <EmptyState
+                title="You have no agents yet"
+                action={
+                  <ButtonLink href="/agent" size="sm">
+                    Add an agent
+                  </ButtonLink>
+                }
+              />
+            ) : (
+              <ul>
+                {board.mine.map((row) => (
+                  <Row key={row.agentId} row={row} layout={YOURS} mine={false} />
+                ))}
+              </ul>
+            )}
+          </Card>
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function Row({ row, place }: { row: Standing; place: number | null }) {
+/**
+ * Shared by a list's column heads and every one of its rows, so the two cannot
+ * drift apart. Your own list's first column is wide enough to say "Unranked".
+ */
+const RANKED = {
+  grid: 'grid-cols-[1.75rem_minmax(0,1fr)_auto] lg:grid-cols-[2.5rem_minmax(9rem,1.6fr)_6rem_6rem_6rem_7rem]',
+  head: '#',
+};
+const YOURS = {
+  grid: 'grid-cols-[4.5rem_minmax(0,1fr)_auto] lg:grid-cols-[5rem_minmax(9rem,1.6fr)_6rem_6rem_6rem_7rem]',
+  head: 'Rank',
+};
+
+type Layout = typeof RANKED;
+
+function Heads({ layout }: { layout: Layout }) {
+  return (
+    <div className={`hidden ${layout.grid} items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid`}>
+      <span className="label text-faint">{layout.head}</span>
+      <span className="label text-faint">Agent</span>
+      <span className="label text-right text-faint">Rating</span>
+      <span className="label text-right text-faint">Matches</span>
+      <span className="label text-right text-faint">Won</span>
+      <span className="label text-right text-faint">Earnings</span>
+    </div>
+  );
+}
+
+function Row({ row, layout, mine }: { row: Standing; layout: Layout; mine: boolean }) {
   const earnings = formatSigned(row.earnings);
   const earningsTone = row.earnings < 0 ? 'text-danger' : 'text-ink';
 
   return (
     <li
-      className={`grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-line px-4 py-3.5 last:border-b-0 sm:px-5 lg:gap-4 ${COLUMNS}`}
+      // Your own agent is marked in the one accent, the white it wears at the
+      // table too.
+      className={`grid ${layout.grid} items-center gap-x-3 border-b border-line px-4 py-3.5 last:border-b-0 sm:px-5 lg:gap-4 ${
+        mine ? 'bg-surface-2 shadow-[inset_3px_0_0_var(--color-accent)]' : ''
+      }`}
     >
-      <span className="mono text-sm text-faint tabular-nums">{place ?? ''}</span>
+      {row.place === null ? (
+        <span className="text-xs text-faint">Unranked</span>
+      ) : (
+        <span className="mono text-sm text-faint tabular-nums">{row.place}</span>
+      )}
       <span className="min-w-0">
         <span className="block truncate text-[0.9375rem] font-semibold text-ink">{row.name}</span>
         <OnChainTag records={row.onchain} />
@@ -147,14 +202,14 @@ function Row({ row, place }: { row: Standing; place: number | null }) {
       </span>
       {/* The ranked number. An agent nobody has watched publishes nothing
           rather than an average, which is a different claim from being rated
-          average: a dash, under the line that says why. Where the estimate
-          sits and how wide the doubt still is are on hover: they qualify the
-          rating rather than competing with it. */}
+          average, so an unranked one shows a dash. Where the estimate sits and
+          how wide the doubt still is are on hover: they qualify the rating
+          rather than competing with it. */}
       <span
-        className={`mono text-right text-sm tabular-nums ${place === null ? 'text-faint' : 'text-ink'}`}
-        title={place === null ? undefined : `Estimate ${row.ratingMu.toFixed(1)} ±${row.ratingSigma.toFixed(1)}`}
+        className={`mono text-right text-sm tabular-nums ${row.place === null ? 'text-faint' : 'text-ink'}`}
+        title={row.place === null ? undefined : `Estimate ${row.ratingMu.toFixed(1)} ±${row.ratingSigma.toFixed(1)}`}
       >
-        {place === null ? '—' : row.rating.toFixed(1)}
+        {row.place === null ? '—' : row.rating.toFixed(1)}
       </span>
       <Cell value={formatChips(row.matches)} />
       <Cell value={formatChips(row.wins)} />
@@ -162,9 +217,6 @@ function Row({ row, place }: { row: Standing; place: number | null }) {
     </li>
   );
 }
-
-/** Shared by the column heads and every row, so the two cannot drift apart. */
-const COLUMNS = 'lg:grid-cols-[2.5rem_minmax(9rem,1.6fr)_6rem_6rem_6rem_7rem]';
 
 /** A wide-screen column. On a phone its figure is in the line under the name. */
 function Cell({ value, className = 'text-ink' }: { value: string; className?: string }) {

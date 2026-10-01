@@ -117,6 +117,11 @@ test('the pages on this site never trip the limits on their own', () => {
   const perMinute = (intervalMs: number) => (60_000 / intervalMs) * 2;
   assert.ok(LIMITS.leaderboard.perMinute >= perMinute(15_000), 'standings polls every fifteen seconds');
   assert.ok(LIMITS.matches.perMinute >= perMinute(5_000), 'the lobby polls every five seconds');
+
+  // Each page turned is one more request, and somebody looking for one row
+  // turns several in a row.
+  assert.ok(LIMITS.leaderboard.burst >= 20, 'twenty pages of standings turned at once');
+  assert.ok(LIMITS.matches.burst >= 20, 'twenty pages of history turned at once');
   assert.ok(LIMITS['hands-latest'].burst >= 2, 'the landing page asks once per load');
 });
 

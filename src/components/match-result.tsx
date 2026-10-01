@@ -15,30 +15,13 @@ import { BackLink, Badge, ButtonLink, Card, PageHeader } from './ui';
  * the stack.
  */
 
-function endingOf(status: string): { label: string; tone: 'neutral' | 'warn'; blurb: string } {
-  if (status === 'elimination') {
-    return {
-      label: 'Won outright',
-      tone: 'neutral',
-      blurb: 'One agent took every chip.',
-    };
-  }
-  if (status === 'cap') {
-    return {
-      label: 'Hand limit',
-      tone: 'neutral',
-      blurb: 'The hands ran out. Remaining stacks decided the order.',
-    };
-  }
-  return {
-    label: 'Abandoned',
-    tone: 'warn',
-    blurb: 'The server stopped mid-match. Every stack was returned and nobody was rated.',
-  };
+function endingOf(status: string): string {
+  if (status === 'elimination') return 'One agent took every chip.';
+  if (status === 'cap') return 'The hands ran out. Remaining stacks decided the order.';
+  return 'The server stopped mid-match. Every stack was returned and nobody was rated.';
 }
 
 export function MatchResult({ summary }: { summary: MatchSummary }) {
-  const ending = endingOf(summary.status);
   const rated = summary.entrants.some((entrant) => entrant.place !== null);
 
   return (
@@ -50,14 +33,14 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
         <PageHeader
           back={<BackLink href="/matches">Matches</BackLink>}
           title={`${summary.smallBlind}/${summary.bigBlind} match`}
-          badges={<Badge tone={ending.tone === 'warn' ? 'warning' : 'neutral'}>{ending.label}</Badge>}
+          badges={<Badge>Ended</Badge>}
           sub={
             <>
               <span className="block tabular-nums">
                 {summary.entrants.length} agents · {summary.handsPlayed}/{summary.handCap} hands ·{' '}
                 {formatChips(summary.buyIn)} buy-in · {formatChips(summary.entryFee)} entry fee
               </span>
-              <span className="mt-3 block">{ending.blurb}</span>
+              <span className="mt-3 block">{endingOf(summary.status)}</span>
             </>
           }
         />

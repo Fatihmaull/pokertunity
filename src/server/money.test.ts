@@ -25,9 +25,10 @@ import { confirmDeposit, startDeposit, type DepositResult } from './actions';
 import type { Session } from './auth';
 import type { observeDeposit } from './chain';
 import { shuffledDeck } from './deck';
-import { leaderboard } from './metrics';
+import { STANDINGS_PAGE, leaderboard, standings } from './metrics';
 import { abandonOrphanedMatches } from './matchmaker';
 import {
+  HISTORY_PAGE,
   createMatch,
   handsDealt,
   markInHand,
@@ -346,21 +347,52 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     );
   });
 
-  test('a settled match still says who sat where, once its seats are gone', async () => {
+  test('a settled match stays on the floor once its seats are gone', async () => {
     const field = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B'), await candidate(SEAT_COST, 'C')];
     const match = (await createMatch(field))!;
-    await setStacks(match.id, [{ stack: 3_000 }, { stack: 2_000 }, { stack: 1_000 }]);
     await settleMatch(match.id, 'cap', 100);
 
     assert.equal((await seatsOf(match.id)).length, 0, 'the seats really are deleted');
 
-    const [listed] = (await storedMatches()).filter((entry) => entry.matchId === match.id);
+    const [listed] = (await storedMatches()).matches.filter((entry) => entry.matchId === match.id);
     assert.ok(listed, 'a finished match is still worth showing');
-    assert.deepEqual(
-      listed.seats.map((seat) => `${seat.index} ${seat.name} ${seat.stack}`),
-      ['0 A 3000', '1 B 2000', '2 C 1000'],
-      'the lobby draws the table that played, not a row of empty chairs',
-    );
+    assert.equal(listed.seatCount, 3, 'and still counts the field that played');
+  });
+
+  test('the live matches come with every page of the floor, and the ended ones page latest first', async () => {
+    const live = (await createMatch([await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B')]))!;
+
+    // One more than a page holds, each ending a minute after the one before.
+    const ended = await db
+      .insert(matches)
+      .values(
+        Array.from({ length: HISTORY_PAGE + 1 }, (_, index) => ({
+          status: 'cap' as const,
+          seatCount: 2,
+          smallBlind: MATCH.smallBlind,
+          bigBlind: MATCH.bigBlind,
+          buyIn: MATCH.buyIn,
+          entryFee: MATCH.entryFee,
+          handCap: MATCH.handCap,
+          startedAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+          endedAt: new Date(Date.UTC(2026, 0, 1, 1, index)),
+        })),
+      )
+      .returning({ id: matches.id });
+
+    const first = await storedMatches(1);
+    const second = await storedMatches(2);
+    const playing = (floor: typeof first) =>
+      floor.matches.filter((entry) => entry.status === 'playing').map((entry) => entry.matchId);
+    const history = (floor: typeof first) =>
+      floor.matches.filter((entry) => entry.status !== 'playing').map((entry) => entry.matchId);
+
+    assert.equal(first.pages, 2);
+    assert.deepEqual(playing(first), [live.id]);
+    assert.deepEqual(playing(second), [live.id], 'a live match is never paged out');
+    assert.deepEqual(history(first), ended.slice(1).reverse().map((row) => row.id));
+    assert.deepEqual(history(second), [ended[0].id], 'the earliest to end is on the last page');
+    assert.equal((await storedMatches(9)).page, 2, 'a page past the end answers with the last one');
   });
 
   /* ------------------------------------------------------------------------ */
@@ -542,6 +574,35 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
     const names = (await leaderboard()).map((row) => row.name);
     assert.deepEqual(names, ['Played', 'Unseen']);
+  });
+
+  test('a page of the standings and an owner’s places are counted in one order', async () => {
+    // A page and one more, every one of them rated, best first.
+    const field: Candidate[] = [];
+    for (let index = 0; index <= STANDINGS_PAGE; index++) {
+      field.push(await candidate(0, `R${index + 1}`, { mu: 60 - index, sigma: 1 }, 1));
+    }
+    const owner = field.at(-1)!;
+    await db.insert(agents).values({ userId: owner.ownerId, name: 'Unseen', color: 'red', tokenHash: 'test-unseen' });
+
+    const second = await standings({ page: 2, ownerId: owner.ownerId });
+    assert.equal(second.pages, 2, 'only the rated are counted toward pages');
+    assert.deepEqual(
+      second.ranked.map((row) => `${row.place} ${row.name}`),
+      [`${STANDINGS_PAGE + 1} R${STANDINGS_PAGE + 1}`],
+    );
+    assert.deepEqual(
+      second.mine?.map((row) => `${row.place} ${row.name}`),
+      [`${STANDINGS_PAGE + 1} R${STANDINGS_PAGE + 1}`, 'null Unseen'],
+      'the owner’s agent carries the place the page shows it at, and the unranked one follows with none',
+    );
+
+    const first = await standings({ page: 1, ownerId: null });
+    assert.deepEqual(
+      first.ranked.map((row) => row.place),
+      Array.from({ length: STANDINGS_PAGE }, (_, index) => index + 1),
+    );
+    assert.equal(first.mine, null, 'somebody signed out has no agents of their own to list');
   });
 
   /* ------------------------------------------------------------------------ */
