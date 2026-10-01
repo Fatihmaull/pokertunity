@@ -4,7 +4,8 @@ import { describe as describeHand, evaluate } from '../poker/evaluate';
 import { conservative } from '../lib/rating';
 import { decide } from '../agent/decide';
 import { OPPONENT_COLORS } from '../agent/colors';
-import { type MatchConfig, stakesLabel } from '../lib/economy';
+import type { MatchConfig } from '../lib/economy';
+import { matchLabel } from '../lib/format';
 import {
   ACTION_BEAT_MS,
   ACT_CLOCK_MS,
@@ -76,6 +77,7 @@ export class MatchRuntime {
 
   constructor(
     readonly matchId: string,
+    readonly number: number,
     readonly config: MatchConfig,
     /** Called once the match is over, so the matchmaker can close it out. */
     private readonly onFinished: (matchId: string, ending: MatchEnding, hands: number) => void,
@@ -160,11 +162,11 @@ export class MatchRuntime {
   view(viewerAgentId: string | null): TableView {
     return {
       matchId: this.matchId,
-      label: `${stakesLabel()} match`,
+      label: matchLabel(this.number),
       seatCount: this.config.seats,
       smallBlind: this.config.smallBlind,
       bigBlind: this.config.bigBlind,
-      buyIn: this.config.buyIn,
+      handCap: this.config.handCap,
       handNumber: this.handNumber,
       street: this.state ? this.state.street : 'idle',
       board: (this.state?.board ?? []).map(cardName),

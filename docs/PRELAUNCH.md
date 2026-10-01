@@ -71,7 +71,7 @@ Exercised against a running arena in production mode, not only in unit tests.
 **The deposit rehearsal.** Two local chains carrying the production chain ids
 (97 and 421614), each with the current `ChipVault`, and the arena reading
 receipts over its own RPC exactly as it would a testnet. From a real SIWE
-session: a Starter deposit credited 10,000 chips once; confirming it again
+session: a 10,000-chip deposit credited once; confirming it again
 credited nothing; an intent priced on Arbitrum and paid on BNB was refused;
 another wallet paying the intent credited neither account; half the price was
 refused; and a deposit stayed pending until its third confirmation. What this
@@ -174,12 +174,12 @@ Etherscan-style API; record it as unverified rather than chasing it.
 ### A4. Put a real deposit through
 
 The item the whole scope exists for. Sign in with the funded wallet, open the
-cashier, buy the Starter package, watch the chips arrive.
+cashier, buy 10,000 chips, watch them arrive.
 
 The server credits only after reading the receipt over its own RPC and
 confirming all five: the log came from that chain's vault, the intent was issued
 for that same chain, the payer is the signed-in wallet, the amount covers the
-package, and the transaction has three confirmations.
+intent's price, and the transaction has three confirmations.
 
 - Chips credited, exactly once
 - A `deposit` row in `ledger_entries` with a correct `balance_after`
@@ -226,7 +226,7 @@ will run on, once D1 exists.
 | Route | Why it matters |
 | --- | --- |
 | `/api/agents/[id]/axes` | Worst. Public, unauthenticated, scans up to 5,000 rows, then computes in memory |
-| `/api/leaderboard` | Aggregate over every hand ever played |
+| `/api/leaderboard` | Places every agent, then aggregates every hand a page of them played |
 | `/api/hands/latest` | Reads a whole hand plus its decisions |
 | `/api/matches` | Polled by every open lobby |
 
@@ -372,9 +372,9 @@ Nobody has. Each screen, light and dark, laptop and phone.
 | Screen | Watch for |
 | --- | --- |
 | `/` | The live hand hero, and what it shows when no match is running |
-| `/matches` | Live and finished matches; a finished one must name who played |
+| `/matches` | Ongoing and History as separate lists, and History paging |
 | `/match/[id]` | The felt, the Brain Visualizer, the clock, the pacing |
-| `/standings` | An unrated agent reads "unrated" rather than 0.0 |
+| `/standings` | Your own agents tinted in the ranks; an unranked one reads "Unranked" under Your agents |
 | `/agent` | Token handling, the agent list, the cashier |
 
 No horizontal scrolling on a phone, text readable in both themes, nothing

@@ -2,25 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { formatChips } from '@/lib/economy';
 import { shortAddress } from '@/lib/wallet';
 import { useAccount } from './account-context';
-import { useChain } from './chain-context';
 import { Cashier } from './cashier';
+import { ChainMenu } from './chain-menu';
 import { LogoMark } from './logo';
 import { Button, useDismissed } from './ui';
 
 /*
   Each label is the title of the page it opens, so a link and the heading it
-  lands on never disagree. The one short form keeps the phone row inside four
-  equal cells; it drops a word rather than swapping in a different one.
+  lands on never disagree.
 */
 const NAV = [
-  { href: '/', label: 'Home', short: 'Home' },
-  { href: '/matches', label: 'Matches', short: 'Matches' },
-  { href: '/standings', label: 'Standings', short: 'Standings' },
-  { href: '/agent', label: 'Your agents', short: 'Agents' },
+  { href: '/', label: 'Home' },
+  { href: '/matches', label: 'Matches' },
+  { href: '/standings', label: 'Standings' },
+  { href: '/agent', label: 'Your agents' },
 ];
 
 /**
@@ -37,49 +36,37 @@ export function SiteHeader() {
     <>
       <header className="sticky top-0 z-40 border-b border-line bg-canvas/90 backdrop-blur-md">
         {/*
-          Below the lg breakpoint the navigation takes a row of its own.
-          Sharing one row with the balance and the wallet left it short of the
-          width its four links need, and the labels it cut off were reachable
-          only by knowing to swipe. --header-h follows the taller header so
-          pages still fill the screen beneath it.
+          Below the lg breakpoint the four labels need more width than the row
+          has beside the balance and the wallet, so there they fold into a
+          menu at its end.
         */}
-        <div className="mx-auto flex h-[var(--header-h)] w-full max-w-[84rem] flex-wrap content-center items-center gap-x-2 gap-y-1 px-4 sm:gap-x-6 sm:px-6 lg:flex-nowrap">
-          <Link href="/" className="flex shrink-0 items-center gap-2 text-[0.9375rem] font-semibold text-ink">
+        <div className="mx-auto flex h-[var(--header-h)] w-full max-w-[84rem] items-center gap-x-2 px-4 sm:gap-x-6 sm:px-6">
+          {/*
+            The only thing in the row that gives way. The name wraps onto a
+            second line the link's height clips, so it shows wherever it fits
+            and leaves the mark alone on a narrow phone holding a big balance.
+          */}
+          <Link
+            href="/"
+            className="flex h-[1.6em] min-w-0 flex-wrap items-center gap-x-2 overflow-hidden text-[0.9375rem] font-semibold text-ink"
+          >
             <LogoMark />
             <span>Pokertunity</span>
           </Link>
 
-          <nav
-            aria-label="Main"
-            className="scroll-x order-last flex w-full min-w-0 items-center gap-0.5 lg:order-none lg:w-auto"
-          >
-            {NAV.map((item) => {
-              const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex-1 rounded-control px-2 py-1.5 text-center text-[0.8125rem] font-medium whitespace-nowrap transition-colors sm:px-3 sm:text-sm lg:flex-none ${
-                    active ? 'bg-surface-2 text-ink' : 'text-muted hover:text-ink'
-                  }`}
-                >
-                  <span className="sm:hidden">{item.short}</span>
-                  <span className="hidden sm:inline">{item.label}</span>
-                </Link>
-              );
-            })}
+          <nav aria-label="Main" className="hidden items-center gap-0.5 lg:flex">
+            <NavLinks pathname={pathname} className="px-3 py-1.5 text-sm" />
           </nav>
 
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <ChainMenu />
+            <ChainMenu className="hidden lg:block" />
 
             {account ? (
               <>
                 <button
                   type="button"
                   onClick={() => setCashierOpen(true)}
-                  aria-label={`Cashier. Balance ${formatChips(account.chips)} chips.`}
+                  aria-label={`Chips Store. Balance ${formatChips(account.chips)} chips.`}
                   className="inline-flex h-9 items-center gap-2 rounded-control border border-line-strong bg-surface-2 pr-2 pl-3 text-sm transition-colors hover:bg-surface-3"
                 >
                   <span className="mono text-ink tabular-nums">{formatChips(account.chips)}</span>
@@ -96,6 +83,8 @@ export function SiteHeader() {
                 <span className="hidden sm:inline">{connecting ? 'Check your wallet' : 'Connect wallet'}</span>
               </Button>
             )}
+
+            <NavMenu pathname={pathname} />
           </div>
         </div>
       </header>
@@ -123,73 +112,70 @@ export function SiteHeader() {
   );
 }
 
-/**
- * Which network the player is on, and the way to change it.
- *
- * A deployment offering one chain shows a badge rather than a menu with nothing
- * to choose.
- */
-function ChainMenu() {
-  const { chains, chain, loading, switching, switchChain } = useChain();
+function NavLinks({
+  pathname,
+  className,
+  onClick,
+}: {
+  pathname: string;
+  className: string;
+  onClick?: () => void;
+}) {
+  return NAV.map((item) => {
+    const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? 'page' : undefined}
+        onClick={onClick}
+        className={`rounded-control font-medium whitespace-nowrap transition-colors ${className} ${
+          active ? 'bg-surface-2 text-ink' : 'text-muted hover:text-ink'
+        }`}
+      >
+        {item.label}
+      </Link>
+    );
+  });
+}
+
+/** The navigation below the lg breakpoint, dropped down under the header from a button. */
+function NavMenu({ pathname }: { pathname: string }) {
   const [open, setOpen] = useState(false);
   const wrapper = useDismissed(open, setOpen);
-
-  if (loading || !chain) return null;
-
-  if (chains.length < 2) {
-    return (
-      <span className="hidden items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted lg:inline-flex">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-        {chain.shortName}
-      </span>
-    );
-  }
+  const id = useId();
 
   return (
-    <div ref={wrapper} className="relative hidden lg:block">
+    // Left unpositioned, so the open list hangs from the header and spans its
+    // full width.
+    <div ref={wrapper} className="lg:hidden">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label={`Network. Currently ${chain.name}.`}
-        disabled={switching}
-        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted transition-colors hover:text-ink disabled:opacity-50"
+        aria-controls={id}
+        aria-label="Menu"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface text-muted transition-colors hover:text-ink"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-        {chain.shortName}
-        <span aria-hidden className="text-faint">▾</span>
+        <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4">
+          <path
+            d={open ? 'M4 4l8 8M12 4l-8 8' : 'M2.5 4.5h11M2.5 8h11M2.5 11.5h11'}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
       </button>
 
       {open ? (
-        <div
-          role="menu"
-          className="entering absolute right-0 z-50 mt-2 w-64 rounded-card border border-line bg-surface p-1.5 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)]"
+        <nav
+          id={id}
+          aria-label="Main"
+          className="entering absolute inset-x-0 top-full flex flex-col gap-1 border-y border-line bg-canvas px-4 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)] sm:px-6"
         >
-          <p className="label px-2.5 py-2 text-faint">Network</p>
-          {chains.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              role="menuitemradio"
-              aria-checked={entry.key === chain.key}
-              onClick={() => {
-                setOpen(false);
-                void switchChain(entry.key);
-              }}
-              className={`flex w-full items-baseline gap-2 rounded-[0.375rem] px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-2 ${
-                entry.key === chain.key ? 'text-ink' : 'text-muted'
-              }`}
-            >
-              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-              <span className="mono shrink-0 text-xs text-faint">{entry.nativeCurrency.symbol}</span>
-              {entry.key === chain.key ? <span aria-hidden className="shrink-0 text-accent">●</span> : null}
-            </button>
-          ))}
-          <p className="px-2.5 py-2 text-xs text-faint">
-            Your chips stay the same on every network.
-          </p>
-        </div>
+          <NavLinks pathname={pathname} onClick={() => setOpen(false)} className="px-3 py-2.5 text-[0.9375rem]" />
+        </nav>
       ) : null}
     </div>
   );

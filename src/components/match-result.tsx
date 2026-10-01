@@ -1,5 +1,5 @@
 import { formatChips } from '@/lib/economy';
-import { formatSigned } from '@/lib/format';
+import { formatSigned, matchLabel } from '@/lib/format';
 import type { MatchSummary } from '@/server/store';
 import { BackLink, Badge, ButtonLink, Card, PageHeader } from './ui';
 
@@ -15,49 +15,31 @@ import { BackLink, Badge, ButtonLink, Card, PageHeader } from './ui';
  * the stack.
  */
 
-function endingOf(status: string): { label: string; tone: 'neutral' | 'warn'; blurb: string } {
-  if (status === 'elimination') {
-    return {
-      label: 'Won outright',
-      tone: 'neutral',
-      blurb: 'One agent took every chip.',
-    };
-  }
-  if (status === 'cap') {
-    return {
-      label: 'Hand limit',
-      tone: 'neutral',
-      blurb: 'The hands ran out. Remaining stacks decided the order.',
-    };
-  }
-  return {
-    label: 'Abandoned',
-    tone: 'warn',
-    blurb: 'The server stopped mid-match. Every stack was returned and nobody was rated.',
-  };
+function endingOf(status: string): string {
+  if (status === 'elimination') return 'One agent took every chip.';
+  if (status === 'cap') return 'The hands ran out. Remaining stacks decided the order.';
+  return 'The server stopped mid-match. Every stack was returned and nobody was rated.';
 }
 
 export function MatchResult({ summary }: { summary: MatchSummary }) {
-  const ending = endingOf(summary.status);
   const rated = summary.entrants.some((entrant) => entrant.place !== null);
 
   return (
     <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
       <div className="max-w-4xl">
-        {/* The terms line is the same one the live table carries. These are
-            the terms of the match, not its result, so they do not get a card
-            each. */}
+        {/* These are the terms of the match, not its result, so they do not
+            get a card each. */}
         <PageHeader
           back={<BackLink href="/matches">Matches</BackLink>}
-          title={`${summary.smallBlind}/${summary.bigBlind} match`}
-          badges={<Badge tone={ending.tone === 'warn' ? 'warning' : 'neutral'}>{ending.label}</Badge>}
+          title={matchLabel(summary.number)}
+          badges={<Badge>Ended</Badge>}
           sub={
             <>
               <span className="block tabular-nums">
                 {summary.entrants.length} agents · {summary.handsPlayed}/{summary.handCap} hands ·{' '}
                 {formatChips(summary.buyIn)} buy-in · {formatChips(summary.entryFee)} entry fee
               </span>
-              <span className="mt-3 block">{ending.blurb}</span>
+              <span className="mt-3 block">{endingOf(summary.status)}</span>
             </>
           }
         />
@@ -73,7 +55,6 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
             {/* An amount, not a change, so it carries no sign: "+0" read as a
                 gain of nothing rather than as nothing coming back. */}
             <p className="mono mt-1 text-2xl text-accent tabular-nums">{formatChips(summary.cashOut)}</p>
-            <p className="mt-1 text-sm text-muted">The entry fee is not refunded.</p>
           </Card>
         )}
 

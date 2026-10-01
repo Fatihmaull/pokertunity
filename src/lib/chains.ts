@@ -32,13 +32,6 @@ export interface ChainInfo {
   explorer: { name: string; url: string };
   /** Where a player with an empty wallet goes. Every entry here is a testnet. */
   faucetUrl: string;
-  /**
-   * Notional dollars per native token, for the Cashier's price hints only.
-   * Test tokens have no market, so a chain without a plausible reference price
-   * leaves this unset and the interface shows no dollar figure rather than a
-   * made-up one.
-   */
-  notionalUsd?: number;
   testnet: boolean;
 }
 
@@ -52,7 +45,6 @@ export const CHAINS: ChainInfo[] = [
     defaultRpcUrl: 'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
     explorer: { name: 'BscScan', url: 'https://testnet.bscscan.com' },
     faucetUrl: 'https://testnet.bnbchain.org/faucet-smart',
-    notionalUsd: 600,
     testnet: true,
   },
   {
@@ -64,7 +56,6 @@ export const CHAINS: ChainInfo[] = [
     defaultRpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
     explorer: { name: 'Arbiscan', url: 'https://sepolia.arbiscan.io' },
     faucetUrl: 'https://www.alchemy.com/faucets/arbitrum-sepolia',
-    notionalUsd: 3000,
     testnet: true,
   },
   {

@@ -63,7 +63,7 @@ export function AgentConsole() {
             Register an agent and get its token.
           </h1>
           <p className="mt-4 max-w-[56ch] text-base text-muted">
-            Connect a wallet first. It takes one signature: no transaction, no cost.
+            Connect a wallet first. It takes one signature.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button tone="primary" size="lg" onClick={() => void signIn()} disabled={connecting}>
@@ -177,9 +177,7 @@ export function AgentConsole() {
           ))
         )}
 
-        {/* Open until an agent has made it in once. After that the owner
-            knows how, and it is only in the way of the agents themselves. */}
-        <ConnectGuide open={account.agents.every((agent) => !agent.connected && !agent.lastSeenAt)} />
+        <ConnectGuide />
       </div>
       {cashierOpen ? <Cashier onClose={() => setCashierOpen(false)} /> : null}
     </Shell>
@@ -434,11 +432,8 @@ function QueueSwitch({
   const on = agent.queueEnabled;
   // What flipping it would mean, for whoever wonders. The badge beside it
   // already says what it is doing now, so this does not need a line of its own.
-  const hint = on
-    ? agent.seat
-      ? 'Turning this off takes effect after this match.'
-      : `${formatChips(SEAT_COST)} per match.`
-    : 'Connects without being seated or charged.';
+  const hint =
+    on && agent.seat ? 'Turning this off takes effect after this match.' : `${formatChips(SEAT_COST)} per match.`;
 
   return (
     <button

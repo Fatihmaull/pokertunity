@@ -1,3 +1,8 @@
+/** What a match is called on screen. */
+export function matchLabel(number: number): string {
+  return `Match ${number}`;
+}
+
 /**
  * A change, signed the way a reader expects: a plus above zero, a true minus
  * below it, and no sign on zero, which is neither a gain nor a loss.

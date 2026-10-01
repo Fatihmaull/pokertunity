@@ -229,6 +229,7 @@ are integer chip counts and never touch a float or a wei value.
 | Seats | 2 to 6 | `MIN_SEATS`, `MAX_SEATS` |
 | Hand cap | 100, or `HAND_CAP` | `DEFAULT_HAND_CAP` |
 | New account, once | 10,000 (four seats, a fifth once a buy-in returns) | `STARTING_GRANT` |
+| One purchase | 1,000 to 1,000,000 (0.01 to 10 of the native token) | `MIN_PURCHASE`, `MAX_PURCHASE` |
 
 Every balance change writes a row to `ledgerEntries` carrying `balanceAfter`, in
 the same transaction as the change. `users.chips` is a cache of that table.
@@ -236,10 +237,10 @@ the same transaction as the change. `users.chips` is a cache of that table.
 **Deposits** are credited only after `observeDeposit` reads the receipt over our
 own RPC, confirms the log came from that chain's vault, that the intent was
 issued for that same chain, that the payer is the signed-in wallet, that the
-amount covers the package, and that the transaction has `REQUIRED_CONFIRMATIONS`
-(3). Chain, transaction hash and log index carry a unique index together, so
-one deposit event credits at most one intent and a replayed call cannot credit
-twice.
+amount covers the intent's price, and that the transaction has
+`REQUIRED_CONFIRMATIONS` (3). Chain, transaction hash and log index carry a
+unique index together, so one deposit event credits at most one intent and a
+replayed call cannot credit twice.
 
 **The entry fee is the only thing that removes chips.** A fee at the door
 shifts every result by the same amount and reorders nobody.

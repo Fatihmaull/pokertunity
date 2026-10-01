@@ -168,7 +168,10 @@ export function useDismissed(
       if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      // Claimed, so a dialog this menu sits in stays open.
+      event.preventDefault();
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -190,16 +193,14 @@ export function useDismissed(
  */
 export function Disclosure({
   summary,
-  defaultOpen = false,
   className = '',
   children,
 }: {
   summary: React.ReactNode;
-  defaultOpen?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
   const id = useId();
 
   return (
@@ -308,5 +309,30 @@ export function SectionHeading({
       </div>
       {action}
     </div>
+  );
+}
+
+/**
+ * Back and forward through a list the server hands over a page at a time.
+ * Nothing is drawn while one page holds everything: a pager with nowhere to go
+ * is two buttons that do nothing.
+ */
+export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
+  if (pages <= 1) return null;
+
+  return (
+    <nav aria-label="Pages" className="mt-3 flex items-center justify-between gap-4">
+      <Button tone="ghost" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+        <span aria-hidden>←</span>
+        Previous
+      </Button>
+      <span className="mono text-xs text-faint tabular-nums">
+        Page {page} of {pages}
+      </span>
+      <Button tone="ghost" size="sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+        Next
+        <span aria-hidden>→</span>
+      </Button>
+    </nav>
   );
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "deposit_intents" ALTER COLUMN "package_id" DROP NOT NULL;

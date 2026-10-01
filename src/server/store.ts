@@ -1,4 +1,4 @@
-import { TransactionRollbackError, and, desc, eq, inArray, isNotNull, isNull, sql as raw } from 'drizzle-orm';
+import { TransactionRollbackError, and, count, desc, eq, inArray, isNotNull, isNull, sql as raw } from 'drizzle-orm';
 
 import { db } from '../db/client';
 import {
@@ -192,10 +192,10 @@ function bandOf(entrants: readonly Candidate[]): number | null {
  */
 export async function createMatch(
   entrants: readonly Candidate[],
-): Promise<{ id: string; config: MatchConfig } | null> {
+): Promise<{ id: string; number: number; config: MatchConfig } | null> {
   if (entrants.length < 2) return null;
 
-  return db.transaction(async (tx): Promise<{ id: string; config: MatchConfig } | null> => {
+  return db.transaction(async (tx): Promise<{ id: string; number: number; config: MatchConfig } | null> => {
     const [match] = await tx
       .insert(matches)
       .values({
@@ -273,6 +273,7 @@ export async function createMatch(
     // it was opened with.
     return {
       id: match.id,
+      number: match.number,
       config: {
         seats: seated,
         smallBlind: match.smallBlind,
@@ -678,6 +679,7 @@ export async function ratingsOf(agentIds: string[]): Promise<Map<string, Rating>
 /** A match as it can be described without the process that is dealing it. */
 export interface StoredMatch {
   matchId: string;
+  number: number;
   status: string;
   seatCount: number;
   smallBlind: number;
@@ -688,118 +690,68 @@ export interface StoredMatch {
   bandRating: number | null;
   startedAt: Date | null;
   endedAt: Date | null;
-  seats: Array<{ index: number; agentId: string; name: string; color: string; stack: number; busted: boolean }>;
 }
 
+/** Ended matches to a page of the floor's history. */
+export const HISTORY_PAGE = 20;
+
 /**
- * Every match worth showing, read from the database rather than from process
- * memory.
+ * Every match being dealt and one page of the ones that have ended, read from
+ * the database rather than from process memory.
  *
  * Only one instance deals, so only that one has runtimes to describe. A lobby
  * read off them would tell every other instance that the room is empty, which
  * is indistinguishable from the room being empty and is the worst way for it to
  * be wrong.
+ *
+ * The live matches come with every page. There are few of them, and one that
+ * was paged out behind the matches that ended around it would read as nothing
+ * being dealt.
  */
-export async function storedMatches(limit = 20): Promise<StoredMatch[]> {
-  const rows = await db
-    // Abandoned matches belong here too. Without them, a match somebody had
-    // chips in would vanish from the floor the moment the process dealing it
-    // went away, and the entrant would be left looking at a lobby that had never
-    // heard of it.
+export async function storedMatches(page = 1): Promise<{ matches: StoredMatch[]; page: number; pages: number }> {
+  // Abandoned matches belong here too. Without them, a match somebody had chips
+  // in would vanish from the floor the moment the process dealing it went away,
+  // and the entrant would be left looking at a lobby that had never heard of it.
+  const ended = inArray(matches.status, ['elimination', 'cap', 'abandoned']);
+
+  const [{ total }] = await db.select({ total: count() }).from(matches).where(ended);
+  const pages = Math.max(1, Math.ceil(total / HISTORY_PAGE));
+  const current = Math.min(Math.max(1, Math.floor(page)), pages);
+
+  const playing = await db.select().from(matches).where(eq(matches.status, 'playing')).orderBy(desc(matches.startedAt));
+  const history = await db
     .select()
     .from(matches)
-    .where(inArray(matches.status, ['playing', 'elimination', 'cap', 'abandoned']))
-    .orderBy(desc(matches.startedAt))
-    .limit(limit);
+    .where(ended)
+    // The id settles ties, so a page boundary falls in the same place on every read.
+    .orderBy(raw`${matches.endedAt} desc nulls last`, desc(matches.id))
+    .limit(HISTORY_PAGE)
+    .offset((current - 1) * HISTORY_PAGE);
 
-  if (rows.length === 0) return [];
+  return {
+    matches: [...playing, ...history].map((row) => ({
+      matchId: row.id,
+      number: row.number,
+      status: row.status,
+      seatCount: row.seatCount,
+      smallBlind: row.smallBlind,
+      bigBlind: row.bigBlind,
+      buyIn: row.buyIn,
+      handCap: row.handCap,
+      handsPlayed: row.handsPlayed,
+      bandRating: row.bandRating,
+      startedAt: row.startedAt,
+      endedAt: row.endedAt,
+    })),
+    page: current,
+    pages,
+  };
+}
 
-  const dealing = rows.filter((row) => row.status === 'playing').map((row) => row.id);
-  const finished = rows.filter((row) => row.status !== 'playing').map((row) => row.id);
-
-  const occupied =
-    dealing.length === 0
-      ? []
-      : await db
-          .select({
-            matchId: seats.matchId,
-            seatIndex: seats.seatIndex,
-            agentId: seats.agentId,
-            stack: seats.stack,
-            bustedAtHand: seats.bustedAtHand,
-            name: agents.name,
-            color: agents.color,
-          })
-          .from(seats)
-          .innerJoin(agents, eq(agents.id, seats.agentId))
-          .where(inArray(seats.matchId, dealing))
-          .orderBy(seats.seatIndex);
-
-  // A settled match has no seats left — they are deleted when the chips go
-  // back — so who played is read off the finishing record instead. Without
-  // this the lobby draws a row of empty chairs for a game six agents actually
-  // sat down to, which reads as a match nobody turned up for.
-  const recorded =
-    finished.length === 0
-      ? []
-      : await db
-          .select({
-            matchId: matchResults.matchId,
-            seatIndex: matchResults.seatIndex,
-            agentId: matchResults.agentId,
-            stack: matchResults.finalStack,
-            bustedAtHand: matchResults.bustedAtHand,
-            name: agents.name,
-            color: agents.color,
-          })
-          .from(matchResults)
-          .innerJoin(agents, eq(agents.id, matchResults.agentId))
-          .where(inArray(matchResults.matchId, finished));
-
-  // One shape for both sources. A live seat always knows its chair; a recorded
-  // one may not, if it was written before the chair was kept.
-  const lineup: Array<{
-    matchId: string;
-    seatIndex: number | null;
-    agentId: string;
-    stack: number;
-    bustedAtHand: number | null;
-    name: string;
-    color: string;
-  }> = [...occupied, ...recorded];
-
-  return rows.map((row) => ({
-    matchId: row.id,
-    status: row.status,
-    seatCount: row.seatCount,
-    smallBlind: row.smallBlind,
-    bigBlind: row.bigBlind,
-    buyIn: row.buyIn,
-    handCap: row.handCap,
-    handsPlayed: row.handsPlayed,
-    bandRating: row.bandRating,
-    startedAt: row.startedAt,
-    endedAt: row.endedAt,
-    seats: lineup
-      // A chair nobody recorded is left out rather than guessed at. That is
-      // only ever a match settled before the chair was kept, and an invented
-      // seating is worse than a missing one.
-      .flatMap((seat) =>
-        seat.matchId === row.id && seat.seatIndex !== null
-          ? [
-              {
-                index: seat.seatIndex,
-                agentId: seat.agentId,
-                name: seat.name,
-                color: seat.color,
-                stack: seat.stack,
-                busted: seat.bustedAtHand !== null,
-              },
-            ]
-          : [],
-      )
-      .sort((a, b) => a.index - b.index),
-  }));
+/** What a match is called, for its page's title. Null for an id that names no match. */
+export async function matchNumber(matchId: string): Promise<number | null> {
+  const [row] = await db.select({ number: matches.number }).from(matches).where(eq(matches.id, matchId)).limit(1);
+  return row?.number ?? null;
 }
 
 export interface MatchEntrant {
@@ -819,6 +771,7 @@ export interface MatchEntrant {
 
 export interface MatchSummary {
   matchId: string;
+  number: number;
   status: string;
   seatCount: number;
   smallBlind: number;
@@ -941,6 +894,7 @@ export async function matchSummary(matchId: string, viewerUserId: string | null)
 
   return {
     matchId: row.id,
+    number: row.number,
     status: row.status,
     seatCount: row.seatCount,
     smallBlind: row.smallBlind,

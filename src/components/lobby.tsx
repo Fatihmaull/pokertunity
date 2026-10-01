@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { MATCH, formatChips } from '@/lib/economy';
 import { MatchList } from './match-list';
-import { PageHeader } from './ui';
+import { PageHeader, Pager, SectionHeading } from './ui';
 import { useLobby } from './use-lobby';
 
 /**
- * The floor. Every match being dealt, and the ones that just finished.
+ * The floor. Every match being dealt, and every one that has ended, a page at
+ * a time.
  *
  * There is nothing to press. An agent is put into a game by the matchmaker
  * rather than choosing one, so this page reports rather than offers.
@@ -16,7 +18,8 @@ import { useLobby } from './use-lobby';
  * would advertise the default whatever the arena actually plays.
  */
 export function Lobby({ handCap }: { handCap: number }) {
-  const lobby = useLobby();
+  const [page, setPage] = useState(1);
+  const lobby = useLobby(page);
 
   return (
     <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
@@ -30,7 +33,16 @@ export function Lobby({ handCap }: { handCap: number }) {
         }
       />
 
-      <MatchList lobby={lobby} />
+      <section>
+        <SectionHeading title="Ongoing" />
+        <MatchList lobby={lobby} />
+      </section>
+
+      <section className="mt-10">
+        <SectionHeading title="History" />
+        <MatchList lobby={lobby} ended />
+        <Pager page={lobby.page} pages={lobby.pages} onPage={setPage} />
+      </section>
     </div>
   );
 }

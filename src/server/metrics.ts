@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql as raw } from 'drizzle-orm';
+import { and, between, count, desc, eq, gt, inArray, or, sql as raw } from 'drizzle-orm';
 import { db } from '../db/client';
 import { agents, decisions, matchResults, results, seats, users } from '../db/schema';
 import { type Axes, type AxisDecision, computeAxes } from '../lib/axes';
@@ -34,7 +34,16 @@ export interface AgentMetrics {
   rate: WinRate;
 }
 
-export async function leaderboard(options: { limit?: number; agentId?: string } = {}): Promise<AgentMetrics[]> {
+/**
+ * The published figure, as the database computes it. Written once, because the
+ * order a list is cut on and the order a place is counted on must be the same
+ * expression, or the two disagree about who is above whom.
+ */
+const published = raw`${agents.ratingMu} - ${PUBLISHED_SIGMAS} * ${agents.ratingSigma}`;
+
+export async function leaderboard(
+  options: { limit?: number; agentId?: string; agentIds?: string[] } = {},
+): Promise<AgentMetrics[]> {
   const rows = await db
     .select({
       agentId: agents.id,
@@ -59,7 +68,13 @@ export async function leaderboard(options: { limit?: number; agentId?: string } 
     .innerJoin(users, eq(users.id, agents.userId))
     .leftJoin(seats, eq(seats.agentId, agents.id))
     .leftJoin(results, eq(results.agentId, agents.id))
-    .where(options.agentId ? eq(agents.id, options.agentId) : undefined)
+    .where(
+      options.agentId
+        ? eq(agents.id, options.agentId)
+        : options.agentIds
+          ? inArray(agents.id, options.agentIds)
+          : undefined,
+    )
     .groupBy(agents.id, agents.name, users.chips, seats.stack)
     // Ordered on the published figure before the limit, not on mu. Cutting on
     // mu lets a new agent with one lucky match, and the sigma that goes with
@@ -70,11 +85,7 @@ export async function leaderboard(options: { limit?: number; agentId?: string } 
     // Their published figure is zero by construction, which is not a rating but
     // the absence of one, and ranking it above an agent that played and came
     // out slightly below zero puts the unknown ahead of the measured.
-    .orderBy(
-      raw`${agents.matchesPlayed} = 0`,
-      raw`${agents.ratingMu} - ${PUBLISHED_SIGMAS} * ${agents.ratingSigma} desc`,
-      desc(agents.matchesPlayed),
-    )
+    .orderBy(raw`${agents.matchesPlayed} = 0`, raw`${published} desc`, desc(agents.matchesPlayed))
     .limit(options.limit ?? 50);
 
   return rows
@@ -98,6 +109,100 @@ export async function leaderboard(options: { limit?: number; agentId?: string } 
         b.rating - a.rating ||
         b.matchesPlayed - a.matchesPlayed,
     );
+}
+
+/** Agents to a page of the standings. */
+export const STANDINGS_PAGE = 20;
+
+export interface Standing extends AgentMetrics {
+  /** Its place in the standings, or null until it has finished a match. */
+  place: number | null;
+}
+
+/**
+ * One page of the standings, and where the viewer's own agents stand in them.
+ *
+ * Only an agent that has finished a match is ranked. Before that its published
+ * figure is zero by construction, which is the absence of a rating rather than
+ * a low one, so there is no place to give it. Its owner still sees it among
+ * their own, unranked.
+ */
+export async function standings(options: { page: number; ownerId: string | null }): Promise<{
+  ranked: Standing[];
+  page: number;
+  pages: number;
+  /** The viewer's agents, placed ones best first. Null for somebody signed out. */
+  mine: Standing[] | null;
+}> {
+  const finished = gt(agents.matchesPlayed, 0);
+
+  const [{ total }] = await db.select({ total: count() }).from(agents).where(finished);
+  const pages = Math.max(1, Math.ceil(total / STANDINGS_PAGE));
+  const page = Math.min(Math.max(1, Math.floor(options.page)), pages);
+  const first = (page - 1) * STANDINGS_PAGE + 1;
+  const last = page * STANDINGS_PAGE;
+
+  const owned =
+    options.ownerId === null
+      ? []
+      : (
+          await db
+            .select({ id: agents.id })
+            .from(agents)
+            .where(eq(agents.userId, options.ownerId))
+            .orderBy(agents.createdAt)
+        ).map((row) => row.id);
+
+  // Every place is counted in one query, the page's and the viewer's alike, so
+  // an agent that is in both lists carries one number. Matches played breaks a
+  // tie in the figure and the id breaks the rest, so a page boundary falls in
+  // the same place on every read.
+  const ladder = db
+    .select({
+      id: agents.id,
+      place: raw<number>`(row_number() over (order by ${published} desc, ${agents.matchesPlayed} desc, ${agents.id}))::int`.as(
+        'place',
+      ),
+    })
+    .from(agents)
+    .where(finished)
+    .as('ladder');
+
+  const placed = await db
+    .select()
+    .from(ladder)
+    .where(or(between(ladder.place, first, last), owned.length > 0 ? inArray(ladder.id, owned) : undefined));
+  const places = new Map(placed.map((row) => [row.id, row.place]));
+
+  const onPage = placed
+    .filter((row) => row.place >= first && row.place <= last)
+    .sort((a, b) => a.place - b.place)
+    .map((row) => row.id);
+  const wanted = [...new Set([...onPage, ...owned])];
+  const metrics = new Map(
+    (wanted.length === 0 ? [] : await leaderboard({ agentIds: wanted, limit: wanted.length })).map((row) => [
+      row.agentId,
+      row,
+    ]),
+  );
+
+  const standing = (id: string): Standing[] => {
+    const row = metrics.get(id);
+    return row ? [{ ...row, place: places.get(id) ?? null }] : [];
+  };
+
+  return {
+    ranked: onPage.flatMap(standing),
+    page,
+    pages,
+    // The unranked keep the order they were made in, after every placed one.
+    mine:
+      options.ownerId === null
+        ? null
+        : owned
+            .flatMap(standing)
+            .sort((a, b) => (a.place ?? Number.MAX_SAFE_INTEGER) - (b.place ?? Number.MAX_SAFE_INTEGER)),
+  };
 }
 
 /**

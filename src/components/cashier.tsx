@@ -1,12 +1,12 @@
 'use client';
-/* eslint-disable @next/next/no-img-element */ // Same fixed-size chip art as the felt.
 
 import { useEffect, useRef, useState } from 'react';
 import { chainByKey } from '@/lib/chains';
-import { CHIP_PACKAGES, chipsToWei, formatChips, formatNative, formatUsd } from '@/lib/economy';
+import { chipsToWei, formatChips, formatNative, purchaseRefusal } from '@/lib/economy';
 import { sendDeposit } from '@/lib/wallet';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
+import { ChainMenu } from './chain-menu';
 
 type Stage = 'idle' | 'signing' | 'confirming' | 'done';
 
@@ -16,6 +16,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   const [stage, setStage] = useState<Stage>('idle');
   const [status, setStatus] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Kept as typed, digits only, so the field can sit empty mid-edit.
+  const [amount, setAmount] = useState('10000');
   const dialog = useRef<HTMLDivElement>(null);
 
   // Escape closes, and Tab stays inside. A modal the keyboard can walk out of
@@ -23,7 +25,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose();
+        // An open menu inside the dialog takes the first Escape.
+        if (!event.defaultPrevented) onClose();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -61,7 +64,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   // every time the balance is refreshed, and a deposit this dialog is finishing
   // may be credited by another poll still running from the dialog closed a
   // moment ago, whose refresh would cancel this one mid-wait and leave the
-  // dialog on "Waiting for the network" with every package disabled.
+  // dialog on "Waiting for the network" with Buy disabled.
   const wallet = account?.address ?? null;
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +103,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
     };
   }, [wallet, refresh]);
 
-  async function buy(packageId: string) {
+  async function buy(chips: number) {
     if (!account || !chain) return;
     setFailure(null);
     setStage('signing');
@@ -110,7 +113,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
       const intentResponse = await fetch('/api/cashier/intent', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ packageId, chain: chain.key }),
+        body: JSON.stringify({ chips, chain: chain.key }),
       });
       const intent = (await intentResponse.json()) as {
         intentId?: string;
@@ -166,12 +169,16 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   /** Whether switching would reach a cashier that works, or only the same message again. */
   const settlesSomewhere = chains.some((entry) => entry.vault);
 
+  const chips = Number(amount);
+  const refusal = purchaseRefusal(chips);
+  const wei = refusal ? null : chipsToWei(chips);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label="Cashier"
+      aria-label="Chips Store"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -181,12 +188,13 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         tabIndex={-1}
         // The shell does not scroll, so the dialog carries its own scrollbar rather
         // than relying on the page to make room for it.
-        className="scroll-y max-h-full w-full max-w-3xl rounded-card border border-line bg-surface shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] outline-none"
+        className="scroll-y max-h-full w-full max-w-lg rounded-card border border-line bg-surface shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] outline-none"
       >
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-6 py-5">
-          <h2 className="text-2xl text-ink">Cashier</h2>
-          <p className="mono text-xs text-faint">1 chip = 0.00001 {symbol || 'native token'}</p>
-          {chain ? <NetworkPicker disabled={busy} /> : null}
+          <h2 className="text-2xl text-ink">Chips Store</h2>
+          {/* Shown at every width: on a phone, where the header hides it, this
+              is the way off a network that has no vault. */}
+          <ChainMenu align="left" disabled={busy} className="order-last basis-full sm:order-none sm:basis-auto" />
           <button
             type="button"
             onClick={onClose}
@@ -196,45 +204,40 @@ export function Cashier({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="grid gap-px bg-line sm:grid-cols-3">
-          {CHIP_PACKAGES.map((entry) => {
-            const wei = chipsToWei(entry.chips);
-            const usd = formatUsd(wei, chain?.notionalUsd);
-            return (
-              <div key={entry.id} className="flex flex-col gap-4 bg-surface p-6">
-                <div className="flex items-baseline justify-between">
-                  <span className="label text-faint">{entry.name}</span>
-                  {entry.popular ? (
-                    <span className="rounded-full bg-accent px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-ink">
-                      Most bought
-                    </span>
-                  ) : null}
-                </div>
+        <form
+          className="flex flex-col gap-4 p-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!refusal) void buy(chips);
+          }}
+        >
+          <label className="flex flex-col gap-2">
+            <span className="label text-faint">Amount</span>
+            <input
+              value={amount}
+              onChange={(event) => setAmount(event.target.value.replace(/\D/g, ''))}
+              inputMode="numeric"
+              autoComplete="off"
+              disabled={busy}
+              className="mono h-12 rounded-control border border-line bg-surface-2 px-3 text-2xl text-ink tabular-nums outline-none focus:border-accent disabled:opacity-45"
+            />
+          </label>
 
-                <ChipTower chips={entry.chips} />
+          <p
+            aria-live="polite"
+            className={`mono text-[0.8125rem] tabular-nums ${wei === null ? 'text-faint' : 'text-muted'}`}
+          >
+            {wei === null ? refusal : `${formatNative(wei)} ${symbol}`}
+          </p>
 
-                <div>
-                  <div className="mono text-2xl text-ink tabular-nums">{formatChips(entry.chips)}</div>
-                  <div className="mono text-[0.8125rem] text-muted tabular-nums">
-                    {formatNative(wei)} {symbol}
-                  </div>
-                  {usd ? (
-                    <div className="mono text-xs text-faint tabular-nums">{usd} at a fixed testnet rate</div>
-                  ) : null}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={busy || !account || !settles}
-                  onClick={() => void buy(entry.id)}
-                  className="mt-auto inline-flex h-10 items-center justify-center rounded-control bg-accent px-4 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Buy {formatChips(entry.chips)} chips
-                </button>
-              </div>
-            );
-          })}
-        </div>
+          <button
+            type="submit"
+            disabled={busy || !account || !settles || refusal !== null}
+            className="inline-flex h-10 items-center justify-center rounded-control bg-accent px-4 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {refusal ? 'Buy chips' : `Buy ${formatChips(chips)} chips`}
+          </button>
+        </form>
 
         {chain && !settles ? (
           <div className="border-t border-line px-6 py-4">
@@ -260,66 +263,6 @@ export function Cashier({ onClose }: { onClose: () => void }) {
           </div>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-/**
- * Which network the deposit is paid on, and the way to change it.
- *
- * Here as well as in the header because the header's menu only fits on a wide
- * screen, and this is the one place the choice actually matters: on a phone it
- * was otherwise impossible to leave a network that has no vault.
- */
-function NetworkPicker({ disabled }: { disabled: boolean }) {
-  const { chains, chain, switching, switchChain } = useChain();
-  const [failure, setFailure] = useState<string | null>(null);
-  if (!chain) return null;
-  if (chains.length < 2) return <p className="text-xs text-faint">on {chain.name}</p>;
-
-  return (
-    <label className="flex items-center gap-1.5 text-xs text-faint">
-      on
-      <select
-        value={chain.key}
-        disabled={disabled || switching}
-        aria-label="Network"
-        onChange={(event) => {
-          setFailure(null);
-          switchChain(event.target.value).catch((error: unknown) =>
-            setFailure(error instanceof Error ? error.message : 'That network is unavailable.'),
-          );
-        }}
-        className="h-7 rounded-control border border-line bg-surface-2 px-1.5 text-xs text-ink disabled:opacity-50"
-      >
-        {chains.map((entry) => (
-          <option key={entry.key} value={entry.key}>
-            {entry.name}
-          </option>
-        ))}
-      </select>
-      {failure ? <span className="text-danger">{failure}</span> : null}
-    </label>
-  );
-}
-
-/** The package size drawn as height. A bigger package is a physically taller stack. */
-function ChipTower({ chips }: { chips: number }) {
-  const count = Math.max(3, Math.min(14, Math.round(Math.log10(chips) * 5)));
-  return (
-    <div className="relative h-24" aria-hidden>
-      {Array.from({ length: count }, (_, i) => (
-        <img
-          key={i}
-          src="/chips/white-edge.png"
-          alt=""
-          width={52}
-          height={24}
-          className="absolute left-0"
-          style={{ bottom: i * 7 }}
-          draggable={false}
-        />
-      ))}
     </div>
   );
 }

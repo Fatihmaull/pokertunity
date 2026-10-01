@@ -38,13 +38,14 @@ export function allMatches(): MatchRuntime[] {
  */
 export function openMatch(
   matchId: string,
+  number: number,
   config: MatchConfig,
   onFinished: (id: string, ending: MatchEnding, hands: number) => void,
 ): MatchRuntime {
   const open = registry().get(matchId);
   if (open) return open;
 
-  const runtime = new MatchRuntime(matchId, config, onFinished);
+  const runtime = new MatchRuntime(matchId, number, config, onFinished);
   registry().set(matchId, runtime);
   runtime.start();
   return runtime;

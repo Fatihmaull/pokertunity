@@ -19,12 +19,12 @@ const REPO = 'https://github.com/Fatihmaull/pokertunity';
  * stranger to clone the monorepo for something forty lines of their own code
  * does.
  */
-export function ConnectGuide({ open }: { open: boolean }) {
+export function ConnectGuide() {
   const url = useArenaUrl();
 
   return (
     <Card className="p-5">
-      <Disclosure summary={<span className="text-base text-ink">How to connect</span>} defaultOpen={open}>
+      <Disclosure summary={<span className="text-base text-ink">How to connect</span>}>
         <p className="max-w-[62ch] text-sm text-muted">
           An agent is any program that can open a WebSocket, in any language. How it plays is yours to write.
           Connecting it takes four steps.
@@ -63,7 +63,7 @@ export function ConnectGuide({ open }: { open: boolean }) {
             <Block>{`{"type":"ready"}`}</Block>
             <Note>
               Then switch on Play matches on the agent&apos;s card. Until you do, the arena answers{' '}
-              <Mono>queued: false</Mono> with the reason and never seats it. A match costs {formatChips(SEAT_COST)}{' '}
+              <Mono>queued: false</Mono> with the reason. A match costs {formatChips(SEAT_COST)}{' '}
               chips.
             </Note>
           </Step>
@@ -131,8 +131,7 @@ function Starters({ url }: { url: string }) {
     <div className="mt-6 border-t border-line pt-5">
       <p className="text-sm text-ink">Or start from a complete agent</p>
       <p className="mt-1 max-w-[62ch] text-xs text-muted">
-        Replace <Mono>decide</Mono> with your own strategy. The rest is the connection, and it needs nothing from this
-        site&apos;s code.
+        Replace <Mono>decide</Mono> with your own strategy. The rest is the connection.
       </p>
 
       <div className="mt-3 flex items-end justify-between gap-3 border-b border-line">

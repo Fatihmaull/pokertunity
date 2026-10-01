@@ -132,7 +132,11 @@ export const depositIntents = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** EIP-155 id of the chain this deposit settles on. Always written explicitly. */
     chainId: integer('chain_id').notNull(),
-    packageId: text('package_id').notNull(),
+    /**
+     * Unused. Nullable for now so the process a deploy replaces can still
+     * insert while both run; a later migration drops it.
+     */
+    packageId: text('package_id'),
     chips: integer('chips').notNull(),
     expectedWei: text('expected_wei').notNull(),
     status: depositStatus('status').notNull().default('pending'),
@@ -277,6 +281,8 @@ export const matches = pgTable(
   'matches',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    /** What the match is called on screen, "Match 142". Counts up in the order matches are created. */
+    number: integer('number').generatedByDefaultAsIdentity(),
     status: matchStatus('status').notNull().default('waiting'),
     /** Copied in rather than read from configuration, so a finished match still describes itself. */
     seatCount: integer('seat_count').notNull(),
@@ -292,7 +298,10 @@ export const matches = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }),
     endedAt: timestamp('ended_at', { withTimezone: true }),
   },
-  (table) => [index('matches_status_idx').on(table.status, table.createdAt)],
+  (table) => [
+    index('matches_status_idx').on(table.status, table.createdAt),
+    uniqueIndex('matches_number_idx').on(table.number),
+  ],
 );
 
 /**
