@@ -13,6 +13,7 @@ import {ChipVault} from "../src/ChipVault.sol";
 contract DeployChipVault is Script {
     function run() external returns (ChipVault vault) {
         address operator = vm.envAddress("VAULT_OWNER");
+        // The cashier's smallest purchase, MIN_PURCHASE in src/lib/economy.ts, is this in chips.
         uint256 minDeposit = vm.envOr("VAULT_MIN_DEPOSIT_WEI", uint256(0.01 ether));
 
         vm.startBroadcast();

@@ -220,7 +220,7 @@ RPC and every one of these holds:
 2. The log came from **that chain's** vault address.
 3. The intent was issued for **that same chain**.
 4. The payer is the signed-in wallet.
-5. The amount covers the package.
+5. The amount covers the intent's price.
 
 So the usual causes, in order of likelihood:
 

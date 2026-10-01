@@ -4,14 +4,15 @@ import {
   BIG_BLIND,
   BUY_IN,
   BUY_IN_BB,
-  CHIP_PACKAGES,
   ENTRY_FEE,
   ENTRY_FEE_BPS,
   DEFAULT_HAND_CAP,
   HAND_CAP,
   handCapFrom,
   MATCH,
+  MAX_PURCHASE,
   MAX_SEATS,
+  MIN_PURCHASE,
   MIN_SEATS,
   SEAT_COST,
   SMALL_BLIND,
@@ -19,6 +20,7 @@ import {
   chipsToWei,
   formatNative,
   formatUsd,
+  purchaseRefusal,
   weiToChips,
   WEI_PER_CHIP,
 } from './economy';
@@ -81,17 +83,28 @@ test('a match is between two and six, and knows its own shape', () => {
   assert.equal(MATCH.bigBlind, BIG_BLIND);
 });
 
-test('packages are priced by the same peg the matches use', () => {
-  const regular = CHIP_PACKAGES.find((entry) => entry.id === 'regular')!;
-  assert.equal(regular.chips, 50_000);
-  assert.equal(chipsToWei(regular.chips), 500_000_000_000_000_000n);
-  assert.equal(CHIP_PACKAGES.filter((entry) => entry.popular).length, 1, 'exactly one package is marked popular');
+test('the smallest purchase is the smallest deposit the vault takes', () => {
+  // The vault is deployed with a minimum of 0.01 of the native token. Below
+  // that the wallet would be asked to send a transaction that reverts.
+  assert.equal(chipsToWei(MIN_PURCHASE), 10n ** 16n);
+});
+
+test('the cashier sells any whole number of chips in its range', () => {
+  assert.equal(purchaseRefusal(MIN_PURCHASE), null);
+  assert.equal(purchaseRefusal(12_345), null);
+  assert.equal(purchaseRefusal(MAX_PURCHASE), null);
+
+  for (const chips of [0, -1, MIN_PURCHASE - 1, MAX_PURCHASE + 1, 1_500.5, Number.NaN, Infinity]) {
+    assert.equal(purchaseRefusal(chips), 'Buy between 1,000 and 1,000,000 chips.', `refuses ${chips}`);
+  }
 });
 
 test('formats the native token without trailing noise', () => {
   assert.equal(formatNative(chipsToWei(10_000)), '0.1');
   assert.equal(formatNative(chipsToWei(50_000)), '0.5');
   assert.equal(formatNative(chipsToWei(250_000)), '2.5');
+  assert.equal(formatNative(chipsToWei(12_345)), '0.12345', 'every chip shows, so the label is what the wallet asks');
+  assert.equal(formatNative(chipsToWei(1)), '0.00001');
   assert.equal(formatNative(0n), '0');
 });
 

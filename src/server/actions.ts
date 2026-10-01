@@ -2,7 +2,7 @@ import { and, eq, isNotNull, sql as raw } from 'drizzle-orm';
 import { db } from '../db/client';
 import { agents, depositIntents, ledgerEntries, seats, users } from '../db/schema';
 import { conservative } from '../lib/rating';
-import { chipsToWei, packageById, weiToChips } from '../lib/economy';
+import { chipsToWei, purchaseRefusal, weiToChips } from '../lib/economy';
 import { chainById } from '../lib/chains';
 import { REQUIRED_CONFIRMATIONS, observeDeposit } from './chain';
 import { UnknownChain, enabledChains, requireChain, vaultAddress, type DeployedChain } from './chains';
@@ -142,9 +142,9 @@ export interface DepositQuote {
   chainId: number;
 }
 
-export async function startDeposit(session: Session, packageId: string, chainKey: string): Promise<DepositQuote> {
-  const chosen = packageById(packageId);
-  if (!chosen) throw new ActionError('That package does not exist.');
+export async function startDeposit(session: Session, chips: number, chainKey: string): Promise<DepositQuote> {
+  const refusal = purchaseRefusal(chips);
+  if (refusal) throw new ActionError(refusal);
 
   const chain = chainFor(chainKey);
 
@@ -166,14 +166,13 @@ export async function startDeposit(session: Session, packageId: string, chainKey
     );
   }
 
-  const valueWei = chipsToWei(chosen.chips);
+  const valueWei = chipsToWei(chips);
   const [intent] = await db
     .insert(depositIntents)
     .values({
       userId: session.userId,
       chainId: chain.id,
-      packageId: chosen.id,
-      chips: chosen.chips,
+      chips,
       expectedWei: valueWei.toString(),
     })
     .returning({ id: depositIntents.id });
@@ -181,7 +180,7 @@ export async function startDeposit(session: Session, packageId: string, chainKey
   return {
     intentId: intent.id,
     bytes32: intentToBytes32(intent.id),
-    chips: chosen.chips,
+    chips,
     valueWei: valueWei.toString(),
     vault,
     chainKey: chain.key,
@@ -362,11 +361,11 @@ export async function confirmDeposit(
 
       // One short deposit does not hold up the others the same call paid for.
       if (observed.amountWei < BigInt(intent.expectedWei)) {
-        refusal ??= 'That deposit was smaller than the package it was for.';
+        refusal ??= 'That deposit was smaller than the purchase it was for.';
         continue;
       }
 
-      // Anything sent above the package price still buys chips at the same peg.
+      // Anything sent above the price still buys chips at the same peg.
       const chips = Math.max(intent.chips, weiToChips(observed.amountWei));
 
       // The status is part of the condition, not just of the payload, so the

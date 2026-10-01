@@ -18,7 +18,7 @@ import {
   users,
 } from '../db/schema';
 import type { DecisionRecord } from '../agent/decide';
-import { ENTRY_FEE, MATCH, SEAT_COST, chipsToWei } from '../lib/economy';
+import { ENTRY_FEE, MATCH, MAX_PURCHASE, MIN_PURCHASE, SEAT_COST, chipsToWei } from '../lib/economy';
 import { DEFAULT_RATING, conservative, type Rating } from '../lib/rating';
 import { applyAction, startHand } from '../poker/engine';
 import { confirmDeposit, startDeposit, type DepositResult } from './actions';
@@ -399,9 +399,29 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
   /* Deposits                                                                 */
   /* ------------------------------------------------------------------------ */
 
+  test('a purchase is priced at the peg for exactly the chips asked', async () => {
+    const me = await owner(0);
+    const quote = await startDeposit(me, 12_345, CHAIN);
+
+    assert.equal(quote.chips, 12_345);
+    assert.equal(quote.valueWei, chipsToWei(12_345).toString());
+    const [intent] = await db.select().from(depositIntents).where(eq(depositIntents.id, quote.intentId));
+    assert.equal(intent.chips, 12_345);
+    assert.equal(intent.expectedWei, quote.valueWei);
+  });
+
+  test('a chip count outside the range writes no intent', async () => {
+    const me = await owner(0);
+
+    for (const chips of [MIN_PURCHASE - 1, MAX_PURCHASE + 1, 1_500.5]) {
+      await assert.rejects(startDeposit(me, chips, CHAIN), /Buy between 1,000 and 1,000,000 chips/);
+    }
+    assert.equal((await db.select().from(depositIntents)).length, 0);
+  });
+
   test('a confirmed deposit is credited once, however often it is confirmed', async () => {
     const me = await owner(0);
-    const quote = await startDeposit(me, 'starter', CHAIN);
+    const quote = await startDeposit(me, 10_000, CHAIN);
     const observe = paid(quote.bytes32, me.address, BigInt(quote.valueWei));
 
     const result = credited(await confirmDeposit(me, TX, CHAIN, observe));
@@ -425,7 +445,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
   test('two confirmations racing on one transaction credit it once', async () => {
     const me = await owner(0);
-    const quote = await startDeposit(me, 'starter', CHAIN);
+    const quote = await startDeposit(me, 10_000, CHAIN);
     const observe = paid(quote.bytes32, me.address, BigInt(quote.valueWei));
 
     // Both are told it landed, which is what a cashier closed and reopened
@@ -442,10 +462,10 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(deposits.length, 1);
   });
 
-  test('one transaction paying two packages credits both, once each', async () => {
+  test('one transaction paying two purchases credits both, once each', async () => {
     const me = await owner(0);
-    const first = await startDeposit(me, 'starter', CHAIN);
-    const second = await startDeposit(me, 'regular', CHAIN);
+    const first = await startDeposit(me, 10_000, CHAIN);
+    const second = await startDeposit(me, 50_000, CHAIN);
     const observe = paidTogether(me.address, [
       { intentId: first.bytes32, amountWei: BigInt(first.valueWei) },
       { intentId: second.bytes32, amountWei: BigInt(second.valueWei) },
@@ -471,8 +491,8 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
   test('a short deposit in a batch does not hold up the others it was paid with', async () => {
     const me = await owner(0);
-    const short = await startDeposit(me, 'starter', CHAIN);
-    const full = await startDeposit(me, 'starter', CHAIN);
+    const short = await startDeposit(me, 10_000, CHAIN);
+    const full = await startDeposit(me, 10_000, CHAIN);
     const observe = paidTogether(me.address, [
       { intentId: short.bytes32, amountWei: BigInt(short.valueWei) - 1n },
       { intentId: full.bytes32, amountWei: BigInt(full.valueWei) },
@@ -488,7 +508,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     // The first ask after a wallet hands back a hash nearly always lands here;
     // treated as a failure, it would end the cashier's wait on its first poll.
     const me = await owner(0);
-    await startDeposit(me, 'starter', CHAIN);
+    await startDeposit(me, 10_000, CHAIN);
 
     const result = await confirmDeposit(me, TX, CHAIN, async () => null);
 
@@ -498,7 +518,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
   test('a deposit short of its confirmations credits nothing yet', async () => {
     const me = await owner(0);
-    const quote = await startDeposit(me, 'starter', CHAIN);
+    const quote = await startDeposit(me, 10_000, CHAIN);
 
     const result = await confirmDeposit(me, TX, CHAIN, paid(quote.bytes32, me.address, BigInt(quote.valueWei), 2n));
 
@@ -508,7 +528,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
   test('a deposit paid from somebody else’s wallet is refused', async () => {
     const me = await owner(0);
-    const quote = await startDeposit(me, 'starter', CHAIN);
+    const quote = await startDeposit(me, 10_000, CHAIN);
 
     await assert.rejects(
       confirmDeposit(me, TX, CHAIN, paid(quote.bytes32, `0x${'9'.repeat(40)}`, BigInt(quote.valueWei))),
@@ -517,20 +537,20 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(await balance(me.userId), 0);
   });
 
-  test('a deposit smaller than its package is refused', async () => {
+  test('a deposit smaller than its purchase is refused', async () => {
     const me = await owner(0);
-    const quote = await startDeposit(me, 'starter', CHAIN);
+    const quote = await startDeposit(me, 10_000, CHAIN);
 
     await assert.rejects(
       confirmDeposit(me, TX, CHAIN, paid(quote.bytes32, me.address, BigInt(quote.valueWei) - 1n)),
-      /smaller than the package/,
+      /smaller than the purchase/,
     );
     assert.equal(await balance(me.userId), 0);
   });
 
   test('a deposit is finished only on the chain its intent was priced on', async () => {
     const me = await owner(0);
-    const quote = await startDeposit(me, 'starter', CHAIN);
+    const quote = await startDeposit(me, 10_000, CHAIN);
 
     await assert.rejects(
       confirmDeposit(me, TX, 'arbitrum-sepolia', paid(quote.bytes32, me.address, BigInt(quote.valueWei))),
@@ -539,9 +559,9 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(await balance(me.userId), 0);
   });
 
-  test('anything paid above the package still buys chips at the peg', async () => {
+  test('anything paid above the price still buys chips at the peg', async () => {
     const me = await owner(0);
-    const quote = await startDeposit(me, 'starter', CHAIN);
+    const quote = await startDeposit(me, 10_000, CHAIN);
 
     const result = credited(
       await confirmDeposit(me, TX, CHAIN, paid(quote.bytes32, me.address, BigInt(quote.valueWei) + chipsToWei(500))),

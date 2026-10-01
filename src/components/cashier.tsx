@@ -1,9 +1,8 @@
 'use client';
-/* eslint-disable @next/next/no-img-element */ // Same fixed-size chip art as the felt.
 
 import { useEffect, useRef, useState } from 'react';
 import { chainByKey } from '@/lib/chains';
-import { CHIP_PACKAGES, chipsToWei, formatChips, formatNative, formatUsd } from '@/lib/economy';
+import { chipsToWei, formatChips, formatNative, formatUsd, purchaseRefusal } from '@/lib/economy';
 import { sendDeposit } from '@/lib/wallet';
 import { useAccount } from './account-context';
 import { useChain } from './chain-context';
@@ -17,6 +16,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   const [stage, setStage] = useState<Stage>('idle');
   const [status, setStatus] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Kept as typed, digits only, so the field can sit empty mid-edit.
+  const [amount, setAmount] = useState('10000');
   const dialog = useRef<HTMLDivElement>(null);
 
   // Escape closes, and Tab stays inside. A modal the keyboard can walk out of
@@ -63,7 +64,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   // every time the balance is refreshed, and a deposit this dialog is finishing
   // may be credited by another poll still running from the dialog closed a
   // moment ago, whose refresh would cancel this one mid-wait and leave the
-  // dialog on "Waiting for the network" with every package disabled.
+  // dialog on "Waiting for the network" with Buy disabled.
   const wallet = account?.address ?? null;
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +103,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
     };
   }, [wallet, refresh]);
 
-  async function buy(packageId: string) {
+  async function buy(chips: number) {
     if (!account || !chain) return;
     setFailure(null);
     setStage('signing');
@@ -112,7 +113,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
       const intentResponse = await fetch('/api/cashier/intent', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ packageId, chain: chain.key }),
+        body: JSON.stringify({ chips, chain: chain.key }),
       });
       const intent = (await intentResponse.json()) as {
         intentId?: string;
@@ -168,6 +169,11 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   /** Whether switching would reach a cashier that works, or only the same message again. */
   const settlesSomewhere = chains.some((entry) => entry.vault);
 
+  const chips = Number(amount);
+  const refusal = purchaseRefusal(chips);
+  const wei = refusal ? null : chipsToWei(chips);
+  const usd = wei === null ? null : formatUsd(wei, chain?.notionalUsd);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm"
@@ -183,7 +189,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         tabIndex={-1}
         // The shell does not scroll, so the dialog carries its own scrollbar rather
         // than relying on the page to make room for it.
-        className="scroll-y max-h-full w-full max-w-3xl rounded-card border border-line bg-surface shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] outline-none"
+        className="scroll-y max-h-full w-full max-w-lg rounded-card border border-line bg-surface shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] outline-none"
       >
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-6 py-5">
           <h2 className="text-2xl text-ink">Cashier</h2>
@@ -200,45 +206,46 @@ export function Cashier({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="grid gap-px bg-line sm:grid-cols-3">
-          {CHIP_PACKAGES.map((entry) => {
-            const wei = chipsToWei(entry.chips);
-            const usd = formatUsd(wei, chain?.notionalUsd);
-            return (
-              <div key={entry.id} className="flex flex-col gap-4 bg-surface p-6">
-                <div className="flex items-baseline justify-between">
-                  <span className="label text-faint">{entry.name}</span>
-                  {entry.popular ? (
-                    <span className="rounded-full bg-accent px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-ink">
-                      Most bought
-                    </span>
-                  ) : null}
-                </div>
+        <form
+          className="flex flex-col gap-4 p-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!refusal) void buy(chips);
+          }}
+        >
+          <label className="flex flex-col gap-2">
+            <span className="label text-faint">Chips</span>
+            <input
+              value={amount}
+              onChange={(event) => setAmount(event.target.value.replace(/\D/g, ''))}
+              inputMode="numeric"
+              autoComplete="off"
+              disabled={busy}
+              className="mono h-12 rounded-control border border-line bg-surface-2 px-3 text-2xl text-ink tabular-nums outline-none focus:border-accent disabled:opacity-45"
+            />
+          </label>
 
-                <ChipTower chips={entry.chips} />
+          <div aria-live="polite" className="mono min-h-10 tabular-nums">
+            {wei === null ? (
+              <p className="text-[0.8125rem] text-faint">{refusal}</p>
+            ) : (
+              <>
+                <p className="text-[0.8125rem] text-muted">
+                  {formatNative(wei)} {symbol}
+                </p>
+                {usd ? <p className="text-xs text-faint">{usd} at a fixed testnet rate</p> : null}
+              </>
+            )}
+          </div>
 
-                <div>
-                  <div className="mono text-2xl text-ink tabular-nums">{formatChips(entry.chips)}</div>
-                  <div className="mono text-[0.8125rem] text-muted tabular-nums">
-                    {formatNative(wei)} {symbol}
-                  </div>
-                  {usd ? (
-                    <div className="mono text-xs text-faint tabular-nums">{usd} at a fixed testnet rate</div>
-                  ) : null}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={busy || !account || !settles}
-                  onClick={() => void buy(entry.id)}
-                  className="mt-auto inline-flex h-10 items-center justify-center rounded-control bg-accent px-4 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Buy {formatChips(entry.chips)} chips
-                </button>
-              </div>
-            );
-          })}
-        </div>
+          <button
+            type="submit"
+            disabled={busy || !account || !settles || refusal !== null}
+            className="inline-flex h-10 items-center justify-center rounded-control bg-accent px-4 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {refusal ? 'Buy chips' : `Buy ${formatChips(chips)} chips`}
+          </button>
+        </form>
 
         {chain && !settles ? (
           <div className="border-t border-line px-6 py-4">
@@ -264,27 +271,6 @@ export function Cashier({ onClose }: { onClose: () => void }) {
           </div>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-/** The package size drawn as height. A bigger package is a physically taller stack. */
-function ChipTower({ chips }: { chips: number }) {
-  const count = Math.max(3, Math.min(14, Math.round(Math.log10(chips) * 5)));
-  return (
-    <div className="relative h-24" aria-hidden>
-      {Array.from({ length: count }, (_, i) => (
-        <img
-          key={i}
-          src="/chips/white-edge.png"
-          alt=""
-          width={52}
-          height={24}
-          className="absolute left-0"
-          style={{ bottom: i * 7 }}
-          draggable={false}
-        />
-      ))}
     </div>
   );
 }

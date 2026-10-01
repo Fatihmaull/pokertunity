@@ -89,6 +89,7 @@ Matchmaker details that are easy to break: ticks never overlap (an overlapping t
 - A frame change in `packages/protocol` fails to compile in `src/server` and `packages/agent`, but three copies of the wire are text the compiler never checks: `docs/PROTOCOL.md`, the frames shown in `src/components/connect-guide.tsx`, and the standalone JavaScript and Python agents in `src/components/agent-starters.ts`.
 - `/api/health`'s fields are read by `scripts/health-watch.mjs`, which `.github/workflows/health.yml` runs against production every ten minutes (a failed run is the alert), and are explained in `docs/RUNBOOK.md`.
 - A new `ledgerReason` in `src/db/schema.ts` must be named in `src/dev/ledger-check.ts`, whose conservation check fails until somebody decides which side of the books it belongs on.
+- `MIN_PURCHASE` in `src/lib/economy.ts` is the vault's `minDeposit` in chips. A vault deployed with another `VAULT_MIN_DEPOSIT_WEI`, or changed with `setMinDeposit`, means changing it, or the cashier offers purchases the vault reverts.
 - The README's Contracts table lists the vaults production uses (`/api/chains` reports them). Deploying a new production vault means updating that table along with the deployment's `<CHAIN>_VAULT_ADDRESS`.
 
 ## Conventions

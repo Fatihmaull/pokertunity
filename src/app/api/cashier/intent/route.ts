@@ -11,13 +11,13 @@ export async function POST(request: Request): Promise<Response> {
   const allowed = take('deposit-start', callerOf(request, session.userId));
   if (!allowed.ok) return tooMany(allowed.retryAfterMs);
 
-  const body = (await request.json().catch(() => null)) as { packageId?: string; chain?: string } | null;
-  if (!body?.packageId) return Response.json({ error: 'Choose a package.' }, { status: 400 });
+  const body = (await request.json().catch(() => null)) as { chips?: unknown; chain?: string } | null;
+  if (typeof body?.chips !== 'number') return Response.json({ error: 'Enter how many chips to buy.' }, { status: 400 });
 
   const chainKey = body.chain ?? (await selectedChain()).key;
 
   try {
-    return Response.json(await startDeposit(session, body.packageId, chainKey));
+    return Response.json(await startDeposit(session, body.chips, chainKey));
   } catch (error) {
     if (error instanceof ActionError) return Response.json({ error: error.message }, { status: 400 });
     console.error('deposit intent failed', error);

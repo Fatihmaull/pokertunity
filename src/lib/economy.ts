@@ -24,21 +24,23 @@ export function weiToChips(wei: bigint): number {
   return Number(wei / WEI_PER_CHIP);
 }
 
-export interface ChipPackage {
-  id: string;
-  name: string;
-  chips: number;
-  popular?: boolean;
-}
+/**
+ * The fewest chips one purchase buys. The vault refuses a deposit under 0.01
+ * of the native token (`VAULT_MIN_DEPOSIT_WEI` when it is deployed), which is
+ * this many chips.
+ */
+export const MIN_PURCHASE = 1_000;
 
-export const CHIP_PACKAGES: ChipPackage[] = [
-  { id: 'starter', name: 'Starter', chips: 10_000 },
-  { id: 'regular', name: 'Regular', chips: 50_000, popular: true },
-  { id: 'whale', name: 'Whale', chips: 250_000 },
-];
+/**
+ * The most one purchase buys: ten of the native token. Balances are a 32-bit
+ * integer column, and this keeps any one purchase far inside it.
+ */
+export const MAX_PURCHASE = 1_000_000;
 
-export function packageById(id: string): ChipPackage | undefined {
-  return CHIP_PACKAGES.find((entry) => entry.id === id);
+/** Null when the cashier sells this many chips; otherwise the sentence saying what it sells. */
+export function purchaseRefusal(chips: number): string | null {
+  if (Number.isInteger(chips) && chips >= MIN_PURCHASE && chips <= MAX_PURCHASE) return null;
+  return `Buy between ${formatChips(MIN_PURCHASE)} and ${formatChips(MAX_PURCHASE)} chips.`;
 }
 
 /** Display helpers. Formatting lives here so chips read the same on every screen. */
@@ -46,10 +48,13 @@ export function formatChips(chips: number): string {
   return chips.toLocaleString('en-US');
 }
 
-/** Wei as a decimal amount of the native token, without a symbol. */
+/**
+ * Wei as a decimal amount of the native token, for the caller to put a symbol
+ * after. Five places, because a chip is the fifth: any chip count prints exactly.
+ */
 export function formatNative(wei: bigint): string {
   const whole = wei / 10n ** 18n;
-  const fraction = (wei % 10n ** 18n).toString().padStart(18, '0').slice(0, 4).replace(/0+$/, '');
+  const fraction = (wei % 10n ** 18n).toString().padStart(18, '0').slice(0, 5).replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 

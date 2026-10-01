@@ -132,7 +132,11 @@ export const depositIntents = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** EIP-155 id of the chain this deposit settles on. Always written explicitly. */
     chainId: integer('chain_id').notNull(),
-    packageId: text('package_id').notNull(),
+    /**
+     * Unused. Nullable for now so the process a deploy replaces can still
+     * insert while both run; a later migration drops it.
+     */
+    packageId: text('package_id'),
     chips: integer('chips').notNull(),
     expectedWei: text('expected_wei').notNull(),
     status: depositStatus('status').notNull().default('pending'),
