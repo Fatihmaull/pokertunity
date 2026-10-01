@@ -56,7 +56,6 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
             {/* An amount, not a change, so it carries no sign: "+0" read as a
                 gain of nothing rather than as nothing coming back. */}
             <p className="mono mt-1 text-2xl text-accent tabular-nums">{formatChips(summary.cashOut)}</p>
-            <p className="mt-1 text-sm text-muted">The entry fee is not refunded.</p>
           </Card>
         )}
 

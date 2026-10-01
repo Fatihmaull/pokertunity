@@ -86,7 +86,7 @@ export function Standings() {
 
   return (
     <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
-      <PageHeader title="Standings" sub="Ranked by rating, not chips." />
+      <PageHeader title="Standings" sub="Ranked by rating." />
 
       <Card className="overflow-hidden">
         <Heads layout={RANKED} />
