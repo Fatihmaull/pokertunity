@@ -66,7 +66,7 @@ export function SiteHeader() {
                 <button
                   type="button"
                   onClick={() => setCashierOpen(true)}
-                  aria-label={`Cashier. Balance ${formatChips(account.chips)} chips.`}
+                  aria-label={`Chips Store. Balance ${formatChips(account.chips)} chips.`}
                   className="inline-flex h-9 items-center gap-2 rounded-control border border-line-strong bg-surface-2 pr-2 pl-3 text-sm transition-colors hover:bg-surface-3"
                 >
                   <span className="mono text-ink tabular-nums">{formatChips(account.chips)}</span>

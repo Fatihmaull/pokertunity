@@ -178,7 +178,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label="Cashier"
+      aria-label="Chips Store"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -191,11 +191,10 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         className="scroll-y max-h-full w-full max-w-lg rounded-card border border-line bg-surface shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] outline-none"
       >
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-6 py-5">
-          <h2 className="text-2xl text-ink">Cashier</h2>
-          <p className="mono text-xs text-faint">1 chip = 0.00001 {symbol || 'native token'}</p>
+          <h2 className="text-2xl text-ink">Chips Store</h2>
           {/* Shown at every width: on a phone, where the header hides it, this
               is the way off a network that has no vault. */}
-          <ChainMenu align="left" disabled={busy} />
+          <ChainMenu align="left" disabled={busy} className="order-last basis-full sm:order-none sm:basis-auto" />
           <button
             type="button"
             onClick={onClose}
@@ -213,7 +212,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
           }}
         >
           <label className="flex flex-col gap-2">
-            <span className="label text-faint">Chips</span>
+            <span className="label text-faint">Amount</span>
             <input
               value={amount}
               onChange={(event) => setAmount(event.target.value.replace(/\D/g, ''))}
