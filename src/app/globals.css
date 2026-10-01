@@ -115,13 +115,6 @@
   --ease-land: cubic-bezier(0.2, 1.35, 0.4, 1);
 }
 
-/* Below the lg breakpoint the header is two rows: controls, then navigation. */
-@media (width < 64rem) {
-  :root {
-    --header-h: 5.75rem;
-  }
-}
-
 body {
   margin: 0;
   background: var(--color-canvas);
