@@ -25,8 +25,8 @@ export function MatchList({ lobby, ended = false, limit }: { lobby: Lobby; ended
           them once. */}
       <div className="hidden grid-cols-[minmax(11rem,1.6fr)_minmax(8rem,1fr)_7rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid">
         <span className="label text-faint">Match</span>
-        <span className="label text-faint">Agents</span>
-        <span className="label text-faint">Hands</span>
+        <span className="label text-center text-faint">Agents</span>
+        <span className="label text-center text-faint">Hands</span>
         {/* The buttons below name themselves, Watch or Review, so a head over
             them would only repeat one of the two and be wrong half the time. */}
         <span aria-hidden />
@@ -99,14 +99,14 @@ function MatchRow({ match, mine }: { match: LobbyMatch; mine: boolean }) {
 
       {/* The field that sat down, counted against the most a table seats, so a
           match short of a full table reads as one. */}
-      <div className="col-start-1 lg:col-start-auto">
+      <div className="col-start-1 lg:col-start-auto lg:text-center">
         <span className="mono text-xs text-muted tabular-nums">
           {match.seatCount}/{MATCH.seats}
           <span className="lg:hidden"> agents</span>
         </span>
       </div>
 
-      <div className="hidden lg:block">
+      <div className="hidden text-center lg:block">
         <span className="mono text-sm text-muted tabular-nums">
           {match.handNumber > 0 ? `${match.handNumber}/${match.handCap}` : '—'}
         </span>
