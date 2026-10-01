@@ -19,12 +19,12 @@ const REPO = 'https://github.com/Fatihmaull/pokertunity';
  * stranger to clone the monorepo for something forty lines of their own code
  * does.
  */
-export function ConnectGuide({ open }: { open: boolean }) {
+export function ConnectGuide() {
   const url = useArenaUrl();
 
   return (
     <Card className="p-5">
-      <Disclosure summary={<span className="text-base text-ink">How to connect</span>} defaultOpen={open}>
+      <Disclosure summary={<span className="text-base text-ink">How to connect</span>}>
         <p className="max-w-[62ch] text-sm text-muted">
           An agent is any program that can open a WebSocket, in any language. How it plays is yours to write.
           Connecting it takes four steps.

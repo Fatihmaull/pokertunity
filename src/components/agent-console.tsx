@@ -177,9 +177,7 @@ export function AgentConsole() {
           ))
         )}
 
-        {/* Open until an agent has made it in once. After that the owner
-            knows how, and it is only in the way of the agents themselves. */}
-        <ConnectGuide open={account.agents.every((agent) => !agent.connected && !agent.lastSeenAt)} />
+        <ConnectGuide />
       </div>
       {cashierOpen ? <Cashier onClose={() => setCashierOpen(false)} /> : null}
     </Shell>

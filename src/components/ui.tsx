@@ -193,16 +193,14 @@ export function useDismissed(
  */
 export function Disclosure({
   summary,
-  defaultOpen = false,
   className = '',
   children,
 }: {
   summary: React.ReactNode;
-  defaultOpen?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
   const id = useId();
 
   return (
