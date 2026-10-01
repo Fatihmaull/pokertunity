@@ -191,8 +191,3 @@ export const MATCH: MatchConfig = {
   handCap: HAND_CAP,
 };
 
-/** How the stakes read on screen. One line, because there is only one game. */
-export function stakesLabel(): string {
-  return `${SMALL_BLIND}/${BIG_BLIND}`;
-}
-

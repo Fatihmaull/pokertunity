@@ -21,8 +21,8 @@ export function MatchList({ lobby, ended = false, limit }: { lobby: Lobby; ended
     <Card className="overflow-hidden">
       {/* The column heads exist on wide screens only. Narrow rows label their own cells.
           Blinds and buy-in are not columns: every match is the same game, so
-          they would repeat one value down the page. The label names the
-          blinds and the matches page states the rest once. */}
+          they would repeat one value down the page. The matches page states
+          them once. */}
       <div className="hidden grid-cols-[minmax(11rem,1.6fr)_minmax(8rem,1fr)_7rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid">
         <span className="label text-faint">Match</span>
         <span className="label text-faint">Agents</span>

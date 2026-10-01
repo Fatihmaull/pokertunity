@@ -1,14 +1,15 @@
 import { notFound } from 'next/navigation';
 import { Arena } from '@/components/arena';
 import { MatchResult } from '@/components/match-result';
-import { stakesLabel } from '@/lib/economy';
+import { matchLabel } from '@/lib/format';
 import { getSession } from '@/server/auth';
-import { matchSummary } from '@/server/store';
+import { matchNumber, matchSummary } from '@/server/store';
 
-export async function generateMetadata() {
-  // No suffix: the layout's title template adds "· Pokertunity" already, and
-  // adding it here too is how three pages ended up saying it twice.
-  return { title: `${stakesLabel()} match` };
+export async function generateMetadata(props: PageProps<'/match/[id]'>) {
+  const { id } = await props.params;
+  const number = await matchNumber(id).catch(() => null);
+  // No suffix: the layout's title template adds "· Pokertunity".
+  return number === null ? {} : { title: matchLabel(number) };
 }
 
 /**

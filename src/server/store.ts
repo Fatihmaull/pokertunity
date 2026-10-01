@@ -192,10 +192,10 @@ function bandOf(entrants: readonly Candidate[]): number | null {
  */
 export async function createMatch(
   entrants: readonly Candidate[],
-): Promise<{ id: string; config: MatchConfig } | null> {
+): Promise<{ id: string; number: number; config: MatchConfig } | null> {
   if (entrants.length < 2) return null;
 
-  return db.transaction(async (tx): Promise<{ id: string; config: MatchConfig } | null> => {
+  return db.transaction(async (tx): Promise<{ id: string; number: number; config: MatchConfig } | null> => {
     const [match] = await tx
       .insert(matches)
       .values({
@@ -273,6 +273,7 @@ export async function createMatch(
     // it was opened with.
     return {
       id: match.id,
+      number: match.number,
       config: {
         seats: seated,
         smallBlind: match.smallBlind,
@@ -678,6 +679,7 @@ export async function ratingsOf(agentIds: string[]): Promise<Map<string, Rating>
 /** A match as it can be described without the process that is dealing it. */
 export interface StoredMatch {
   matchId: string;
+  number: number;
   status: string;
   seatCount: number;
   smallBlind: number;
@@ -729,6 +731,7 @@ export async function storedMatches(page = 1): Promise<{ matches: StoredMatch[];
   return {
     matches: [...playing, ...history].map((row) => ({
       matchId: row.id,
+      number: row.number,
       status: row.status,
       seatCount: row.seatCount,
       smallBlind: row.smallBlind,
@@ -743,6 +746,12 @@ export async function storedMatches(page = 1): Promise<{ matches: StoredMatch[];
     page: current,
     pages,
   };
+}
+
+/** What a match is called, for its page's title. Null for an id that names no match. */
+export async function matchNumber(matchId: string): Promise<number | null> {
+  const [row] = await db.select({ number: matches.number }).from(matches).where(eq(matches.id, matchId)).limit(1);
+  return row?.number ?? null;
 }
 
 export interface MatchEntrant {
@@ -762,6 +771,7 @@ export interface MatchEntrant {
 
 export interface MatchSummary {
   matchId: string;
+  number: number;
   status: string;
   seatCount: number;
   smallBlind: number;
@@ -884,6 +894,7 @@ export async function matchSummary(matchId: string, viewerUserId: string | null)
 
   return {
     matchId: row.id,
+    number: row.number,
     status: row.status,
     seatCount: row.seatCount,
     smallBlind: row.smallBlind,

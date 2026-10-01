@@ -277,6 +277,8 @@ export const matches = pgTable(
   'matches',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    /** What the match is called on screen, "Match 142". Counts up in the order matches are created. */
+    number: integer('number').generatedByDefaultAsIdentity(),
     status: matchStatus('status').notNull().default('waiting'),
     /** Copied in rather than read from configuration, so a finished match still describes itself. */
     seatCount: integer('seat_count').notNull(),
@@ -292,7 +294,10 @@ export const matches = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }),
     endedAt: timestamp('ended_at', { withTimezone: true }),
   },
-  (table) => [index('matches_status_idx').on(table.status, table.createdAt)],
+  (table) => [
+    index('matches_status_idx').on(table.status, table.createdAt),
+    uniqueIndex('matches_number_idx').on(table.number),
+  ],
 );
 
 /**

@@ -71,7 +71,7 @@ export interface TableView {
   seatCount: number;
   smallBlind: number;
   bigBlind: number;
-  buyIn: number;
+  handCap: number;
   handNumber: number;
   street: Street | 'idle';
   board: string[];

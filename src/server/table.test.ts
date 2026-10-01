@@ -14,7 +14,7 @@ const config = MATCH;
 
 /** Chairs 1 and 2 occupied, chair 0 vacated: what a bust leaves behind. */
 function sparseTable() {
-  const runtime = new MatchRuntime('m-1', config, () => {});
+  const runtime = new MatchRuntime('m-1', 1, config, () => {});
   const internals = runtime as unknown as Record<string, unknown>;
 
   const seated: SeatedAgent[] = [
@@ -69,7 +69,7 @@ test('the dealer button lands on one chair and only one', () => {
 });
 
 test('two agents wearing one colour are told apart at the table', () => {
-  const runtime = new MatchRuntime('m-1', config, () => {});
+  const runtime = new MatchRuntime('m-1', 1, config, () => {});
   const internals = runtime as unknown as Record<string, unknown>;
 
   // Past the tenth account, colours are reused. Six of them cannot share a felt.
@@ -116,7 +116,7 @@ test('a match announces itself finished exactly once', () => {
   // The loop can reach an ending from several directions at once, and settling
   // twice would return every stack twice.
   const endings: string[] = [];
-  const runtime = new MatchRuntime('m-1', config, (_id, ending) => {
+  const runtime = new MatchRuntime('m-1', 1, config, (_id, ending) => {
     endings.push(ending);
   });
 

@@ -1,4 +1,4 @@
-import { stakesLabel } from '@/lib/economy';
+import { matchLabel } from '@/lib/format';
 import { getSession } from '@/server/auth';
 import { account } from '@/server/actions';
 import { callerOf, take, tooMany } from '@/server/rate-limit';
@@ -36,7 +36,7 @@ export async function GET(request: Request): Promise<Response> {
 
     return {
       id: row.matchId,
-      label: `${stakesLabel()} match`,
+      label: matchLabel(row.number),
       status: row.status,
       seatCount: row.seatCount,
       smallBlind: row.smallBlind,

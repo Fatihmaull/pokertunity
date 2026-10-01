@@ -155,7 +155,7 @@ async function tick(): Promise<void> {
     if (!match) continue;
 
     console.log(`[matchmaker] opened ${match.id} with ${group.map((entrant) => entrant.name).join(', ')}`);
-    openMatch(match.id, match.config, onFinished);
+    openMatch(match.id, match.number, match.config, onFinished);
   }
 }
 

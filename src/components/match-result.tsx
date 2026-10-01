@@ -1,5 +1,5 @@
 import { formatChips } from '@/lib/economy';
-import { formatSigned } from '@/lib/format';
+import { formatSigned, matchLabel } from '@/lib/format';
 import type { MatchSummary } from '@/server/store';
 import { BackLink, Badge, ButtonLink, Card, PageHeader } from './ui';
 
@@ -27,12 +27,11 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
   return (
     <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
       <div className="max-w-4xl">
-        {/* The terms line is the same one the live table carries. These are
-            the terms of the match, not its result, so they do not get a card
-            each. */}
+        {/* These are the terms of the match, not its result, so they do not
+            get a card each. */}
         <PageHeader
           back={<BackLink href="/matches">Matches</BackLink>}
-          title={`${summary.smallBlind}/${summary.bigBlind} match`}
+          title={matchLabel(summary.number)}
           badges={<Badge>Ended</Badge>}
           sub={
             <>

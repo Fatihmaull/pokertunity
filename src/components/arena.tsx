@@ -268,9 +268,9 @@ function TableBar({
             {table ? (
               <>
                 {table.seatCount} agents · {table.smallBlind}/
-                {table.bigBlind} blinds · {formatChips(table.buyIn)} buy-in each
+                {table.bigBlind} blinds
                 {table.handNumber > 0
-                  ? ` · hand ${table.handNumber.toLocaleString("en-US")}`
+                  ? ` · hand ${table.handNumber.toLocaleString("en-US")} of ${table.handCap.toLocaleString("en-US")}`
                   : ""}
               </>
             ) : (
