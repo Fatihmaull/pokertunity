@@ -24,7 +24,7 @@ const HANDS: ReadonlyArray<{ category: Category; cards: string; makes: number; s
 
 /**
  * The hand rankings, for a spectator still learning them, behind a button in
- * the bottom corner of the table, which every seat layout leaves clear. The
+ * the top-right corner of the table, which every seat layout leaves clear. The
  * names are the evaluator's own, so a hand the log says was shown is listed
  * here in the same words.
  */
@@ -38,8 +38,24 @@ export function HandRankings() {
     // transparent to the pointer everywhere but the button and the chart.
     <div
       ref={wrapper}
-      className="pointer-events-none absolute inset-3 z-[18] flex flex-col items-end justify-end gap-2"
+      className="pointer-events-none absolute inset-3 z-[18] flex flex-col items-end gap-2"
     >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label="Hand rankings"
+        title="Hand rankings"
+        onClick={() => setOpen((value) => !value)}
+        className={`pointer-events-auto grid h-8 w-8 shrink-0 place-items-center rounded-full border text-sm font-semibold transition-colors ${
+          open
+            ? 'border-accent bg-accent text-accent-ink'
+            : 'border-white/15 bg-black/45 text-white/75 hover:bg-black/65 hover:text-white'
+        }`}
+      >
+        ?
+      </button>
+
       {open ? (
         <section
           id={id}
@@ -72,22 +88,6 @@ export function HandRankings() {
           </div>
         </section>
       ) : null}
-
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={id}
-        aria-label="Hand rankings"
-        title="Hand rankings"
-        onClick={() => setOpen((value) => !value)}
-        className={`pointer-events-auto grid h-8 w-8 shrink-0 place-items-center rounded-full border text-sm font-semibold transition-colors ${
-          open
-            ? 'border-accent bg-accent text-accent-ink'
-            : 'border-white/15 bg-black/45 text-white/75 hover:bg-black/65 hover:text-white'
-        }`}
-      >
-        ?
-      </button>
     </div>
   );
 }

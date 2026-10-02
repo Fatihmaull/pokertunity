@@ -122,8 +122,7 @@ export function Felt({
             <Centre table={table} potKey={potKey} />
           </div>
 
-          {/* Room under the last seat for the rankings button in the corner. */}
-          <ul className="space-y-2 px-3 pb-14 md:hidden">
+          <ul className="space-y-2 px-3 pb-4 md:hidden">
             {table.seats
               .filter((seat) => seat.agentId)
               .map((seat) => (
