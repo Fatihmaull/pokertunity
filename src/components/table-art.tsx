@@ -34,14 +34,18 @@ export interface CardOrigin {
 export interface CardMotion {
   delayMs?: number;
   origin?: CardOrigin | null;
-  /** `reveal` turns the card face up; `deal` slides it in from `origin`. */
-  entrance?: 'deal' | 'reveal';
+  /**
+   * `reveal` turns the card face up; `deal` slides it in from `origin`; `none`
+   * draws it in place, for a card that only illustrates a hand.
+   */
+  entrance?: 'deal' | 'reveal' | 'none';
   /** The hand is out of play and on its way back to the middle. */
   leaving?: boolean;
 }
 
 function motionClass({ entrance = 'deal', leaving = false }: CardMotion): string {
   if (leaving) return 'mucked';
+  if (entrance === 'none') return '';
   return entrance === 'reveal' ? 'revealed' : 'dealt';
 }
 
