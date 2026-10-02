@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatChips } from '@/lib/economy';
 import { ACT_CLOCK_MS } from '@/lib/pacing';
 import type { SeatView, TableView } from '@/server/view';
+import { HandRankings } from './hand-rankings';
 import { CardBack, CardSlot, DealerButton, PlayingCard, agentHex, type CardOrigin } from './table-art';
 import { seatLabel } from './use-match-stream';
 import { useRemaining } from './use-remaining';
@@ -121,7 +122,8 @@ export function Felt({
             <Centre table={table} potKey={potKey} />
           </div>
 
-          <ul className="space-y-2 px-3 pb-4 md:hidden">
+          {/* Room under the last seat for the rankings button in the corner. */}
+          <ul className="space-y-2 px-3 pb-14 md:hidden">
             {table.seats
               .filter((seat) => seat.agentId)
               .map((seat) => (
@@ -134,6 +136,8 @@ export function Felt({
                 />
               ))}
           </ul>
+
+          <HandRankings />
 
           {seated < 2 ? (
             <div className="absolute inset-0 z-20 grid place-items-center bg-black/55 px-6 backdrop-blur-[2px]">

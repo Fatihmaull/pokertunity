@@ -1,5 +1,9 @@
+'use client';
+
+import { useId, useState } from 'react';
 import { CATEGORY, CATEGORY_NAMES, type Category } from '@/poker/evaluate';
 import { PlayingCard } from './table-art';
+import { useDismissed } from './ui';
 
 /**
  * One example of every hand, strongest first. It leads with the cards that make
@@ -19,32 +23,71 @@ const HANDS: ReadonlyArray<{ category: Category; cards: string; makes: number; s
 ];
 
 /**
- * The hand rankings, for a spectator still learning them. The names are the
- * evaluator's own, so a hand the log says was shown is listed here in the same
- * words.
+ * The hand rankings, for a spectator still learning them, behind a button in
+ * the bottom corner of the table, which every seat layout leaves clear. The
+ * names are the evaluator's own, so a hand the log says was shown is listed
+ * here in the same words.
  */
 export function HandRankings() {
+  const [open, setOpen] = useState(false);
+  const wrapper = useDismissed(open, setOpen);
+  const id = useId();
+
   return (
-    <div className="scroll-y h-full p-3" data-panel-scroll tabIndex={0}>
-      <p className="label px-1 pb-2 text-faint">Strongest first</p>
-      <ol className="space-y-1">
-        {HANDS.map((hand) => (
-          <li
-            key={hand.category}
-            className="flex items-center gap-3 rounded-control border border-line bg-surface-2 px-3 py-1.5"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm text-ink first-letter:uppercase">{CATEGORY_NAMES[hand.category]}</p>
-              <p className="text-xs text-faint">{hand.says}</p>
-            </div>
-            <div className="flex shrink-0 gap-0.5">
-              {hand.cards.split(' ').map((card, index) => (
-                <PlayingCard key={card} card={card} size={28} entrance="none" dimmed={index >= hand.makes} />
+    // Spread over the whole felt so the chart can be as tall as the table, and
+    // transparent to the pointer everywhere but the button and the chart.
+    <div
+      ref={wrapper}
+      className="pointer-events-none absolute inset-3 z-[18] flex flex-col items-end justify-end gap-2"
+    >
+      {open ? (
+        <section
+          id={id}
+          aria-label="Hand rankings"
+          className="entering pointer-events-auto flex min-h-0 w-[min(22rem,100%)] flex-col rounded-card border border-line bg-surface shadow-[0_18px_40px_-12px_rgba(0,0,0,0.8)]"
+        >
+          <div className="flex shrink-0 items-baseline justify-between gap-3 border-b border-line px-4 py-2.5">
+            <h2 className="text-sm font-semibold text-ink">Hand rankings</h2>
+            <span className="label text-faint">Strongest first</span>
+          </div>
+          <div className="scroll-y min-h-0 p-3" tabIndex={0}>
+            <ol className="space-y-1">
+              {HANDS.map((hand) => (
+                <li
+                  key={hand.category}
+                  className="flex items-center gap-3 rounded-control border border-line bg-surface-2 px-3 py-1.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-ink first-letter:uppercase">{CATEGORY_NAMES[hand.category]}</p>
+                    <p className="text-xs text-faint">{hand.says}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-0.5">
+                    {hand.cards.split(' ').map((card, index) => (
+                      <PlayingCard key={card} card={card} size={28} entrance="none" dimmed={index >= hand.makes} />
+                    ))}
+                  </div>
+                </li>
               ))}
-            </div>
-          </li>
-        ))}
-      </ol>
+            </ol>
+          </div>
+        </section>
+      ) : null}
+
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label="Hand rankings"
+        title="Hand rankings"
+        onClick={() => setOpen((value) => !value)}
+        className={`pointer-events-auto grid h-8 w-8 shrink-0 place-items-center rounded-full border text-sm font-semibold transition-colors ${
+          open
+            ? 'border-accent bg-accent text-accent-ink'
+            : 'border-white/15 bg-black/45 text-white/75 hover:bg-black/65 hover:text-white'
+        }`}
+      >
+        ?
+      </button>
     </div>
   );
 }

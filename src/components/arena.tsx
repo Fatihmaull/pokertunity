@@ -6,14 +6,13 @@ import { formatChips } from "@/lib/economy";
 import type { TableView } from "@/server/view";
 import { useAccount } from "./account-context";
 import { Felt } from "./felt";
-import { HandRankings } from "./hand-rankings";
 import { ThinkingPanel, drawsOf, type BrainState } from "./thinking-panel";
 import { ChipDot, DealerButton, agentHex } from "./table-art";
 import { seatLabel, useMatchStream } from "./use-match-stream";
 import { useLobby } from "./use-lobby";
 import { BackLink, Badge, ButtonLink, Card, LiveBadge } from "./ui";
 
-type Tab = "thinking" | "players" | "log" | "rankings";
+type Tab = "thinking" | "players" | "log";
 
 /**
  * How often, and how many times, a finished match asks for its result page.
@@ -28,7 +27,6 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "thinking", label: "Thinking" },
   { id: "players", label: "Players" },
   { id: "log", label: "Hand log" },
-  { id: "rankings", label: "Rankings" },
 ];
 
 /**
@@ -220,10 +218,8 @@ export function Arena({ matchId }: { matchId: string }) {
               <ThinkingPanel brain={brain} deadline={table?.deadline ?? null} />
             ) : tab === "players" ? (
               <PlayersPanel table={table} myAgentIds={myAgentIds} />
-            ) : tab === "log" ? (
-              <LogPanel table={table} />
             ) : (
-              <HandRankings />
+              <LogPanel table={table} />
             )}
           </div>
         </Card>
