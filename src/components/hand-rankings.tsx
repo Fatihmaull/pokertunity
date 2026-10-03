@@ -60,19 +60,18 @@ export function HandRankings() {
         <section
           id={id}
           aria-label="Hand rankings"
-          className="entering pointer-events-auto flex min-h-0 w-[min(22rem,100%)] flex-col rounded-card border border-line bg-surface shadow-[0_18px_40px_-12px_rgba(0,0,0,0.8)]"
+          className="entering pointer-events-auto flex min-h-0 w-[min(24rem,100%)] flex-col rounded-card border border-line bg-surface shadow-[0_18px_40px_-12px_rgba(0,0,0,0.8)]"
         >
           <div className="flex shrink-0 items-baseline justify-between gap-3 border-b border-line px-4 py-2.5">
             <h2 className="text-sm font-semibold text-ink">Hand rankings</h2>
             <span className="label text-faint">Strongest first</span>
           </div>
-          <div className="scroll-y min-h-0 p-3" tabIndex={0}>
-            <ol className="space-y-1">
+          {/* One list, ruled between hands, so all nine stand on a table of
+              ordinary height without scrolling, each on one line of words. */}
+          <div className="scroll-y min-h-0" tabIndex={0}>
+            <ol className="divide-y divide-line">
               {HANDS.map((hand) => (
-                <li
-                  key={hand.category}
-                  className="flex items-center gap-3 rounded-control border border-line bg-surface-2 px-3 py-1.5"
-                >
+                <li key={hand.category} className="flex items-center gap-3 px-4 py-1.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-ink first-letter:uppercase">{CATEGORY_NAMES[hand.category]}</p>
                     <p className="text-xs text-faint">{hand.says}</p>

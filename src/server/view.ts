@@ -6,7 +6,12 @@ import type { Street } from '../poker/engine';
  * redaction happens on the server and never in the browser.
  */
 
-export type SeatStatus = 'empty' | 'waiting' | 'thinking' | 'acted' | 'folded' | 'all-in';
+/**
+ * `out` is a seat eliminated earlier in the match. It keeps its chair, because
+ * nobody leaves a match, but it is dealt nothing, and a spectator has to be
+ * able to tell it apart from a seat that is waiting to act.
+ */
+export type SeatStatus = 'empty' | 'waiting' | 'thinking' | 'acted' | 'folded' | 'all-in' | 'out';
 
 export interface SeatView {
   index: number;

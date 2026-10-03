@@ -217,7 +217,7 @@ export class MatchRuntime {
         color: this.palette.get(index) ?? occupant.color,
         stack: live?.stack ?? occupant.stack,
         committed: live?.committed ?? 0,
-        status: this.statusOf(index, live),
+        status: occupant.bustedAtHand !== null ? 'out' : this.statusOf(index, live),
         isDealer: this.state !== null && position !== null && position === this.state.button,
         hole: hole ? hole.map(cardName) : null,
         lastAction: timing?.action ?? null,

@@ -46,7 +46,8 @@ export function Felt({
 
   const focus = table?.seats.findIndex((seat) => seat.agentId && myAgentIds.has(seat.agentId)) ?? -1;
   const anchor = focus >= 0 ? focus : 0;
-  const seated = table?.seats.filter((seat) => seat.agentId).length ?? 0;
+  // An eliminated seat keeps its chair, so it is in the list but not in play.
+  const seated = table?.seats.filter((seat) => seat.agentId && seat.status !== 'out').length ?? 0;
 
   return (
     <div
@@ -87,7 +88,7 @@ export function Felt({
                 key={seat.index}
                 seat={seat}
                 table={table}
-                position={seatPosition(seat.index, anchor, table.seats.length)}
+                position={seatPosition(seat.index, anchor, table.seats.length, box.spread)}
                 // The avatar sits on the outer side of the plate, so a seat on
                 // the left of the table is laid out the mirror of one on the
                 // right and both read outwards from the cloth.
@@ -119,7 +120,7 @@ export function Felt({
 
           {/* The same table as a column, for screens too narrow to hold an oval. */}
           <div className="flex flex-col items-center gap-2 py-6 md:hidden">
-            <Centre table={table} potKey={potKey} />
+            <Centre table={table} potKey={potKey} cardSize={columnCard(box.width)} />
           </div>
 
           <ul className="space-y-2 px-3 pb-4 md:hidden">
@@ -160,7 +161,15 @@ export function Felt({
 }
 
 /** What is in the middle of the table: the money, and the cards everyone shares. */
-function Centre({ table, potKey }: { table: TableView; potKey: number }) {
+function Centre({
+  table,
+  potKey,
+  cardSize = BOARD_CARD,
+}: {
+  table: TableView;
+  potKey: number;
+  cardSize?: number;
+}) {
   const pot = useCountUp(table.pot);
 
   return (
@@ -168,7 +177,7 @@ function Centre({ table, potKey }: { table: TableView; potKey: number }) {
       <div className="flex h-[3.25rem] flex-col items-center justify-end gap-1">
         {table.pot > 0 ? (
           <>
-            <span className="text-[0.7rem] font-semibold tracking-[0.14em] text-white/45">POT</span>
+            <span className="label leading-none text-white/55">Pot</span>
             <div key={potKey} className="pot-hit flex items-center gap-2.5 rounded-full bg-black/45 px-4 py-1.5">
               <span className="chip-dot chip-dot-lg" aria-hidden />
               <span className="mono text-[1.25rem] leading-none font-semibold text-white tabular-nums">
@@ -192,17 +201,30 @@ function Centre({ table, potKey }: { table: TableView; potKey: number }) {
           <PlayingCard
             key={`${card}-${index}`}
             card={card}
-            size={66}
+            size={cardSize}
             delayMs={index < 3 ? index * 150 : 0}
             entrance="reveal"
           />
         ))}
         {Array.from({ length: 5 - table.board.length }, (_, i) => (
-          <CardSlot key={`slot-${i}`} size={66} />
+          <CardSlot key={`slot-${i}`} size={cardSize} />
         ))}
       </div>
     </>
   );
+}
+
+/** A board card's width on the oval, before the felt scales it. */
+const BOARD_CARD = 66;
+
+/**
+ * A board card's width in the column, which nothing scales. Five cards, the
+ * gaps between them and the recess around them have to cross a phone with air
+ * to spare, and at the oval's size they are wider than a phone is.
+ */
+function columnCard(width: number): number {
+  if (width === 0) return BOARD_CARD;
+  return Math.max(40, Math.min(BOARD_CARD, Math.floor((width - 64) / 5)));
 }
 
 /**
@@ -274,6 +296,8 @@ const CENTRE_HALF_WIDTH = 185;
 
 interface FeltBox {
   scale: number;
+  /** How far out the ring reaches, as a fraction of the felt's width. See `ringSpread`. */
+  spread: number;
   width: number;
   height: number;
 }
@@ -301,17 +325,18 @@ function useFeltBox(ref: React.RefObject<HTMLDivElement | null>, count: number):
   // Derived rather than stored, because it depends on how many seats the table
   // has as well as how big the felt is, and a table can be looked at before its
   // first frame says how many that is.
-  return { scale: feltScale(size.width, size.height, count), ...size };
+  const scale = feltScale(size.width, size.height, count);
+  return { scale, spread: ringSpread(size.width, scale), ...size };
 }
 
 /**
  * How large the objects on the cloth can be drawn in the room they have.
  *
  * Everything on the cloth is drawn at one size, so the fit is one number and
- * the worst-off seat decides it. Three things can take a seat's room away: the
- * top edge of the felt, the bottom edge, and the column of pot and board in the
- * middle. This walks the seats rather than assuming which one is worst, because
- * that depends on how many there are.
+ * the worst-off seat decides it. Four things can take a seat's room away: the
+ * top edge of the felt, the bottom edge, the sides, and the column of pot and
+ * board in the middle. This walks the seats rather than assuming which one is
+ * worst, because that depends on how many there are.
  *
  * The middle column is the interesting one. A seat clears it by being far
  * enough to the side of it or far enough above or below it, and either will do,
@@ -319,28 +344,38 @@ function useFeltBox(ref: React.RefObject<HTMLDivElement | null>, count: number):
  * turning the ring: a seat pushed off the vertical line clears the board
  * sideways and stops competing with it for height.
  *
+ * The sides and the middle pull against each other. A felt with the panel
+ * beside it is narrow enough that the seats at the ends of the ring would hang
+ * off its edges, so the ring pulls in (`ringSpread`), and every pixel it pulls
+ * in is a pixel less between those seats and the board.
+ *
  * Scaling the whole layer instead would be no help at all: it would pull the
  * seats together by exactly as much as it shrank them.
  */
 function feltScale(width: number, height: number, count: number): number {
-  // Below the breakpoint the oval is not drawn and the seats are a list that
-  // reflows on its own, so there is nothing there to scale.
-  if (width < 768 || height === 0) return 1;
+  // Nothing measured yet. Below the breakpoint the answer goes unread: the oval
+  // is not drawn there and the seats are a list that reflows on its own.
+  if (width === 0 || height === 0) return 1;
 
   const boardY = BOARD_TOP * height;
   const boardHalf = CENTRE_HEIGHT / 2;
+  /** From a seat's middle to the far side of the board, and to the felt's edge. */
+  const pass = SEAT_HALF_WIDTH + CENTRE_HALF_WIDTH + SEAT_MARGIN;
+  const reach = SEAT_HALF_WIDTH + SEAT_MARGIN;
   let room = Infinity;
 
   for (let index = 0; index < count; index += 1) {
     const { cos, sin } = seatAngle(index, 0, count);
     const y = (SEAT_CENTRE_Y + SEAT_RADIUS * sin) * height;
-    const x = Math.abs(SEAT_SPREAD * cos) * width;
+    const side = Math.abs(cos);
 
     // A seat below the board points its cards at it; one above it turns only
     // its foot that way. Which end faces the board decides how much room the
     // seat needs to clear it, and how much it needs to clear the felt itself.
     const towards = y > boardY ? SEAT_UP : SEAT_DOWN;
-    const beside = x / (SEAT_HALF_WIDTH + CENTRE_HALF_WIDTH + SEAT_MARGIN);
+    // Sideways a seat stands as far out as the ring reaches: its usual spread,
+    // or, pulled in, half the felt less the seat's own reach to the edge.
+    const beside = Math.min((SEAT_SPREAD * side * width) / pass, (0.5 * side * width) / (pass + reach * side));
     const clear = Math.abs(y - boardY) / (towards + boardHalf + SEAT_MARGIN);
 
     room = Math.min(
@@ -354,6 +389,19 @@ function feltScale(width: number, height: number, count: number): number {
   return Math.max(0.55, Math.min(1, room));
 }
 
+/**
+ * How far out the ring reaches, as a fraction of the felt's width.
+ *
+ * `SEAT_SPREAD` wherever the felt is wide enough to hold it. On a narrower felt
+ * the seats at the ends of the ring would hang off its edges, so the ring pulls
+ * in until they stand inside it, and `feltScale` has already drawn them small
+ * enough to clear the board once it has.
+ */
+function ringSpread(width: number, scale: number): number {
+  if (width === 0) return SEAT_SPREAD;
+  return Math.min(SEAT_SPREAD, 0.5 - ((SEAT_HALF_WIDTH + SEAT_MARGIN) * scale) / width);
+}
+
 /** The middle of the felt, and the pot inside it, in the felt's own pixels. */
 function centreOf(box: FeltBox): { x: number; y: number } {
   return { x: box.width / 2, y: BOARD_TOP * box.height + POT_ANCHOR_Y * box.scale };
@@ -362,7 +410,7 @@ function centreOf(box: FeltBox): { x: number; y: number } {
 /** Where a seat sits, in the felt's own pixels rather than in percentages. */
 function seatPoint(index: number, anchor: number, count: number, box: FeltBox): { x: number; y: number } {
   const { cos, sin } = seatAngle(index, anchor, count);
-  return { x: (0.5 + SEAT_SPREAD * cos) * box.width, y: (SEAT_CENTRE_Y + SEAT_RADIUS * sin) * box.height };
+  return { x: (0.5 + box.spread * cos) * box.width, y: (SEAT_CENTRE_Y + SEAT_RADIUS * sin) * box.height };
 }
 
 /**
@@ -420,7 +468,7 @@ function Seat({
   const thinking = table.toAct === seat.index;
   const folded = seat.status === 'folded';
   const won = (seat.won ?? 0) > 0;
-  const cards = seat.hole ?? (table.street === 'idle' ? null : FACE_DOWN);
+  const cards = cardsOf(seat, table);
   const leaving = useMuck(cards);
   // The plate reaches over the strip rather than containing it, so it has to
   // know whether there is one before it draws its own edge.
@@ -464,7 +512,7 @@ function Seat({
               <div
                 className={`plate relative w-[8.75rem] ${line ? 'has-strip' : ''} ${
                   thinking ? 'plate-live' : ''
-                } ${won ? 'plate-won' : ''} ${folded ? 'plate-out' : ''}`}
+                } ${won ? 'plate-won' : ''} ${folded || seat.status === 'out' ? 'plate-out' : ''}`}
               >
                 {/*
                   Centred in the room the avatar leaves rather than in the
@@ -472,9 +520,7 @@ function Seat({
                   disc as part of the seat.
                 */}
                 <div className={`px-2.5 pt-1.5 pb-1.5 text-center ${mirrored ? 'pr-4' : 'pl-4'}`}>
-                  <div className="truncate text-[0.6875rem] leading-tight font-semibold tracking-[0.06em] text-white/50 uppercase">
-                    {seatLabel(seat)}
-                  </div>
+                  <div className={SEAT_NAME}>{seatLabel(seat)}</div>
                   <StackFigure stack={seat.stack} settling={settling} />
                 </div>
 
@@ -505,6 +551,23 @@ function Seat({
 
 /** Two cards nobody at this table is entitled to see yet. */
 const FACE_DOWN = [null, null];
+
+/**
+ * What a seat holds, as far as this viewer may know. Nothing between hands, and
+ * nothing at all for a seat that has been eliminated: it keeps its chair, and
+ * cards in front of it would say it was still being dealt in.
+ */
+function cardsOf(seat: SeatView, table: TableView): Array<string | null> | null {
+  if (seat.status === 'out') return null;
+  return seat.hole ?? (table.street === 'idle' ? null : FACE_DOWN);
+}
+
+/**
+ * A seat's name, as its owner wrote it. A name is read rather than scanned, so
+ * it keeps its own case, which also fits the most of it on a plate before it
+ * truncates. It stays quieter than the stack under it, the figure that moves.
+ */
+const SEAT_NAME = 'truncate text-xs leading-tight font-medium text-white/65';
 
 /**
  * A seat's hand, sitting square on the top edge of its plate.
@@ -701,7 +764,10 @@ function ActionStrip({ line, inline = false }: { line: StripLine; inline?: boole
  * It changes rarely enough to be worth reading every time it does: what a seat
  * won outranks what it last did, and being out of the hand outlasts both,
  * because the badge that said "fold" is cleared when the street sweeps and
- * without this a seat that is out looks exactly like one that is waiting.
+ * without this a seat that is out looks exactly like one that is waiting. Being
+ * all in outlasts the sweep for the same reason: left with only its stack, an
+ * all-in seat shows nothing, which reads as broke. Being out of the match
+ * outranks everything but a win.
  *
  * `fresh` marks the lines that arrive because the seat just did something, as
  * against the ones that only describe where it stands. Those are the ones that
@@ -714,19 +780,19 @@ function stripLine(seat: SeatView, won: number | null): StripLine | null {
     return { tone: 'strip-won', body: `+${formatChips(won)}`, fresh: true };
   }
 
-  if (seat.lastAction) {
-    const kind = seat.status === 'all-in' ? 'all-in' : seat.lastAction;
-    const total = seat.lastActionTo ?? 0;
-    // Chips going in is the only distinction that changes how the next seat has
-    // to think, so it is the only one drawn in colour.
-    const money = kind !== 'fold' && kind !== 'check' && total > 0;
+  if (seat.status === 'out') return { tone: 'strip-quiet', body: 'Eliminated', fresh: false };
+
+  const move = lastMove(seat);
+  if (move) {
     return {
-      tone: money ? 'strip-money' : 'strip-quiet',
+      // Chips going in is the only distinction that changes how the next seat
+      // has to think, so it is the only one drawn in colour.
+      tone: move.amount !== null ? 'strip-money' : 'strip-quiet',
       fresh: true,
       body: (
         <>
-          {VERB[kind] ?? kind}
-          {money ? <span className="mono ml-1.5 tabular-nums">{formatChips(total)}</span> : null}
+          {move.verb}
+          {move.amount !== null ? <span className="mono ml-1.5 tabular-nums">{formatChips(move.amount)}</span> : null}
         </>
       ),
     };
@@ -750,8 +816,25 @@ function stripLine(seat: SeatView, won: number | null): StripLine | null {
     };
   }
 
+  if (seat.status === 'all-in') return { tone: 'strip-money', body: 'All in', fresh: false };
   if (seat.status === 'folded') return { tone: 'strip-quiet', body: 'Folded', fresh: false };
   return null;
+}
+
+/** What a seat last did: the verb a player reads, and the chips it put in, if any. */
+function lastMove(seat: SeatView): { verb: string; amount: number | null } | null {
+  if (!seat.lastAction) return null;
+  const kind = seat.status === 'all-in' ? 'all-in' : seat.lastAction;
+  const total = seat.lastActionTo ?? 0;
+  const money = kind !== 'fold' && kind !== 'check' && total > 0;
+  return { verb: VERB[kind] ?? kind, amount: money ? total : null };
+}
+
+/** The same move as one line of text, so the panel beside the felt says it in the felt's words. */
+export function moveWords(seat: SeatView): string | null {
+  const move = lastMove(seat);
+  if (!move) return null;
+  return move.amount === null ? move.verb : `${move.verb} ${formatChips(move.amount)}`;
 }
 
 /** "raise" is what the engine calls it; "raise to" is what a player reads. */
@@ -778,20 +861,19 @@ function SeatRow({
 }) {
   const thinking = table.toAct === seat.index;
   const folded = seat.status === 'folded';
+  const cards = cardsOf(seat, table);
   const rowLine = stripLine(seat, seat.won);
 
   return (
     <li
       className={`plate flex items-center gap-2.5 p-2.5 ${thinking ? 'plate-live' : ''} ${
-        folded ? 'plate-out' : ''
+        folded || seat.status === 'out' ? 'plate-out' : ''
       }`}
     >
       <Avatar seat={seat} isMine={isMine} deadline={thinking ? table.deadline : null} />
 
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[0.6875rem] font-semibold tracking-[0.06em] text-white/50 uppercase">
-          {seatLabel(seat)}
-        </div>
+        <div className={SEAT_NAME}>{seatLabel(seat)}</div>
         <div className="mono text-sm font-semibold text-white tabular-nums">{formatChips(seat.stack)}</div>
       </div>
 
@@ -801,14 +883,15 @@ function SeatRow({
         {rowLine ? <ActionStrip key={actionKey} line={rowLine} inline /> : null}
       </div>
 
-      <div className="flex gap-1">
-        {seat.hole ? (
-          seat.hole.map((card) => <PlayingCard key={card} card={card} size={26} dimmed={folded} />)
-        ) : (
-          <>
-            <CardBack size={26} dimmed={folded} />
-            <CardBack size={26} dimmed={folded} />
-          </>
+      {/* Two cards wide whether or not any are dealt, so every row's strip
+          stays in the same column. */}
+      <div className="flex w-[3.5rem] shrink-0 justify-end gap-1">
+        {cards?.map((card, index) =>
+          card === null ? (
+            <CardBack key={index} size={26} dimmed={folded} />
+          ) : (
+            <PlayingCard key={card} card={card} size={26} dimmed={folded} />
+          ),
         )}
       </div>
     </li>
@@ -1007,9 +1090,9 @@ function useCountUp(value: number): number {
 }
 
 /** Seats sit on an ellipse, rotated so the viewer's own agent is always at the bottom. */
-function seatPosition(index: number, anchor: number, count: number): { left: string; top: string } {
+function seatPosition(index: number, anchor: number, count: number, spread: number): { left: string; top: string } {
   const { cos, sin } = seatAngle(index, anchor, count);
-  return { left: `${50 + SEAT_SPREAD * 100 * cos}%`, top: `${SEAT_CENTRE_Y * 100 + SEAT_RADIUS * 100 * sin}%` };
+  return { left: `${50 + spread * 100 * cos}%`, top: `${SEAT_CENTRE_Y * 100 + SEAT_RADIUS * 100 * sin}%` };
 }
 
 function seatAngle(index: number, anchor: number, count: number): { cos: number; sin: number } {

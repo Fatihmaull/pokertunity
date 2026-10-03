@@ -32,7 +32,7 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
         <PageHeader
           back={<BackLink href="/matches">Matches</BackLink>}
           title={matchLabel(summary.number)}
-          badges={<Badge>Ended</Badge>}
+          badges={<Badge>{summary.status === 'abandoned' ? 'Stopped' : 'Ended'}</Badge>}
           sub={
             <>
               <span className="block tabular-nums">
@@ -58,50 +58,62 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
           </Card>
         )}
 
-        {/* Five columns do not fit a phone. The table scrolls inside its card
-            rather than squeezing names onto three lines or pushing the page
-            sideways. */}
+        {/* Five columns do not fit a phone, so there the two figures the
+            match changed are one quiet line under the name, the way the
+            standings set theirs, and the names keep the width. The place is
+            set in ink: on this page it is the result. */}
         <Card className="overflow-hidden">
           <div className="scroll-x">
-            <table className="w-full min-w-[34rem] text-sm">
+            <table className="w-full text-sm sm:min-w-[34rem]">
               <thead className="border-b border-line bg-surface-2 text-left">
                 <tr>
                   <th className="label px-4 py-2.5 text-faint">{rated ? '#' : ''}</th>
                   <th className="label px-4 py-2.5 text-faint">Agent</th>
                   <th className="label px-4 py-2.5 text-right text-faint">Final stack</th>
-                  <th className="label px-4 py-2.5 text-right text-faint">Chips won</th>
-                  <th className="label px-4 py-2.5 text-right text-faint">Rating</th>
+                  <th className="label hidden px-4 py-2.5 text-right text-faint sm:table-cell">Chips won</th>
+                  <th className="label hidden px-4 py-2.5 text-right text-faint sm:table-cell">Rating</th>
                 </tr>
               </thead>
               <tbody>
-                {summary.entrants.map((entrant) => (
-                  <tr key={entrant.agentId} className="border-b border-line last:border-0">
-                    <td className="mono px-4 py-3 text-faint tabular-nums">{entrant.place ?? '—'}</td>
-                    <td className="px-4 py-3 font-semibold text-ink">
-                      {entrant.name}
-                      {entrant.agentId === summary.mine ? (
-                        <Badge tone="accent" className="ml-2 align-middle">
-                          Yours
-                        </Badge>
-                      ) : null}
-                    </td>
-                    <td className="mono px-4 py-3 text-right text-ink tabular-nums">
-                      {entrant.finalStack === null ? '—' : formatChips(entrant.finalStack)}
-                    </td>
-                    <td
-                      className={`mono px-4 py-3 text-right tabular-nums ${entrant.net < 0 ? 'text-danger' : 'text-ink'}`}
-                    >
-                      {formatSigned(entrant.net)}
-                    </td>
-                    <td className="mono px-4 py-3 text-right text-muted tabular-nums">
-                      {entrant.ratingAfter === null ? (
-                        <span className="text-faint">—</span>
-                      ) : (
-                        `${entrant.ratingBefore?.toFixed(1)} → ${entrant.ratingAfter.toFixed(1)}`
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {summary.entrants.map((entrant) => {
+                  const won = formatSigned(entrant.net);
+                  const wonTone = entrant.net < 0 ? 'text-danger' : 'text-ink';
+                  const rating =
+                    entrant.ratingAfter === null
+                      ? null
+                      : `${entrant.ratingBefore?.toFixed(1)} → ${entrant.ratingAfter.toFixed(1)}`;
+
+                  return (
+                    <tr key={entrant.agentId} className="border-b border-line last:border-0">
+                      <td
+                        className={`mono px-4 py-3 align-top tabular-nums sm:align-middle ${
+                          entrant.place === null ? 'text-faint' : 'text-ink'
+                        }`}
+                      >
+                        {entrant.place ?? '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-ink">{entrant.name}</span>
+                        {entrant.agentId === summary.mine ? (
+                          <Badge tone="accent" className="ml-2 align-middle">
+                            Yours
+                          </Badge>
+                        ) : null}
+                        <span className="mono mt-0.5 block text-xs text-faint tabular-nums sm:hidden">
+                          <span className={wonTone}>{won}</span>
+                          {rating ? ` · rating ${rating}` : null}
+                        </span>
+                      </td>
+                      <td className="mono px-4 py-3 text-right align-top text-ink tabular-nums sm:align-middle">
+                        {entrant.finalStack === null ? '—' : formatChips(entrant.finalStack)}
+                      </td>
+                      <td className={`mono hidden px-4 py-3 text-right tabular-nums sm:table-cell ${wonTone}`}>{won}</td>
+                      <td className="mono hidden px-4 py-3 text-right text-muted tabular-nums sm:table-cell">
+                        {rating ?? <span className="text-faint">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
