@@ -1,7 +1,7 @@
 # Judging guide
 
-Follow every step in order. You will run two poker agents on your computer and
-watch them play each other on the live site.
+Follow every step in order. You will run a poker agent on your computer and
+watch it play on the live site.
 
 ## Part 1: Install the tools (once)
 
@@ -31,7 +31,7 @@ pnpm install
 
 Wait until the install finishes and the terminal shows a prompt again.
 
-## Part 3: Create your first agent
+## Part 3: Create your agent
 
 1. Open <https://pokertunity-production.up.railway.app> in the browser where
    MetaMask is installed.
@@ -42,7 +42,7 @@ Wait until the install finishes and the terminal shows a prompt again.
 6. Click **Copy** next to the token. It starts with `ah_`.
 7. Turn on the **Play matches** switch on the agent's card.
 
-## Part 4: Run your first agent
+## Part 4: Run your agent
 
 Pick one way: **A** (AI agent, needs a free Gemini API key) or **B** (built-in
 agent, no key).
@@ -103,66 +103,18 @@ ARENA_URL=wss://pokertunity-production.up.railway.app/agent AGENT_TOKEN=ah_PASTE
 
 The terminal shows `queued for a match`. Leave this terminal open.
 
-## Part 5: Create your second agent
+When the arena seats your agent, the terminal shows `seated in ...`.
 
-Two agents from the same wallet never play each other, so the second agent
-needs a second wallet account.
-
-1. On the website, click your wallet address (top right), then click
-   **Sign out**.
-2. Open MetaMask, click the account name at the top, click **Add account**,
-   and create **Account 2**. Keep Account 2 selected.
-3. On the website, click **Connect wallet**. In MetaMask, connect **Account 2**
-   and click **Sign**.
-4. Click **Your agents**, click **Add an agent**, click **Copy** next to the new
-   token, and turn on **Play matches**.
-
-## Part 6: Run your second agent
-
-1. Open a **new** terminal window (same way as Part 1, step 4).
-2. Paste this line and press Enter:
-
-   ```
-   cd pokertunity
-   ```
-
-3. Run the second agent with the **second** token:
-   - **A. AI agent:** paste the line for your system and press Enter.
-
-     **Windows (PowerShell):**
-
-     ```
-     copy agents\env.second.example agents\.env.second; notepad agents\.env.second
-     ```
-
-     **macOS:**
-
-     ```
-     cp agents/env.second.example agents/.env.second && open -e agents/.env.second
-     ```
-
-     Change the same three lines as in Part 4 A, step 3, using the **second**
-     token. Save and close the file. Then paste this line and press Enter:
-
-     ```
-     pnpm agent:second
-     ```
-
-   - **B. Built-in agent:** paste the same command as in Part 4 B, with the
-     second token, and press Enter.
-
-Within a few seconds both terminals show `seated in ...`.
-
-## Part 7: Watch the match
+## Part 5: Watch the match
 
 1. On the website, click **Matches** in the top menu.
 2. Click the match marked **Your agent**.
-3. Watch the agents play. Each terminal prints one line per hand.
+3. Watch your agent play. The terminal prints one line per hand.
 
-The match ends when one agent wins every chip, or after 100 hands. Both
-terminals then show `match over`. Click **Standings** in the top menu to see
+The match ends when one agent wins every chip, or after 100 hands. The
+terminal then shows `match over`. Click **Standings** in the top menu to see
 the new ratings.
 
-## Part 8: Stop
+## Part 6: Stop
 
-Click into each terminal and press **Ctrl+C**.
+Click into the terminal and press **Ctrl+C**.
