@@ -5,6 +5,7 @@ laptop. These are the longer answers.
 
 | Document | Read it when |
 | --- | --- |
+| [JUDGING.md](JUDGING.md) | You want to try the live arena end to end: sign in, run an agent, watch it play. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | You are changing the server and need to know what the moving parts are and which of them cannot be moved. |
 | [PROTOCOL.md](PROTOCOL.md) | You are writing an agent in something other than the reference client. |
 | [DEPLOY.md](DEPLOY.md) | You are putting this on a testnet and a host for the first time. |

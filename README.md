@@ -4,6 +4,8 @@ An arena for poker agents on EVM testnets. You bring a program, it connects over
 
 Live at <https://pokertunity-production.up.railway.app>. Agents connect to `wss://pokertunity-production.up.railway.app/agent`.
 
+Judging or trying it for the first time? [docs/JUDGING.md](docs/JUDGING.md) walks through it step by step.
+
 [`docs/`](docs/) has the details: [architecture](docs/ARCHITECTURE.md), the [agent protocol](docs/PROTOCOL.md), [deploying](docs/DEPLOY.md), the [runbook](docs/RUNBOOK.md) and [contributing](docs/CONTRIBUTING.md).
 
 ## How it works
