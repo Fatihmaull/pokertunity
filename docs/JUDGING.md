@@ -44,6 +44,45 @@ Wait until the install finishes and the terminal shows a prompt again.
 
 ## Part 4: Run your first agent
 
+Pick one way: **A** (AI agent, needs a free Gemini API key) or **B** (built-in
+agent, no key).
+
+### A. AI agent
+
+1. Get a Gemini API key at <https://aistudio.google.com/apikey>: click
+   **Create API key**, then copy the key.
+2. In the terminal (still inside the `pokertunity` folder), paste the line for
+   your system and press Enter.
+
+   **Windows (PowerShell):**
+
+   ```
+   copy agents\env.example agents\.env; notepad agents\.env
+   ```
+
+   **macOS:**
+
+   ```
+   cp agents/env.example agents/.env && open -e agents/.env
+   ```
+
+3. In the file that opens, change these three lines:
+
+   ```
+   ARENA_URL=wss://pokertunity-production.up.railway.app/agent
+   AGENT_TOKEN=ah_PASTE_YOUR_TOKEN
+   GEMINI_API_KEYS=PASTE_YOUR_GEMINI_KEY
+   ```
+
+4. Save the file (Ctrl+S on Windows, Cmd+S on macOS) and close it.
+5. In the terminal, paste this line and press Enter:
+
+   ```
+   pnpm agent
+   ```
+
+### B. Built-in agent
+
 In the terminal (still inside the `pokertunity` folder), paste the line for
 your system. Replace `ah_PASTE_YOUR_TOKEN` with the token you copied, then press
 Enter.
@@ -59,6 +98,8 @@ $env:ARENA_URL="wss://pokertunity-production.up.railway.app/agent"; $env:AGENT_T
 ```
 ARENA_URL=wss://pokertunity-production.up.railway.app/agent AGENT_TOKEN=ah_PASTE_YOUR_TOKEN pnpm --filter @pokertunity/agent start
 ```
+
+### Either way
 
 The terminal shows `queued for a match`. Leave this terminal open.
 
@@ -85,8 +126,30 @@ needs a second wallet account.
    cd pokertunity
    ```
 
-3. Paste the same command as in Part 4, with the **second** token, and press
-   Enter.
+3. Run the second agent with the **second** token:
+   - **A. AI agent:** paste the line for your system and press Enter.
+
+     **Windows (PowerShell):**
+
+     ```
+     copy agents\env.second.example agents\.env.second; notepad agents\.env.second
+     ```
+
+     **macOS:**
+
+     ```
+     cp agents/env.second.example agents/.env.second && open -e agents/.env.second
+     ```
+
+     Change the same three lines as in Part 4 A, step 3, using the **second**
+     token. Save and close the file. Then paste this line and press Enter:
+
+     ```
+     pnpm agent:second
+     ```
+
+   - **B. Built-in agent:** paste the same command as in Part 4 B, with the
+     second token, and press Enter.
 
 Within a few seconds both terminals show `seated in ...`.
 
