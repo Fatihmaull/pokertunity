@@ -3,7 +3,6 @@
 import { formatChips } from '@/lib/economy';
 import { formatSigned } from '@/lib/format';
 import { useAccount } from './account-context';
-import { useChain } from './chain-context';
 import { HeroPreview } from './hero-preview';
 import { MatchList } from './match-list';
 import { ChipDot } from './table-art';
@@ -49,7 +48,6 @@ export function Home() {
 
 function Hero() {
   const { signIn, connecting } = useAccount();
-  const { chain } = useChain();
 
   return (
     <section className="border-b border-line">
@@ -76,10 +74,6 @@ function Hero() {
               Watch a match
             </ButtonLink>
           </div>
-
-          <p className="mt-4 text-sm text-faint">
-            No-Limit Texas Hold’em{chain ? ` on ${chain.shortName}` : ''}. Watching is free.
-          </p>
         </div>
 
         <HeroPreview />
@@ -233,39 +227,33 @@ function AgentSummary() {
 }
 
 /**
- * The network is named where a player would otherwise have to guess, and the
- * copy is built from the chain rather than written against one, so switching
- * networks rewrites the page instead of leaving it lying.
+ * Written against no network, because the page is the same whichever one a
+ * visitor has picked; the cashier is where a chain and its token get named.
  */
-function facts(networkName: string, symbol: string) {
-  return [
-    {
-      question: 'What is a chip worth?',
-      answer: `0.00001 ${symbol}, always. Buy them at the cashier.`,
-    },
-    {
-      question: 'Can an agent just make up a bet?',
-      answer: 'No. An illegal reply is thrown away and the seat checks if it can, folds if it cannot.',
-    },
-    {
-      question: 'Is any of this real money?',
-      answer: `No. Chips are bought with testnet ${symbol} on ${networkName}. It has no market value.`,
-    },
-    {
-      question: 'Can I change network?',
-      answer: 'Yes, from the cashier or the header. Your chips and agents are unaffected.',
-    },
-    {
-      question: 'What happens if my agent disconnects mid-match?',
-      answer: 'It has a moment to reconnect. After that it folds every hand until the match ends.',
-    },
-  ];
-}
+const FACTS = [
+  {
+    question: 'What is a chip worth?',
+    answer: '0.00001 of the network’s native token, always. Buy them at the cashier.',
+  },
+  {
+    question: 'Can an agent just make up a bet?',
+    answer: 'No. An illegal reply is thrown away and the seat checks if it can, folds if it cannot.',
+  },
+  {
+    question: 'Is any of this real money?',
+    answer: 'No. Chips are bought with testnet tokens, which have no market value.',
+  },
+  {
+    question: 'Can I change network?',
+    answer: 'Yes, from the cashier or the header. Your chips and agents are unaffected.',
+  },
+  {
+    question: 'What happens if my agent disconnects mid-match?',
+    answer: 'It has a moment to reconnect. After that it folds every hand until the match ends.',
+  },
+];
 
 function GoodToKnow() {
-  const { chain } = useChain();
-  const FACTS = facts(chain?.name ?? 'a public testnet', chain?.nativeCurrency.symbol ?? 'test tokens');
-
   return (
     <section className="border-t border-line bg-surface/40">
       <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
