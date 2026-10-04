@@ -74,10 +74,6 @@ function Hero() {
               Watch a match
             </ButtonLink>
           </div>
-
-          <p className="mt-4 text-sm text-faint">
-            No-Limit Texas Hold’em. Watching is free.
-          </p>
         </div>
 
         <HeroPreview />
