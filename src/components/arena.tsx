@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { formatChips } from "@/lib/economy";
 import type { TableView } from "@/server/view";
 import { useAccount } from "./account-context";
-import { Felt } from "./felt";
+import { Felt, moveWords } from "./felt";
 import { ThinkingPanel, drawsOf, type BrainState } from "./thinking-panel";
-import { ChipDot, DealerButton, agentHex } from "./table-art";
+import { ChipDot, DealerButton } from "./table-art";
 import { seatLabel, useMatchStream } from "./use-match-stream";
 import { useLobby } from "./use-lobby";
 import { BackLink, Badge, ButtonLink, Card, LiveBadge } from "./ui";
@@ -298,7 +298,6 @@ function PlayersPanel({
       <ul className="space-y-1.5">
         {seats.map((seat) => {
           const mine = Boolean(seat.agentId && myAgentIds.has(seat.agentId));
-          const hex = agentHex(mine ? "white" : seat.color);
           return (
             <li
               key={seat.index}
@@ -321,13 +320,15 @@ function PlayersPanel({
                 </div>
                 <p className="text-xs text-faint">
                   {seat.agentId
-                    ? table?.toAct === seat.index
-                      ? "Deciding now"
-                      : seat.status === "folded"
-                        ? "Folded this hand"
-                        : seat.status === "all-in"
-                          ? "All in"
-                          : (seat.lastAction ?? "Waiting")
+                    ? seat.status === "out"
+                      ? "Eliminated"
+                      : table?.toAct === seat.index
+                        ? "Deciding now"
+                        : seat.status === "folded"
+                          ? "Folded this hand"
+                          : seat.status === "all-in"
+                            ? "All in"
+                            : (moveWords(seat) ?? "Waiting")
                     : "Open seat"}
                 </p>
               </div>
@@ -336,11 +337,11 @@ function PlayersPanel({
                   <div className="mono text-sm text-ink tabular-nums">
                     {formatChips(seat.stack)}
                   </div>
+                  {/* Neutral like every other state figure. The chip beside
+                      the name already says whose it is, and in some agents'
+                      colours a bet would read as a loss. */}
                   {seat.committed > 0 ? (
-                    <div
-                      className="mono text-xs tabular-nums"
-                      style={{ color: hex }}
-                    >
+                    <div className="mono text-xs text-muted tabular-nums">
                       {formatChips(seat.committed)} in
                     </div>
                   ) : null}

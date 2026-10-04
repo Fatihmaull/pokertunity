@@ -589,6 +589,9 @@ h3 {
 }
 
 .dealer-pin {
+  /* The plate draws its ring in ::after, which paints after every child of the
+     plate, so the button is lifted over it or the ring runs across its face. */
+  z-index: 1;
   border-radius: 50%;
   line-height: 0;
   box-shadow:

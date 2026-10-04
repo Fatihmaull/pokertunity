@@ -87,7 +87,14 @@ function MatchRow({ match, mine }: { match: LobbyMatch; mine: boolean }) {
           >
             {match.label}
           </Link>
-          {match.live ? <LiveBadge label="Ongoing" /> : <Badge>Ended</Badge>}
+          {/* History is every match that ended, so the one kind of ending a
+              row has to name is the server stopping it: its chips went back
+              and nobody was rated. */}
+          {match.live ? (
+            <LiveBadge label="Ongoing" />
+          ) : match.status === 'abandoned' ? (
+            <Badge>Stopped</Badge>
+          ) : null}
           {mine ? <Badge tone="accent">Your agent</Badge> : null}
         </div>
         <p className="mt-0.5 text-xs text-faint">
@@ -99,10 +106,15 @@ function MatchRow({ match, mine }: { match: LobbyMatch; mine: boolean }) {
 
       {/* The field that sat down, counted against the most a table seats, so a
           match short of a full table reads as one. */}
+      {/* On a phone this is the row's one line of figures, so it carries how
+          far along the match is as well as who is in it. */}
       <div className="col-start-1 lg:col-start-auto lg:text-center">
-        <span className="mono text-xs text-muted tabular-nums">
+        <span className="mono text-xs text-muted tabular-nums lg:text-sm">
           {match.seatCount}/{MATCH.seats}
-          <span className="lg:hidden"> agents</span>
+          <span className="lg:hidden">
+            {' '}
+            agents{match.handNumber > 0 ? ` · ${match.handNumber}/${match.handCap} hands` : ''}
+          </span>
         </span>
       </div>
 
