@@ -6,12 +6,11 @@ import postgres from 'postgres';
  *
  * For the incident drill in PRELAUNCH D6 and for any time the books are in
  * doubt: run it before a restart and after, and the two answers should differ
- * only by hands played. Everything runs in one read-only transaction, so it is
- * safe against production and cannot fix anything it finds, which is the
- * point: a finding here is a question for a person, not something to paper
- * over.
+ * by hands played alone. Everything runs in one read-only transaction, so it
+ * is safe against production and leaves every finding as it found it, which is
+ * the point: a finding here is a question for a person.
  *
- * Exits non-zero when any check fails, so it can gate a script.
+ * Exits 1 when any check fails, so it can gate a script.
  */
 
 interface Check {
@@ -23,7 +22,7 @@ interface Check {
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
-  if (!url) throw new Error('DATABASE_URL is not set');
+  if (!url) throw new Error('DATABASE_URL is required');
 
   const sql = postgres(url, { max: 1, onnotice: () => {} });
   const checks: Check[] = [];
@@ -55,14 +54,14 @@ async function main(): Promise<void> {
       });
 
       checks.push({
-        name: 'no negative balances',
+        name: 'every balance is zero or above',
         meaning: 'a seat was charged to an account that could not cover it',
         rows: await tx`select id, chips from users where chips < 0 limit 20`,
       });
 
       checks.push({
-        name: 'no stacks left on a closed match',
-        meaning: 'chips are sitting on a table nobody is dealing and have not gone home',
+        name: 'closed matches hold zero stacks',
+        meaning: 'chips are still sitting on a closed table, waiting to go home',
         rows: await tx`
           select m.id, m.status, count(*)::int seats, sum(s.stack)::int chips
           from seats s join matches m on m.id = s.match_id
@@ -71,7 +70,7 @@ async function main(): Promise<void> {
 
       // Buy-ins in and cash-outs back are the same chips moving through a
       // table. Across every finished match the two must cancel exactly; the
-      // entry fee is the only sink, and it is booked separately.
+      // entry fee is the one sink, and it is booked separately.
       const [flow] = await tx`
         select coalesce(sum(delta) filter (where reason = 'match-buy-in'), 0)::bigint buy_ins,
                coalesce(sum(delta) filter (where reason = 'match-cash-out'), 0)::bigint cash_outs,
@@ -90,7 +89,7 @@ async function main(): Promise<void> {
         rows: imbalance === 0 ? [] : [{ buyIns: flow.buy_ins, cashOuts: flow.cash_outs, onTables: inFlight, imbalance }],
       });
 
-      // Everything that is not a chip moving onto or off a table enters or
+      // Every reason other than a chip moving onto or off a table enters or
       // leaves the system. Each reason is named, so one added later fails this
       // check until somebody decides which side of the books it belongs on.
       const expected = Number(flow.grants) + Number(flow.deposits) + Number(flow.adjustments) + Number(flow.fees);

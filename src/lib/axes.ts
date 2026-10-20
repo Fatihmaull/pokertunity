@@ -2,13 +2,13 @@
  * The four numbers that are the hypothesis, stated as arithmetic.
  *
  * The claim is that agents detect patterns, exploit weaknesses, adapt, and
- * deceive each other. A chip count says none of that: the agent that made the
+ * deceive each other. A chip count measures money: the agent that made the
  * most money and the agent that played best are routinely different, and
  * published work on LLM poker found exactly that. So each claim gets its own
  * number, measured from what the agents actually did.
  *
  * Everything here is pure so the definitions can be argued with, and tested,
- * without a database in the way.
+ * in plain memory.
  */
 
 export type AxisAction = 'fold' | 'check' | 'call' | 'bet' | 'raise';
@@ -45,13 +45,13 @@ export interface Axes {
 }
 
 /**
- * A bet or raise made with a hand that is probably behind. Not every one is a
- * bluff in the strict sense, but a player who never makes them cannot bluff at
- * all, and one who makes them and wins is being believed.
+ * A bet or raise made with a hand that is probably behind. Some are bluffs in
+ * the strict sense and some are something looser, and every bluff is one of
+ * them; a player who makes them and wins is being believed.
  */
 const BLUFF_EQUITY = 0.35;
 
-/** Below these, the number would be noise wearing a decimal point. */
+/** The sample a number needs before it means more than noise wearing a decimal point. */
 const MIN_BLUFFS = 10;
 const MIN_WEAK_HANDS = 50;
 const MIN_HANDS_PER_SIDE = 25;
@@ -67,15 +67,14 @@ export interface AxisInput {
   /**
    * How often each agent at the table voluntarily put money in preflop, by
    * agent id. Computed across the whole field, because what matters is whether
-   * this agent's opponents were loose, not who owned them.
+   * this agent's opponents were loose, whoever owned them.
    */
   looseness: ReadonlyMap<string, number>;
   /** Who else was in each hand, by hand id. */
   opponentsByHand: ReadonlyMap<string, string[]>;
   /**
    * The rating at or below which opposition counts as weak. The median across
-   * every hand on record, so it moves with the field rather than being a number
-   * somebody picked.
+   * every hand on record, so it moves with the field and comes from the data.
    */
   weakOpponentRating: number | null;
   /** What the field as a whole manages against that half, in big blinds per 100 hands. */
@@ -97,7 +96,7 @@ export function computeAxes(input: AxisInput): Axes {
  * Its hands are split by how loose the table was, and its willingness to keep
  * paying is compared across the two halves. An agent that reads the table
  * continues more against opponents whose bets mean less. One that plays its own
- * cards and nothing else scores near zero, which is the honest result for it.
+ * cards alone scores near zero, which is the honest result for it.
  */
 function reading(input: AxisInput): number | null {
   const scored = input.results
@@ -111,9 +110,9 @@ function reading(input: AxisInput): number | null {
 
   if (scored.length < MIN_HANDS_PER_SIDE * 2) return null;
 
-  // Split by rank rather than by comparing against the median value. Opponent
-  // looseness is usually bimodal, a table of stations or a table of rocks, and
-  // a value comparison puts every hand on one side of it.
+  // Split by rank. Opponent looseness is usually bimodal, a table of stations
+  // or a table of rocks, and a rank split puts half the hands on each side
+  // where a value comparison would put them all on one.
   const ranked = [...scored].sort((a, b) => a.loose - b.loose);
   const half = Math.floor(ranked.length / 2);
   const tightHands = new Set(ranked.slice(0, half).map((entry) => entry.handId));
@@ -127,11 +126,10 @@ function reading(input: AxisInput): number | null {
 }
 
 /**
- * How often it keeps paying when it could fold instead.
+ * How often it keeps paying when folding is on offer.
  *
- * Only decisions taken against a bet count. Checking is free and says nothing
- * about willingness to call, so including it would just measure how often the
- * agent was in a pot nobody had bet into.
+ * Decisions taken against a bet are the ones that count. Checking is free, and
+ * willingness to call shows when a call costs chips.
  */
 function continuationRate(decisions: AxisDecision[]): number | null {
   const facing = decisions.filter(
@@ -145,9 +143,9 @@ function continuationRate(decisions: AxisDecision[]): number | null {
 /**
  * Deception: how often a bet made with a weak hand took the pot down.
  *
- * A bluff worked if the hand ended in profit without anyone's cards being
- * compared. Winning at showdown with a weak hand is luck, not persuasion, and
- * is deliberately not counted.
+ * A bluff worked if the hand ended in profit before any cards were compared.
+ * Winning at showdown with a weak hand is luck, and persuasion is what this
+ * counts.
  */
 function deception(decisions: AxisDecision[], results: AxisResult[]): number | null {
   const bluffHands = new Set(
@@ -170,11 +168,11 @@ function deception(decisions: AxisDecision[], results: AxisResult[]): number | n
  * Adaptation: does it do better later in a stint than earlier?
  *
  * A stint is one match, which is exactly the window an agent accumulates
- * knowledge of these particular opponents over: it sits down knowing nobody and
- * plays the same five faces until it ends. Splitting it
+ * knowledge of these particular opponents over: it sits down among strangers
+ * and plays the same five faces until it ends. Splitting it
  * in half and comparing win rates asks whether that knowledge was worth
- * anything. Averaged across stints, because one lucky second half is not
- * learning.
+ * anything. Averaged across stints, because learning shows up over many second
+ * halves.
  */
 function adaptation(results: AxisResult[]): number | null {
   const deltas: number[] = [];
@@ -205,10 +203,9 @@ export function stints(results: AxisResult[]): AxisResult[][] {
 /**
  * Exploitation: how much harder it punishes weak opponents than the field does.
  *
- * Weak means measured as weak, by rating, rather than scripted to be. Measured
- * against what everyone else achieves against the same half of the field rather
- * than in absolute terms, because beating weak players a little is not a skill,
- * it is arithmetic.
+ * Weak means measured as weak, by rating. Measured against what everyone else
+ * achieves against the same half of the field, because beating weak players a
+ * little is arithmetic, and beating them harder than the field is the skill.
  */
 function exploitation(
   results: AxisResult[],

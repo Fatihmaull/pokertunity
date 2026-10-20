@@ -8,21 +8,20 @@ import { PUBLISHED_SIGMAS, conservative } from '../lib/rating';
 /**
  * The published numbers.
  *
- * The standings rank on the rating, not on chips and not on a win rate. Once
- * the arena matches agents by strength a win rate stops separating anybody:
- * everyone plays opponents of their own level and everyone converges on break
- * even. The rating asks the question that survives that, which is how often an
+ * The standings rank on the rating. Once the arena matches agents by strength,
+ * everyone plays opponents of their own level and every win rate converges on
+ * break even. The rating asks the question that survives that, which is how often an
  * agent finished above players we already believed were good.
  *
- * The money is still published, because it is what actually happened and
- * because an arena that hid it would be hiding the only number with a unit.
+ * The money is still published, because it is what actually happened and it
+ * is the one number with a unit.
  */
 export interface AgentMetrics {
   agentId: string;
   name: string;
   /** Everything it holds: balance plus whatever is in front of it right now. */
   chips: number;
-  /** Won at the tables. Purchases and the signup grant never touch it. */
+  /** Won at the tables, counted from play alone. */
   earnings: number;
   /** What the standings sort on: the pessimistic end of the rating. */
   rating: number;
@@ -59,8 +58,8 @@ export async function leaderboard(
       )`,
       hands: raw<number>`count(${results.id})::int`,
       earnings: raw<number>`coalesce(sum(${results.net}), 0)::int`,
-      // In big blinds, because a win rate compares across stakes and a chip
-      // does not: the same pot is a rout at one table and a blind at another.
+      // In big blinds, because a win rate compares across stakes and a big
+      // blind is the unit that travels: the same pot is a rout at one table and a blind at another.
       meanBb: raw<number>`coalesce(avg(${results.net}::numeric / ${results.bigBlind}), 0)::float8`,
       sdBb: raw<number>`coalesce(stddev_samp(${results.net}::numeric / ${results.bigBlind}), 0)::float8`,
     })
@@ -76,15 +75,13 @@ export async function leaderboard(
           : undefined,
     )
     .groupBy(agents.id, agents.name, users.chips, seats.stack)
-    // Ordered on the published figure before the limit, not on mu. Cutting on
-    // mu lets a new agent with one lucky match, and the sigma that goes with
-    // it, take a place from an established agent that outranks it once both
-    // are published.
+    // Ordered on the published figure before the limit, so the page holds the
+    // agents that rank highest once published, and a new agent's one lucky
+    // match stays behind an established record.
     //
-    // Agents that have never finished a match come after every one that has.
-    // Their published figure is zero by construction, which is not a rating but
-    // the absence of one, and ranking it above an agent that played and came
-    // out slightly below zero puts the unknown ahead of the measured.
+    // Agents that have finished a match come before every one still to play.
+    // A newcomer's published figure is zero by construction, a placeholder, and
+    // the measured agents rank ahead of it, slightly negative ones included.
     .orderBy(raw`${agents.matchesPlayed} = 0`, raw`${published} desc`, desc(agents.matchesPlayed))
     .limit(options.limit ?? 50);
 
@@ -102,7 +99,7 @@ export async function leaderboard(
       rate: winRate(row.hands, row.meanBb, row.sdBb),
     }))
     // The same order the query cut on: the unrated last, then the published
-    // figure, then who has actually played rather than insertion order.
+    // figure, then who has actually played.
     .sort(
       (a, b) =>
         Number(a.matchesPlayed === 0) - Number(b.matchesPlayed === 0) ||
@@ -122,10 +119,9 @@ export interface Standing extends AgentMetrics {
 /**
  * One page of the standings, and where the viewer's own agents stand in them.
  *
- * Only an agent that has finished a match is ranked. Before that its published
- * figure is zero by construction, which is the absence of a rating rather than
- * a low one, so there is no place to give it. Its owner still sees it among
- * their own, unranked.
+ * An agent is ranked once it has finished a match. Before that its published
+ * figure is a zero placeholder, so it waits for a place. Its owner still sees
+ * it among their own, unranked.
  */
 export async function standings(options: { page: number; ownerId: string | null }): Promise<{
   ranked: Standing[];
@@ -208,9 +204,9 @@ export async function standings(options: { page: number; ownerId: string | null 
 /**
  * The four axis scores for one agent.
  *
- * Fetched over a bounded window and computed in memory rather than in SQL. The
- * definitions are the argument here, and they belong somewhere they can be read
- * and tested without a database, not buried in a query nobody will revisit.
+ * Fetched over a bounded window and computed in memory. The definitions are
+ * the argument here, and they belong in plain code, where they can be read and
+ * tested in memory.
  */
 export async function axesFor(agentId: string, window = 5_000): Promise<Axes> {
   const mine = await db
@@ -274,13 +270,12 @@ export async function axesFor(agentId: string, window = 5_000): Promise<Axes> {
  * How often each of these agents pays to enter a pot: voluntary preflop entry,
  * the oldest read in poker.
  *
- * Counted from decisions rather than from money, because posting a blind is not
- * a choice and calling one is. A high number is a loose player, whose bets mean
+ * Counted from decisions, because calling a blind is a choice and posting one
+ * is forced. A high number is a loose player, whose bets mean
  * less and who can be called wider.
  *
- * Computed over everyone at once rather than per opponent, because the same
- * handful of players recur across a window of hands and asking about each one
- * separately would be the same query many times over.
+ * Computed over everyone at once, because the same handful of players recur
+ * across a window of hands and one query covers them all.
  */
 async function loosenessOfEveryone(agentIds: string[]): Promise<Map<string, number>> {
   if (agentIds.length === 0) return new Map();
@@ -310,7 +305,7 @@ async function loosenessOfEveryone(agentIds: string[]): Promise<Map<string, numb
  * is whether an agent punishes them harder than everybody else manages to.
  *
  * The threshold is the median opponent strength across every hand on record, so
- * it moves with the field instead of being a number somebody picked.
+ * it moves with the field and comes from the data.
  */
 async function fieldVersusWeak(): Promise<{ threshold: number | null; rate: number | null }> {
   const [median] = await db

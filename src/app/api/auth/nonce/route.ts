@@ -8,9 +8,9 @@ import { callerOf, take, tooMany } from '@/server/rate-limit';
 /**
  * Issues the nonce and the exact message to sign.
  *
- * The message is built here, not in the browser, so the domain, chain and nonce
- * it binds to are the ones this server will check. The client signs the string
- * verbatim rather than editing it, which leaves nothing to get wrong. The chain
+ * The message is built here, on the server, so the domain, chain and nonce it
+ * binds to are the ones this server will check. The client signs the string
+ * verbatim, which keeps it exact. The chain
  * named is whichever one the player is currently on.
  */
 export async function GET(request: Request): Promise<Response> {
@@ -26,8 +26,8 @@ export async function GET(request: Request): Promise<Response> {
   const requestHost = headerList.get('host') ?? 'localhost:3000';
   const requestProto = headerList.get('x-forwarded-proto') ?? 'http';
 
-  // Pinned by configuration in production. Signing a message for a domain this
-  // server will not accept is worse than refusing to issue one.
+  // Pinned by configuration in production. The route issues messages this
+  // server will accept, and refuses outright otherwise.
   let host: string;
   let uri: string;
   try {
@@ -43,7 +43,7 @@ export async function GET(request: Request): Promise<Response> {
   const message = new SiweMessage({
     domain: host,
     address: getAddress(address),
-    statement: 'Sign in to Pokertunity. This proves the wallet is yours. It costs nothing and sends no transaction.',
+    statement: 'Sign in to Pokertunity. This proves the wallet is yours. It is free and stays off chain.',
     uri,
     version: '1',
     chainId: (await selectedChain()).id,

@@ -22,7 +22,7 @@ export interface Seat {
   hole: readonly [Card, Card] | null;
   folded: boolean;
   allIn: boolean;
-  /** Seat is at the table but not in this hand. */
+  /** Seat is at the table and sitting this hand out. */
   sittingOut: boolean;
   hasActed: boolean;
   needsToAct: boolean;
@@ -51,7 +51,7 @@ export interface HandState {
   /** Size of the last full raise, which sets the minimum for the next one. */
   lastRaiseSize: number;
   pots: Pot[];
-  /** Everything that happened, in order. The only record of how a hand played. */
+  /** Everything that happened, in order. The one record of how a hand played. */
   events: HandEvent[];
 }
 
@@ -77,8 +77,8 @@ export interface HandOptions {
   smallBlind: number;
   bigBlind: number;
   /**
-   * The deck to deal from, off the end. What a real table passes, shuffled by
-   * something no agent can reproduce; see `src/server/deck.ts`.
+   * The deck to deal from, off the end. What a real table passes, shuffled by a
+   * CSPRNG beyond any agent's reach; see `src/server/deck.ts`.
    */
   deck?: readonly Card[];
   /**
@@ -146,7 +146,7 @@ export function startHand(options: HandOptions): HandState {
   state.events.push({ type: 'hole-dealt', seats: live.map((seat) => seat.index) });
 
   state.toAct = nextToAct(state, bigSeat);
-  // Blinds alone can put every live seat all in, leaving nobody to act. The
+  // Blinds alone can put every live seat all in, leaving the action closed. The
   // hand is still a hand: the board has to run out before anyone can win it.
   if (state.toAct === null) runOut(state);
   return state;
@@ -185,7 +185,7 @@ export interface LegalActions {
   fold: boolean;
   check: boolean;
   call: number | null;
-  /** Opening bet range, when nobody has bet this round. */
+  /** Opening bet range, while the round is unopened. */
   bet: { min: number; max: number } | null;
   /** Raise range expressed as the total to have in front of you. */
   raise: { min: number; max: number } | null;
@@ -204,8 +204,8 @@ export function legalActions(state: HandState): LegalActions | null {
   const maxTo = seat.committed + seat.stack;
 
   return {
-    // Folding a free hand is not offered. It is never right, and an agent that
-    // does it by accident looks broken rather than creative.
+    // Fold is offered when it costs chips to stay. Folding a free hand is always
+    // wrong, and an agent that does it by accident looks broken.
     fold: toCall > 0,
     check: toCall === 0,
     call: toCall > 0 ? toCall : null,
@@ -222,7 +222,7 @@ export function totalPot(state: HandState): number {
 
 export class IllegalAction extends Error {}
 
-/** Applies one action and advances the hand as far as it can go without another decision. */
+/** Applies one action and advances the hand up to the next decision. */
 export function applyAction(state: HandState, action: Action): HandState {
   if (state.toAct === null) throw new IllegalAction('no seat is to act');
   const legal = legalActions(state)!;
@@ -263,8 +263,8 @@ export function applyAction(state: HandState, action: Action): HandState {
       state.currentBet = to;
       if (fullRaise) state.lastRaiseSize = raiseSize;
 
-      // Everyone still in owes a response. A short all-in reopens the action only
-      // for seats that had not acted yet; seats that already acted may call, not raise.
+      // Everyone still in owes a response. A short all-in reopens the action for
+      // seats still waiting to act; seats that already acted may call or fold.
       for (const other of state.seats) {
         if (other === seat || other.folded || other.allIn || other.sittingOut) continue;
         if (!fullRaise && other.hasActed) other.mayRaise = false;
@@ -353,7 +353,7 @@ function advance(state: HandState, from: number): void {
  * Deals whatever board is still owed and settles.
  *
  * Every path that ends a hand with two or more seats still in it comes through
- * here, so `settle` is never asked to score an incomplete board. Scoring five
+ * here, so `settle` always scores a complete board. Scoring five
  * cards as if they were seven silently picks the wrong winner.
  */
 function runOut(state: HandState): void {
@@ -417,8 +417,8 @@ function settle(state: HandState): void {
       orphaned += amount;
       continue;
     }
-    // Layers with the same contestants are one pot. Without this a hand that
-    // folds around shows three "pots" that nobody was ever competing for.
+    // Layers with the same contestants are one pot, so a hand that folds around
+    // shows the one pot that was actually contested.
     const previousPot = pots[pots.length - 1];
     if (previousPot && sameSeats(previousPot.eligible, eligible)) {
       previousPot.amount += amount + orphaned;
@@ -428,8 +428,8 @@ function settle(state: HandState): void {
     orphaned = 0;
   }
   // Chips from layers everybody folded out of. They join the last real pot, and
-  // if there is somehow no real pot they become one: a chip that belongs to no
-  // layer is still a chip somebody put in, and dropping it would break the only
+  // if there is somehow zero real pots they become one: a chip outside every
+  // layer is still a chip somebody put in, and keeping it holds the one
   // invariant this file has, which is that what goes in comes out.
   if (orphaned > 0) {
     if (pots.length > 0) pots[pots.length - 1].amount += orphaned;
@@ -449,13 +449,13 @@ function settle(state: HandState): void {
     return eligible.filter((_, i) => scores[i] === best);
   });
 
-  // Only a hand that takes chips has to be tabled. A player who is beaten may
-  // throw theirs away unseen, as at any real table, which is why an opponent
-  // cannot accumulate a record of everyone's holdings by sitting there: most of
-  // what happens at a showdown stays unknown.
+  // A hand that takes chips is tabled. A player who is beaten may throw theirs
+  // away face down, as at any real table, which keeps an opponent from building
+  // a record of everyone's holdings by sitting there: most of what happens at a
+  // showdown stays private.
   //
-  // The exception is the real one. Once somebody is all in there is no more
-  // betting to protect, so every live hand is turned face up and the whole
+  // The exception is the real one. Once somebody is all in, the betting is
+  // over, so every live hand is turned face up and the whole
   // table sees it. All-in pots are where reads actually come from.
   if (!uncontested && state.street === 'showdown') {
     const allInPot = live.some((seat) => seat.allIn);

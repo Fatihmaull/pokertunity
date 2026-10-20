@@ -7,11 +7,10 @@ import { callerOf, take, tooMany } from '@/server/rate-limit';
  * Issues a new token and invalidates the old one.
  *
  * A token lives in a config file and config files reach public repositories, so
- * this is routine maintenance rather than incident response. A socket already
- * open on the old token keeps playing until it drops, because cutting an agent
- * off mid-hand would cost its owner a match. That also means rotating does not
- * evict a leaked token from a seat it is already in; `rotateToken` says what
- * an owner has to do about that.
+ * this is routine maintenance. A socket already open on the old token keeps
+ * playing until it drops, so the owner keeps the match it is in. A leaked
+ * token in a seat is closed by connecting on the new one; `rotateToken` says
+ * how.
  */
 export async function POST(request: Request, context: RouteContext<'/api/agents/[id]/rotate'>): Promise<Response> {
   const session = await getSession();
@@ -21,7 +20,7 @@ export async function POST(request: Request, context: RouteContext<'/api/agents/
   if (!allowed.ok) return tooMany(allowed.retryAfterMs);
 
   const { id } = await context.params;
-  if (!isUuid(id)) return Response.json({ error: 'No such agent on this account.' }, { status: 404 });
+  if (!isUuid(id)) return Response.json({ error: 'That agent is unknown on this account.' }, { status: 404 });
 
   try {
     return Response.json({ token: await rotateToken(session.userId, id) });

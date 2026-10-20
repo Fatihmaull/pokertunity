@@ -1,23 +1,22 @@
-// Reads /api/health the way PRELAUNCH D5 says to, and exits non-zero with the
-// reasons when the room is not dealing. Run on a schedule by
+// Reads /api/health the way PRELAUNCH D5 says to, and exits 1 with the reasons
+// when the room has stopped dealing. Run on a schedule by
 // .github/workflows/health.yml; runnable by hand with HEALTH_URL set.
 //
-// A 200 is not the check. The route answers 200 while the engine is stalled and
-// while stacks sit on a closed table, and each of those is an arena a visitor
-// cannot use.
+// The check reads the body. The route answers 200 while the engine is stalled
+// and while stacks sit on a closed table, and each of those is an arena a
+// visitor cannot use.
 //
-// An empty room is not on the list. Nobody runs agents on the arena's behalf,
-// so nobody seated only means nobody has brought one, and alerting on it would
-// fire on every quiet hour.
+// An empty room counts as healthy. Agents are brought by their owners, so an
+// empty table means the owners are away, which happens every quiet hour.
 
 const url = process.env.HEALTH_URL;
 if (!url) {
-  console.error('HEALTH_URL is not set');
+  console.error('HEALTH_URL is required');
   process.exit(2);
 }
 
 // How long a hand may go unfinished while agents are seated. A paced hand runs
-// about a minute; five is an engine that has stopped, not a slow table.
+// about a minute; five is an engine that has stopped.
 const STALL_SECONDS = Number(process.env.STALL_SECONDS ?? 300);
 // Settlement is in flight for a moment after every match ends, so stacks still
 // on a closed table are read again after this long before they count.
@@ -38,12 +37,12 @@ let first = await read();
 console.log('health:', first.status, JSON.stringify(first.body ?? first.error));
 
 if (first.status !== 200 || first.body?.ok !== true) {
-  problems.push(`not ok: status ${first.status}, ${first.body?.error ?? first.error ?? 'no body'}`);
+  problems.push(`unhealthy: status ${first.status}, ${first.body?.error ?? first.error ?? 'empty body'}`);
 } else {
   const health = first.body;
-  if (health.dealing !== true) problems.push('dealing is false: no instance is running the room');
+  if (health.dealing !== true) problems.push('dealing is false: the room is closed');
   if (health.seated > 0 && health.idleSeconds !== null && health.idleSeconds > STALL_SECONDS) {
-    problems.push(`stalled: ${health.seated} seated and no hand finished for ${health.idleSeconds}s`);
+    problems.push(`stalled: ${health.seated} seated and the last hand finished ${health.idleSeconds}s ago`);
   }
 
   if (health.unsettled > 0) {

@@ -1,15 +1,15 @@
 import type { Street } from '../poker/engine';
 
 /**
- * What a spectator is allowed to know. Hole cards are omitted unless they
- * belong to the viewer's own agent or have been shown at a real showdown, so
- * redaction happens on the server and never in the browser.
+ * What a spectator is allowed to know. Hole cards are included when they belong
+ * to the viewer's own agent or have been shown at a real showdown, so redaction
+ * happens on the server.
  */
 
 /**
  * `out` is a seat eliminated earlier in the match. It keeps its chair, because
- * nobody leaves a match, but it is dealt nothing, and a spectator has to be
- * able to tell it apart from a seat that is waiting to act.
+ * every entrant stays in the match record, and it sits the hands out, so a
+ * spectator can tell it apart from a seat that is waiting to act.
  */
 export type SeatStatus = 'empty' | 'waiting' | 'thinking' | 'acted' | 'folded' | 'all-in' | 'out';
 
@@ -23,7 +23,7 @@ export interface SeatView {
   committed: number;
   status: SeatStatus;
   isDealer: boolean;
-  /** Present only when this viewer is entitled to see them. */
+  /** Present when this viewer is entitled to see them. */
   hole: string[] | null;
   lastAction: string | null;
   /** The level the last action put this seat at. */
@@ -37,7 +37,7 @@ export interface SeatView {
 
 export interface BrainView {
   seat: number;
-  /** Carried here rather than looked up, because a seat can empty between hands. */
+  /** Carried here, because a seat can empty between hands. */
   seatName: string | null;
   color: string | null;
   street: Street;
@@ -54,7 +54,7 @@ export interface BrainView {
   potOdds: number | null;
   action: string | null;
   amount: number | null;
-  /** Plain statement of what went wrong, or null when nothing did. */
+  /** Plain statement of what went wrong, or null when all went well. */
   failure: string | null;
   elapsedMs: number | null;
   /**
@@ -62,10 +62,9 @@ export interface BrainView {
    *
    * They are the holding by another name: an equity of 0.9 on the river names
    * the cards as surely as turning them over would. So they stay sealed for the
-   * whole hand and open only for seats that show at a showdown, the same rule
+   * whole hand and open for seats that show at a showdown, the same rule
    * the replay applies afterwards. The seat's own owner gets the sealed view
-   * too, because the feed is public and one rule is the only kind that cannot
-   * be walked around.
+   * too, because the feed is public and a single rule is the kind that holds.
    */
   sealed: boolean;
 }
@@ -86,9 +85,8 @@ export interface TableView {
   /** Epoch milliseconds the act clock expires, if a seat is thinking. */
   deadline: number | null;
   /**
-   * Milliseconds left on the act clock when this was rendered. The viewer's
-   * clock is not the server's, so a countdown reads this and runs against its
-   * own clock rather than subtracting a foreign epoch.
+   * Milliseconds left on the act clock when this was rendered. The viewer keeps
+   * its own clock, so a countdown reads this and runs against that clock.
    */
   remainingMs: number | null;
   brain: BrainView | null;
@@ -114,8 +112,8 @@ export type ArenaEvent =
       potOdds: number | null;
       street: Street;
     }
-  // No event carries a deciding seat's reasoning, equity or hand read while its
-  // hand is live. See `BrainView.sealed`; `reveal` is the only way they leave.
+  // A deciding seat's reasoning, equity and hand read stay sealed while its
+  // hand is live. See `BrainView.sealed`; `reveal` is the one way they leave.
   | {
       type: 'decision';
       seat: number;

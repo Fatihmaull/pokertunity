@@ -9,7 +9,7 @@ test('a decision on top of the price is held longest', () => {
 
 test('a decision far from the price clears quickly', () => {
   const trivial = pacingFloor(0.95, 0.2);
-  assert.equal(trivial, PACE_FLOOR_MS, 'nothing to agonise over');
+  assert.equal(trivial, PACE_FLOOR_MS, 'an easy call, held at the floor');
 });
 
 test('holding time rises as the decision gets closer', () => {
@@ -19,12 +19,12 @@ test('holding time rises as the decision gets closer', () => {
   assert.ok(onIt > near && near > wide, `${onIt} > ${near} > ${wide}`);
 });
 
-test('with nothing to call, the reference is a coin flip', () => {
+test('with the bet already matched, the reference is a coin flip', () => {
   assert.equal(pacingFloor(0.5, null), PACE_FLOOR_MS + PACE_SPREAD_MS);
   assert.equal(pacingFloor(0.5, 0.5), pacingFloor(0.5, null));
 });
 
-test('never holds longer than the act clock', () => {
+test('holds within the act clock', () => {
   for (let equity = 0; equity <= 1; equity += 0.05) {
     for (const odds of [null, 0, 0.25, 0.5, 0.75, 1]) {
       const floor = pacingFloor(equity, odds);

@@ -1,6 +1,6 @@
 /**
  * Deposit intents are uuids in the database and bytes32 in the contract.
- * A uuid is sixteen bytes, so it is padded rather than hashed, which keeps the
+ * A uuid is sixteen bytes, so it is zero-padded, which keeps the
  * mapping reversible and lets an on-chain event point straight back at a row.
  */
 
@@ -11,10 +11,9 @@ export function intentToBytes32(uuid: string): `0x${string}` {
 }
 
 export function bytes32ToIntent(value: string): string {
-  // Checked rather than assumed. Anyone can call the vault with a bytes32 of
-  // their choosing, and the result of this goes straight into a lookup on a
-  // uuid column: a value that is not one belongs in a refusal, not in an error
-  // from the database.
+  // Checked here. Anyone can call the vault with a bytes32 of their choosing,
+  // and the result of this goes straight into a lookup on a uuid column, so a
+  // malformed value becomes a clean refusal before the database sees it.
   if (!/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`not a bytes32: ${value}`);
 
   const hex = value.slice(2, 34).toLowerCase();

@@ -22,16 +22,14 @@ import { balanceOf } from './store';
 /**
  * The agent socket.
  *
- * Agents dial in; the arena never dials out. That is not a stylistic choice.
- * An arena that fetched owner-supplied URLs would be making requests from
- * inside its own network on behalf of strangers, which is a server-side request
- * forgery surface that has to be defended rather than avoided. It also means an
- * agent needs no public address, no certificate and no deployment: a laptop
- * behind a router can play.
+ * Agents dial in, and the arena listens. That is a security decision: the
+ * arena makes zero requests on behalf of strangers, so the server-side request
+ * forgery surface is simply absent. It also means a laptop behind a router can
+ * play as well as a server.
  *
  * The second thing it buys is presence. A match holds every seat until it ends,
- * so seating an agent that is not actually there would strand a whole table.
- * Here, being there is the same fact as having a socket open.
+ * so the arena seats agents that are actually there, and being there is the
+ * same fact as having a socket open.
  */
 
 /** How long the handshake may take before the connection is dropped. */
@@ -40,10 +38,10 @@ const HANDSHAKE_MS = 10_000;
 /**
  * Sockets one account may hold at once: one for every agent it can register.
  *
- * Anything lower refuses an owner's own agents, which is the team running
- * several strategies that per-owner agents exist for. A connection for an agent
- * that is already connected replaces the old one rather than adding to it, so
- * this is a backstop rather than a limit a well-behaved owner should ever meet.
+ * That lets a team run every strategy it registered at once, which is what
+ * per-owner agents exist for. A connection for an agent that is already
+ * connected replaces the old one, so this is a backstop a well-behaved owner
+ * stays well inside.
  */
 const MAX_CONNECTIONS_PER_ACCOUNT = MAX_AGENTS_PER_ACCOUNT;
 
@@ -53,11 +51,11 @@ const HEARTBEAT_MS = 25_000;
 const globalForSocket = globalThis as unknown as { __pokertunityWss?: WebSocketServer };
 
 /**
- * Routes upgrade requests, handing anything that is not an agent to Next.
+ * Routes upgrade requests: `/agent` to the socket layer, everything else to
+ * Next.
  *
  * Next runs its own WebSocket for hot reload in development on the same port,
- * so stealing every upgrade would break the dev server in a way that looks like
- * the bundler failing rather than like this file.
+ * so passing its upgrades through keeps the dev server working.
  */
 export function attachAgentSocket(server: HttpServer, nextUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => void): void {
   const wss = globalForSocket.__pokertunityWss ?? new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
@@ -78,16 +76,15 @@ export function attachAgentSocket(server: HttpServer, nextUpgrade: (req: Incomin
 
 /**
  * Waits for the handshake, then either seats the connection on the floor or
- * says why not and hangs up.
+ * says why it was refused and hangs up.
  *
  * Every refusal carries a code and a sentence. An agent author debugging at two
- * in the morning should be told what they did, and a silent drop is the one
- * outcome that teaches them nothing.
+ * in the morning should be told what they did.
  */
 export async function greet(
   ws: WebSocket,
   // The token lookup, as a parameter so the handshake can be driven in a test
-  // without a database. The socket server always takes the default.
+  // from memory. The socket server always takes the default.
   lookup: typeof agentByToken = agentByToken,
 ): Promise<void> {
   const opened = Date.now();
@@ -96,10 +93,8 @@ export async function greet(
    * Frames that arrive while the token is being looked up.
    *
    * Authenticating takes a database round trip, and a client that pipelines its
-   * first frames does not wait for it. Without somewhere to put them, anything
-   * sent in that window lands with no listener attached and is dropped by the
-   * socket library: an agent that sends hello and ready together would be
-   * welcomed, never queued, and never told why.
+   * first frames sends them during it. This holds them, so an agent that sends
+   * hello and ready together is welcomed and queued, in that order.
    */
   const backlog: string[] = [];
   const collect = (data: unknown) => backlog.push(String(data));
@@ -138,13 +133,12 @@ export async function greet(
   const agent = await lookup(hello.token).catch(() => null);
 
   // The lookup is a round trip, and a client can hang up during it. Its close
-  // has already fired by now, so a link built on this socket would never hear
-  // one: it would sit on the floor as a connected agent that is not there, be
-  // queued if it had pipelined `ready`, and be seated to time out every decision.
+  // has already fired by now, so this check is what keeps a departed agent off
+  // the floor, out of the queue, and out of a seat it would time out in.
   if (ws.readyState !== ws.OPEN) return;
 
   if (!agent) {
-    reject(ws, CLOSE.UNAUTHORIZED, 'That token does not match an agent. Rotate it on your account page.');
+    reject(ws, CLOSE.UNAUTHORIZED, 'That token matches zero agents. Rotate it on your account page.');
     return;
   }
 
@@ -157,16 +151,15 @@ export async function greet(
     return;
   }
 
-  // Detached only now, immediately before the link attaches its own handler.
-  // Doing it any earlier reopens the window it exists to close: the token
-  // lookup above is a database round trip, and a frame arriving in that gap
-  // with no listener is dropped by the socket library and never seen again.
+  // Detached here, immediately before the link attaches its own handler, so
+  // a listener is attached through the whole token lookup and every frame in
+  // that gap is kept.
   ws.off('message', collect);
   const link = new SocketLink(ws, agent.agentId, agent.userId, agent.queueEnabled);
 
   // The newer connection wins. An older one is nearly always a socket the far
-  // end has already forgotten, and an agent that really did open two would
-  // otherwise be stuck behind a timeout it cannot see.
+  // end has already forgotten, and an agent that really did open two gets
+  // straight back to playing.
   const replaced = attach(link);
   replaced?.close(CLOSE.REPLACED, 'This agent connected again from somewhere else.');
 
@@ -190,9 +183,8 @@ export async function greet(
  * Says why, then hangs up.
  *
  * The close waits for the error frame to actually go out. Calling both in the
- * same tick races on a socket that has just finished its upgrade, and the loser
- * is the explanation: the client sees a bare abnormal closure with no code and
- * no reason, which is precisely the outcome this function exists to avoid.
+ * same tick races on a socket that has just finished its upgrade, and waiting
+ * is what delivers the explanation: the client sees the code and the reason.
  */
 function reject(ws: WebSocket, code: CloseCode, message: string): void {
   const goodbye = () => ws.close(code, message.slice(0, 120));
@@ -241,20 +233,19 @@ export class SocketLink implements AgentLink {
       this.answered = true;
     });
 
-    // Unreferenced, so a quiet connection cannot keep the process alive on its
-    // own. A shutdown should be decided by the server, not held open by a timer
-    // whose only job is to stop a proxy getting bored.
+    // Unreferenced, so the server decides when the process exits, and a
+    // keepalive timer stays a keepalive timer.
     this.heartbeat = setInterval(() => this.beat(), HEARTBEAT_MS).unref();
   }
 
   /**
-   * Pings, and hangs up on a connection that never answered the last ping.
+   * Pings, and hangs up on a connection that left the last ping unanswered.
    *
-   * A network can lose a connection without telling either end. A socket like
+   * A network can lose a connection silently, on both ends. A socket like
    * that stays open here, and ready, until the operating system gives up on it,
    * which can take hours: long enough to be seated and to time out every
    * decision of a match its owner paid for. Public so the socket suite can
-   * drive it without waiting on a clock.
+   * drive it directly, off the clock.
    */
   beat(): void {
     if (this.ws.readyState !== this.ws.OPEN) return;
@@ -310,8 +301,8 @@ export class SocketLink implements AgentLink {
 
   ask(frame: ActFrame, onReasoning: (text: string) => void, signal: AbortSignal): Promise<DecisionFrame | null> {
     // Anything still outstanding belongs to a hand that has moved on. Settling
-    // it as nothing rather than leaving it hanging is what stops a slow agent
-    // leaking a promise per decision for the life of the connection.
+    // it as null is what keeps a slow agent from leaking a promise per decision
+    // for the life of the connection.
     this.pending?.settle(null);
 
     if (this.ws.readyState !== this.ws.OPEN) return Promise.resolve(null);
@@ -338,43 +329,40 @@ export class SocketLink implements AgentLink {
 
     const frame = parseClientFrame(raw);
     if (!frame) {
-      this.fail(CLOSE.MALFORMED, 'That was not a frame this arena understands.');
+      this.fail(CLOSE.MALFORMED, 'That frame is outside what this arena understands.');
       return;
     }
 
     switch (frame.type) {
       case 'hello':
-        // Already handshaken. A second hello is a confused client rather than a
-        // hostile one, so it costs nothing to ignore.
+        // Already handshaken. A second hello is a confused client, and ignoring
+        // it is free.
         return;
 
       case 'ping':
         return;
 
       case 'ready':
-        // Stamped once. An agent that says ready twice has not gone to the back
-        // of its own queue, so the clock it has been waiting on keeps running.
+        // Stamped once. An agent that says ready twice keeps its place in the
+        // queue, and the clock it has been waiting on keeps running.
         this.readySince ??= Date.now();
         this.ready = true;
-        // Asking is not enough on its own: its owner has to have switched
-        // matches on too, and an agent told it is queued when it is not waits
-        // for a game that is never coming.
+        // Its owner's switch is the second gate, so an agent hears it is queued
+        // exactly when it is.
         this.tellQueue(this.queueOpen ? null : QUEUE_OFF_REASON);
         return;
 
       case 'stop':
         this.ready = false;
         this.readySince = null;
-        // Never interrupts a match: every seat plays its match to the end, so
-        // this stops the next one.
+        // Every seat plays its match to the end, so this applies to the next one.
         this.tellQueue('You asked to stop.');
         return;
 
       case 'reasoning': {
         const pending = this.pending;
-        // A reasoning frame for a hand that has moved on is dropped rather than
-        // shown, because putting last hand's thinking on this hand's panel is
-        // worse than showing nothing.
+        // A reasoning frame for a hand that has moved on is dropped, so this
+        // hand's panel shows this hand's thinking.
         if (!pending || pending.id !== frame.id) return;
 
         pending.reasoningBytes += Buffer.byteLength(frame.text);
@@ -389,9 +377,8 @@ export class SocketLink implements AgentLink {
 
       case 'decision': {
         const pending = this.pending;
-        // The correlation id is what stops a late answer to hand four being
-        // applied to hand five, which is an ordinary event rather than a rare
-        // one once an act clock is involved.
+        // The correlation id is what keeps a late answer to hand four out of hand
+        // five, an ordinary event once an act clock is involved.
         if (!pending || pending.id !== frame.id) return;
         pending.settle(frame);
         return;
@@ -430,18 +417,17 @@ export class SocketLink implements AgentLink {
     if (this.closed) return;
     this.closed = true;
 
-    // Asked before detaching, because detaching is what makes the answer no.
-    // A connection that was already replaced must not write its own goodbye
-    // over the newer one, or an owner reads "disconnected" about an agent that
-    // is sitting at a table right now.
+    // Asked before detaching, because detaching changes the answer. A
+    // connection that was already replaced leaves the newer one's status alone,
+    // so an owner reads "connected" about an agent sitting at a table right now.
     const wasCurrent = linkFor(this.agentId) === this;
 
     clearInterval(this.heartbeat);
     this.ready = false;
     this.readySince = null;
 
-    // A hand waiting on this seat gets nothing, which the dealer already knows
-    // how to handle: it checks if checking is free and folds if it is not.
+    // A hand waiting on this seat gets null, which the dealer already handles:
+    // it checks if checking is free and folds when it costs chips.
     this.pending?.settle(null);
     this.pending = null;
 

@@ -30,16 +30,15 @@ interface Board {
   agents: Standing[];
   page: number;
   pages: number;
-  /** The viewer's own agents, placed or not. Null for somebody signed out. */
+  /** The viewer's own agents, placed and unplaced. Null for somebody signed out. */
   mine: Standing[] | null;
 }
 
 /**
  * The standings.
  *
- * Ranked on the rating rather than on chips or a win rate. Agents are matched
- * against opponents of their own strength, so a win rate converges on break
- * even for everybody and stops separating anyone; the rating asks how often an
+ * Ranked on the rating. Agents are matched against opponents of their own
+ * strength, so every win rate converges on break even; the rating asks how often an
  * agent finished above players the arena already believed were good.
  *
  * The estimate and the doubt around it stay reachable on the rating, because
@@ -49,7 +48,7 @@ export function Standings() {
   const { account } = useAccount();
   const [page, setPage] = useState(1);
   const [board, setBoard] = useState<Board | null>(null);
-  /** Only read while nothing has loaded: after that, what is on screen stays. */
+  /** Read before the first load: after that, what is on screen stays. */
   const [failed, setFailed] = useState(false);
 
   // Asked again on signing in or out too, which changes whose agents the
@@ -68,8 +67,8 @@ export function Standings() {
         setBoard(body);
         setFailed(false);
       } catch {
-        // Keep whatever is on screen. A dropped poll is not new information,
-        // unless nothing is on screen yet and "counting" would never end.
+        // Keep whatever is on screen. A dropped poll carries zero news, so the
+        // failure message is for the empty first load alone.
         if (live) setFailed(true);
       }
     };
@@ -94,12 +93,12 @@ export function Standings() {
         {board === null ? (
           <p className="px-5 py-6 text-sm text-muted">
             {failed
-              ? 'The standings could not be loaded. This page asks again every 15 seconds.'
+              ? 'The standings failed to load. This page asks again every 15 seconds.'
               : 'Counting matches…'}
           </p>
         ) : board.agents.length === 0 ? (
           <EmptyState
-            title="Nobody has finished a match yet"
+            title="The first finished match starts the standings"
             body="An agent is ranked once it has finished its first match."
             action={
               <ButtonLink href="/matches" size="sm">
@@ -124,7 +123,7 @@ export function Standings() {
             <Heads layout={YOURS} />
             {board.mine.length === 0 ? (
               <EmptyState
-                title="You have no agents yet"
+                title="Your agents appear here"
                 action={
                   <ButtonLink href="/agent" size="sm">
                     Add an agent
@@ -146,8 +145,8 @@ export function Standings() {
 }
 
 /**
- * Shared by a list's column heads and every one of its rows, so the two cannot
- * drift apart. Your own list's first column is wide enough to say "Unranked".
+ * Shared by a list's column heads and every one of its rows, so the two always
+ * line up. Your own list's first column is wide enough to say "Unranked".
  */
 const RANKED = {
   grid: 'grid-cols-[1.75rem_minmax(0,1fr)_auto] lg:grid-cols-[2.5rem_minmax(9rem,1.6fr)_6rem_6rem_6rem_7rem]',
@@ -198,16 +197,15 @@ function Row({ row, layout, mine }: { row: Standing; layout: Layout; mine: boole
           <span className={earningsTone}>{earnings}</span>
         </span>
       </span>
-      {/* The ranked number. An agent nobody has watched publishes nothing
-          rather than an average, which is a different claim from being rated
-          average, so an unranked one shows a dash. Where the estimate sits and
-          how wide the doubt still is are on hover: they qualify the rating
-          rather than competing with it. */}
+      {/* The ranked number. A newcomer publishes a placeholder, a different
+      claim from being rated average, so an unranked one shows a dash. Where
+      the estimate sits and how wide the doubt still is are on hover: they
+      qualify the rating. */}
       <span
         className={`mono text-center text-sm tabular-nums ${row.place === null ? 'text-faint' : 'text-ink'}`}
         title={row.place === null ? undefined : `Estimate ${row.ratingMu.toFixed(1)} ±${row.ratingSigma.toFixed(1)}`}
       >
-        {row.place === null ? '—' : row.rating.toFixed(1)}
+        {row.place === null ? '–' : row.rating.toFixed(1)}
       </span>
       <Cell value={formatChips(row.matches)} />
       <Cell value={formatChips(row.wins)} />

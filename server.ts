@@ -3,20 +3,19 @@ import next from 'next';
 import { CLOSE } from '@pokertunity/protocol';
 
 /**
- * The entrypoint, replacing `next start`.
+ * The entrypoint.
  *
- * Next has no way to accept a WebSocket, and agents dial in over one, so the
- * HTTP server has to be ours. Everything that shares state lives in this one
- * process on purpose: the dealer holds match state in memory, the agent sockets
- * feed it, and the spectator stream reads it. Splitting any of the three apart
- * would mean a message bus between them for no gain, since a Postgres advisory
- * lock already guarantees only one process deals.
+ * Agents dial in over a WebSocket, which this server accepts, so the HTTP
+ * server is ours. Everything that shares state lives in this one process on
+ * purpose: the dealer holds match state in memory, the agent sockets feed it,
+ * and the spectator stream reads it. One process keeps them in shared memory,
+ * and a Postgres advisory lock already guarantees exactly one process deals.
  *
- * This file is not compiled by Next, so it runs through tsx rather than the
- * bundler and cannot use anything Next would have transformed for it.
+ * This file runs through tsx, outside Next's bundler, so it uses plain Node and
+ * TypeScript.
  */
 
-// Read rather than trusted. An empty PORT is zero, which listens on a port the
+// Validated on read. An empty PORT is zero, which listens on a port the
 // platform picked at random and fails its own health check.
 const requested = Number(process.env.PORT);
 const port = Number.isInteger(requested) && requested > 0 ? requested : 3000;
@@ -24,25 +23,25 @@ const dev = process.env.NODE_ENV !== 'production';
 
 async function main(): Promise<void> {
   // Next attaches an upgrade listener of its own, once, to whatever
-  // `httpServer` names — and it does so on the first request, not at startup.
+  // `httpServer` names, and it does so on the first request.
   // That listener answers hot reload, and it ends any other upgrade whose path
   // matches a route it serves. `/agent` is also a page here, so given our
   // server it would end every agent socket the moment a page had been loaded.
   //
-  // So it is given a server of its own that nothing listens on. Upgrades that
-  // are not an agent's are re-emitted onto it below, which hands Next the
-  // socket without ever handing it ours.
+  // So it is given a decoy server of its own, bound to zero ports. Page
+  // upgrades are re-emitted onto it below, which hands Next each socket it owns
+  // and keeps ours to ourselves.
   const nextServer = createServer();
   const app = next({ dev, httpServer: nextServer });
   await app.prepare();
 
-  // Fetched after prepare, not before: the server it delegates to does not
-  // exist yet otherwise.
+  // Fetched after prepare, because prepare is what creates the server it
+  // delegates to.
   const handle = app.getRequestHandler();
 
-  // Before the port opens, so no request ever meets a schema older than the
-  // code answering it. A migration that fails ends the process here, and the
-  // platform keeps the previous deployment rather than swapping in this one.
+  // Before the port opens, so every request meets the schema of the code
+  // answering it. A migration that fails ends the process here, and the
+  // platform keeps the previous deployment live.
   // Development is left to `pnpm db:migrate`, run deliberately.
   if (!dev) {
     const { applyMigrations } = await import('./src/db/apply-migrations');
@@ -55,32 +54,31 @@ async function main(): Promise<void> {
   });
 
   // Imported after `prepare`, because these modules read environment the Next
-  // config loads, and because nothing should start dealing before the server
-  // that spectators watch it on is able to answer.
+  // config loads, and because dealing starts once the server that spectators
+  // watch it on is able to answer.
   const { attachAgentSocket } = await import('./src/server/socket');
   const { bootEngine } = await import('./src/server/lifecycle');
   const { closeAll } = await import('./src/server/presence');
 
   attachAgentSocket(server, (request, socket, head) => {
-    // Everything that is not an agent goes to Next, by re-emitting it on the
-    // server Next listened to rather than by calling `getUpgradeHandler()`.
-    // That handler routes to `NextServer.handleUpgrade`, which is empty — the
-    // comment there says the web server does not support web sockets — so
-    // calling it drops hot reload on the floor: the `/_next/hmr` upgrade hangs
-    // with no open, no close and no error, the dev client waits on it before
-    // hydrating, and every page is inert with nothing logged anywhere.
+    // Every page upgrade goes to Next, re-emitted on the decoy server Next
+    // listened to. That is the working path: `getUpgradeHandler()` routes to
+    // `NextServer.handleUpgrade`, an empty method (its comment says the web
+    // server leaves web sockets to others), and calling it leaves the
+    // `/_next/hmr` upgrade hanging silently, the dev client waiting on it before
+    // hydrating, and every page inert.
     //
-    // Next only attaches that listener once a request has been served, so
-    // before then there is nothing to emit to. Hot reload is only ever dialled
-    // after a page has loaded, and a client that finds nobody home retries.
+    // Next attaches that listener once a request has been served. Hot reload is
+    // dialled after a page has loaded, by which point the listener is there,
+    // and a client that dials early retries.
     nextServer.emit('upgrade', request, socket, head);
   });
 
-  // A port that cannot be bound is fatal. Next installs an uncaught-exception
-  // handler that logs this and carries on, which left a process serving nothing
-  // while it took the engine lock and dealt matches no agent could reach.
+  // A port that fails to bind is fatal. Next installs an uncaught-exception
+  // handler that logs this and carries on, which would leave an unreachable
+  // process holding the engine lock and dealing matches.
   server.on('error', (error) => {
-    console.error('[server] cannot listen', error);
+    console.error('[server] listen failed', error);
     process.exit(1);
   });
 
@@ -92,12 +90,12 @@ async function main(): Promise<void> {
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => {
-      // Told rather than dropped. An agent that is hung up on with a reason
-      // reconnects; one whose socket silently dies waits for a timeout first.
+      // Told with a reason. An agent that is hung up on with a reason reconnects
+      // at once; one whose socket silently dies waits for a timeout first.
       closeAll(CLOSE.GOING_AWAY, 'The arena is restarting. Reconnect in a moment.');
       server.close(() => process.exit(0));
-      // A spectator stream never ends on its own, so a clean close would wait
-      // for one that is not coming.
+      // A spectator stream stays open until its viewer leaves, so the exit has a
+      // deadline.
       setTimeout(() => process.exit(0), 3_000).unref();
     });
   }

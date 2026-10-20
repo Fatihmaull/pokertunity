@@ -20,8 +20,8 @@ export function Cashier({ onClose }: { onClose: () => void }) {
   const [amount, setAmount] = useState('10000');
   const dialog = useRef<HTMLDivElement>(null);
 
-  // Escape closes, and Tab stays inside. A modal the keyboard can walk out of
-  // while the page behind it is still there is a modal in appearance only.
+  // Escape closes, and Tab stays inside, so the modal holds the keyboard the
+  // way it holds the eye.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -57,14 +57,13 @@ export function Cashier({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // A deposit paid for in an earlier visit and never credited is picked up
-  // here, so closing the tab while it confirmed does not cost the player money.
+  // A deposit paid for in an earlier visit and still uncredited is picked up
+  // here, so the player's money survives closing the tab mid-confirmation.
   //
-  // Keyed on the wallet, not on the account object. The account is replaced
-  // every time the balance is refreshed, and a deposit this dialog is finishing
-  // may be credited by another poll still running from the dialog closed a
-  // moment ago, whose refresh would cancel this one mid-wait and leave the
-  // dialog on "Waiting for the network" with Buy disabled.
+  // Keyed on the wallet. The account object is replaced every time the
+  // balance is refreshed, and a deposit this dialog is finishing may be
+  // credited by another poll still running from the dialog closed a moment
+  // ago; keying on the wallet keeps this wait running through that refresh.
   const wallet = account?.address ?? null;
   useEffect(() => {
     let cancelled = false;
@@ -78,7 +77,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         if (!waiting || cancelled) return;
 
         // Finished on the network it was paid on, whatever the player is
-        // looking at now. A deposit does not follow them between chains.
+        // looking at now. A deposit stays on the chain it was paid on.
         const paidOn = chainByKey(waiting.chainKey);
         setStage('confirming');
         setStatus(`Finishing a deposit from earlier${paidOn ? ` on ${paidOn.shortName}` : ''}.`);
@@ -122,7 +121,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         valueWei?: string;
         error?: string;
       };
-      if (!intentResponse.ok || !intent.bytes32) throw new Error(intent.error ?? 'Could not start the purchase.');
+      if (!intentResponse.ok || !intent.bytes32) throw new Error(intent.error ?? 'The purchase failed to start. Try again.');
 
       const txHash = await sendDeposit({
         from: account.address,
@@ -132,9 +131,9 @@ export function Cashier({ onClose }: { onClose: () => void }) {
         valueWei: intent.valueWei!,
       });
 
-      // Written down before anything else can fail. A deposit whose hash is on
-      // record can be finished later; one whose hash was only ever in this tab
-      // cannot, so the player is told when that is the position they are in.
+      // Written down first. A deposit whose hash is on record can be finished
+      // later; one whose hash lives in this tab alone needs the tab, so the
+      // player is told when that is the position they are in.
       const noted = await fetch('/api/cashier/pending', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -147,7 +146,7 @@ export function Cashier({ onClose }: { onClose: () => void }) {
       setStatus(
         noted
           ? 'Waiting for the network to confirm.'
-          : 'Waiting for the network to confirm. Keep this window open: the deposit could not be saved to finish later.',
+          : 'Waiting for the network to confirm. Keep this window open: this deposit finishes here.',
       );
 
       const credited = await pollConfirm(txHash, chain.key, (message) => setStatus(message));
@@ -163,10 +162,10 @@ export function Cashier({ onClose }: { onClose: () => void }) {
 
   const busy = stage === 'signing' || stage === 'confirming';
   const symbol = chain?.nativeCurrency.symbol ?? '';
-  // A chain can be switched on before its vault exists. Watching still works;
-  // buying does not, and the dialog says so rather than failing at the wallet.
+  // A chain can be switched on before its vault exists. Watching works and
+  // buying opens with the vault, and the dialog says so up front.
   const settles = Boolean(chain?.vault);
-  /** Whether switching would reach a cashier that works, or only the same message again. */
+  /** Whether switching would reach a working cashier. */
   const settlesSomewhere = chains.some((entry) => entry.vault);
 
   const chips = Number(amount);
@@ -186,14 +185,13 @@ export function Cashier({ onClose }: { onClose: () => void }) {
       <div
         ref={dialog}
         tabIndex={-1}
-        // The shell does not scroll, so the dialog carries its own scrollbar rather
-        // than relying on the page to make room for it.
+        // The shell holds still, so the dialog carries its own scrollbar.
         className="scroll-y max-h-full w-full max-w-lg rounded-card border border-line bg-surface shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] outline-none"
       >
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-6 py-5">
           <h2 className="text-2xl text-ink">Chips Store</h2>
           {/* Shown at every width: on a phone, where the header hides it, this
-              is the way off a network that has no vault. */}
+              is the way off a network whose vault is still to come. */}
           <ChainMenu align="left" disabled={busy} className="order-last basis-full sm:order-none sm:basis-auto" />
           <button
             type="button"
@@ -241,14 +239,12 @@ export function Cashier({ onClose }: { onClose: () => void }) {
 
         {chain && !settles ? (
           <div className="border-t border-line px-6 py-4">
-            {/* Advice worth following, or none. Before the first vault exists
-                every network is in this same state, and sending the player
-                round the header to read the identical sentence three times is
-                worse than telling them plainly that there is nowhere to go. */}
+            {/* Advice worth following. Before the first vault exists every
+            network is in this same state, so the message says that plainly. */}
             <p className="text-sm text-muted">
               {settlesSomewhere
-                ? `No vault on ${chain.name} yet. Pick another network above.`
-                : 'Chips cannot be bought yet: no vault is deployed.'}
+                ? `The ${chain.name} cashier opens once its vault is deployed. Pick another network above.`
+                : 'The cashier opens once a vault is deployed.'}
             </p>
           </div>
         ) : null}
@@ -269,17 +265,17 @@ export function Cashier({ onClose }: { onClose: () => void }) {
 
 /**
  * How often to ask. The confirm route allows ten calls a minute, so asking any
- * faster than this runs the cashier into its own rate limit mid-wait.
+ * at this pace keeps the cashier inside its own rate limit mid-wait.
  */
 const POLL_MS = 6_000;
 
 /**
- * A deposit is credited only once the chain has confirmed it, so the cashier
- * keeps asking rather than pretending the chips have arrived.
+ * A deposit is credited once the chain has confirmed it, so the cashier keeps
+ * asking and shows the chips when they truly arrive.
  *
- * It keeps asking through everything that is not a refusal: a transaction still
- * being mined (202), a rate limit (429, waited out as told) and a node that did
- * not answer (5xx). Only a 4xx the arena chose to send ends the wait.
+ * It keeps asking through every answer short of a refusal: a transaction still
+ * being mined (202), a rate limit (429, waited out as told) and a node that
+ * timed out (5xx). A 4xx the arena chose to send is what ends the wait.
  */
 async function pollConfirm(txHash: string, chainKey: string, onStatus: (message: string) => void): Promise<number> {
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -306,19 +302,19 @@ async function pollConfirm(txHash: string, chainKey: string, onStatus: (message:
       if (Number.isFinite(seconds) && seconds > 0) pause = seconds * 1000;
       onStatus('Waiting for the network to confirm.');
     } else if (response.status >= 500) {
-      onStatus(body.error ?? 'The network did not answer. Trying again.');
+      onStatus(body.error ?? 'The network is slow to answer. Trying again.');
     } else {
-      throw new Error(body.error ?? 'The cashier could not complete that.');
+      throw new Error(body.error ?? 'The cashier hit an error. Try again.');
     }
 
     await new Promise((resolve) => setTimeout(resolve, pause));
   }
-  throw new Error('Not confirmed yet. Reopen the cashier later to finish it.');
+  throw new Error('Still confirming. Reopen the cashier later to finish it.');
 }
 
 function describe(error: unknown): string {
   const code = (error as { code?: number })?.code;
   if (code === 4001) return 'Transaction rejected in your wallet.';
   if (error instanceof Error) return error.message;
-  return 'The cashier could not complete that.';
+  return 'The cashier hit an error. Try again.';
 }

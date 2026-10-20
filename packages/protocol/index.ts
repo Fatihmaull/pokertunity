@@ -2,22 +2,20 @@
  * The wire between the arena and an agent.
  *
  * Both sides import this file, so a change to a frame fails to compile in two
- * places rather than failing at runtime in one. That is the whole reason it is
- * a package and not a copied interface.
+ * places, at build time. That is the whole reason it is a shared package.
  *
  * Two rules hold everywhere below. The arena is the authority: it settles what
  * a hand is worth and which moves are legal before it asks anything, and it
- * checks whatever comes back. And an agent is never trusted to be well behaved,
- * so every bound here is enforced by the arena rather than assumed.
+ * checks whatever comes back. And the arena enforces every bound here itself,
+ * whatever the agent on the other end does.
  */
 
 /**
  * Bumped when a frame changes shape in a way an older agent would misread.
  *
- * The arena refuses a version it does not serve and says so in the close
- * reason. An agent quietly playing against a protocol it half understands is
- * worse than one that fails at startup, because the first costs somebody a
- * tournament and the second costs them a restart.
+ * The arena refuses a version outside what it serves and says so in the close
+ * reason. Failing at startup costs the author a restart; a half-understood
+ * protocol would cost them a tournament.
  */
 export const PROTOCOL_VERSION = 1;
 
@@ -35,9 +33,8 @@ export const MAX_REASONING_BYTES = 4_096;
  *
  * Loose on purpose. The reasoning budget below is what actually bounds the
  * volume an agent can push; this is a coarse net for a client stuck in a loop.
- * Set tight, it would instead punish the ordinary case of an agent forwarding a
- * model's token stream frame by frame, which is a reasonable thing to write and
- * a terrible thing to be disconnected for.
+ * Kept loose, it lets an agent forward a model's token stream frame by frame,
+ * which is a reasonable thing to write.
  */
 export const MAX_FRAMES_PER_SECOND = 200;
 
@@ -45,19 +42,18 @@ export const MAX_FRAMES_PER_SECOND = 200;
  * Why the arena hung up.
  *
  * Every close carries one of these plus a sentence, because an agent author
- * debugging at two in the morning deserves to be told what they did rather
- * than watching a socket drop.
+ * debugging at two in the morning deserves to be told what they did.
  */
 export const CLOSE = {
-  /** Handshake did not arrive, or arrived malformed. */
+  /** Handshake arrived late, malformed, or missing. */
   BAD_HANDSHAKE: 4000,
-  /** Token unknown, revoked, or not matching any agent. */
+  /** Token unknown, revoked, or matching zero agents. */
   UNAUTHORIZED: 4001,
-  /** Protocol version this arena does not serve. */
+  /** Protocol version outside what this arena serves. */
   VERSION: 4002,
   /** Frame rate, frame size, or reasoning budget exceeded. */
   FLOODING: 4003,
-  /** A frame that is not JSON, or not a frame this arena knows. */
+  /** Invalid JSON, or a frame type this arena does not know. */
   MALFORMED: 4004,
   /** Same agent connected somewhere else, and the newer connection wins. */
   REPLACED: 4005,
@@ -76,16 +72,16 @@ export type Street = 'preflop' | 'flop' | 'turn' | 'river';
 /**
  * What this seat may legally do, already computed.
  *
- * An agent does not have to work any of this out and cannot argue with it. A
- * reply outside these bounds is either clamped into range or discarded, and a
- * discarded reply checks when checking is free and folds when it is not.
+ * The arena works all of this out, and it is final. A reply outside these
+ * bounds is either clamped into range or discarded, and a discarded reply checks
+ * when checking is free and folds when it costs chips.
  */
 export interface LegalActions {
   fold: boolean;
   check: boolean;
-  /** Chips to call, or null when there is nothing to call. */
+  /** Chips to call, or null when this seat has matched the bet. */
   call: number | null;
-  /** Opening bet range, when nobody has bet this round. */
+  /** Opening bet range, while the round is unopened. */
   bet: { min: number; max: number } | null;
   /** Raise range, as the total to have in front of you when done. */
   raise: { min: number; max: number } | null;
@@ -96,8 +92,8 @@ export interface LegalActions {
 /**
  * The arena's own Monte Carlo estimate for this hand against random holdings.
  *
- * Sent rather than withheld so that agents are comparable and nobody has to
- * reimplement it badly. An agent is free to ignore it and compute its own.
+ * Sent so that agents are comparable and everybody starts from a sound Monte
+ * Carlo. An agent is free to compute its own.
  */
 export interface EquityView {
   /** Share of the pot this hand expects, ties counted as half. */
@@ -120,9 +116,9 @@ export interface HandReadView {
 /**
  * Another seat, as this agent is entitled to see it.
  *
- * No hole cards, ever, until a showdown puts them in a hand result. How long a
- * seat took is included because it is public at a real table; why it took that
- * long is not.
+ * Hole cards stay hidden until a showdown puts them in a hand result. How long a
+ * seat took is included because it is public at a real table; the reason stays
+ * private.
  */
 export interface OpponentSeat {
   seat: number;
@@ -139,19 +135,19 @@ export interface OpponentSeat {
 /* Arena to agent                                                             */
 /* -------------------------------------------------------------------------- */
 
-/** The handshake was accepted. Nothing happens until the agent says it is ready. */
+/** The handshake was accepted. The agent sends `ready` when it wants a game. */
 export interface WelcomeFrame {
   type: 'welcome';
   version: number;
   agentId: string;
   name: string;
-  /** Chips the owner has, so an agent can tell why it is not being seated. */
+  /** Chips the owner has, so an agent can tell why it is waiting. */
   chips: number;
   /** What one seat costs, buy-in and entry fee together. */
   seatCost: number;
 }
 
-/** Queued, or not. Sent whenever the answer changes, including on refusal. */
+/** The queue answer. Sent whenever it changes, including on refusal. */
 export interface QueueFrame {
   type: 'queued';
   queued: boolean;
@@ -178,9 +174,9 @@ export interface MatchStartFrame {
 /**
  * Your turn.
  *
- * `id` must be echoed on the reply. A reply carrying any other id is treated as
- * though nothing arrived, which matters because an agent that times out and
- * answers a second late is an ordinary event rather than a rare one.
+ * Echo `id` on the reply. A reply carrying any other id is treated as a silent
+ * seat, which matters because agents that time out and answer a
+ * second late are ordinary.
  */
 export interface ActFrame {
   type: 'act';
@@ -209,9 +205,9 @@ export interface ActFrame {
 /**
  * How the hand ended, from this agent's side of the table.
  *
- * `shown` carries only the holdings that were actually turned face up. The
- * arena mucks what a real table mucks, so a hand somebody threw away unseen
- * stays unseen here too.
+ * `shown` carries the holdings that were actually turned face up. The arena
+ * mucks what a real table mucks, so a hand somebody threw away face down stays
+ * face down here too.
  */
 export interface HandResultFrame {
   type: 'hand-result';
@@ -233,7 +229,7 @@ export interface MatchEndFrame {
   matchId: string;
   ending: 'elimination' | 'cap' | 'abandoned';
   handsPlayed: number;
-  /** Finishing position, one being first. Null when nobody was rated. */
+  /** Finishing position, one being first. Null for an abandoned match. */
   place: number | null;
   entrants: number;
   finalStack: number;
@@ -241,7 +237,7 @@ export interface MatchEndFrame {
   rating: { before: number; after: number } | null;
 }
 
-/** Something was wrong. Fatal errors are followed immediately by a close. */
+/** Something went wrong. Fatal errors are followed immediately by a close. */
 export interface ErrorFrame {
   type: 'error';
   code: CloseCode | null;
@@ -261,7 +257,7 @@ export type ServerFrame =
 /* Agent to arena                                                             */
 /* -------------------------------------------------------------------------- */
 
-/** First frame on every connection. Anything else before it closes the socket. */
+/** First frame on every connection; any other frame first closes the socket. */
 export interface HelloFrame {
   type: 'hello';
   version: number;
@@ -271,9 +267,9 @@ export interface HelloFrame {
 /**
  * Put me in the queue.
  *
- * Separate from connecting on purpose: an agent must be able to connect to a
- * live arena without being seated in a match it then plays to the end, or
- * nobody can debug against production.
+ * Separate from connecting on purpose: an agent connects to a live arena and
+ * stays unseated until it asks, which is what lets anybody debug against
+ * production.
  */
 export interface ReadyFrame {
   type: 'ready';
@@ -282,8 +278,7 @@ export interface ReadyFrame {
 /**
  * Take me out of the queue.
  *
- * Never interrupts a match: every seat plays its match to the end, so this
- * stops the next one.
+ * Every seat plays its match to the end, so this applies to the next one.
  */
 export interface StopFrame {
   type: 'stop';
@@ -292,8 +287,8 @@ export interface StopFrame {
 /**
  * Thinking out loud, as it happens.
  *
- * Optional in every sense: an agent that sends none still plays, and one that
- * sends some is under no obligation for them to relate to what it decides.
+ * Optional in every sense: an agent plays the same either way, and what
+ * it streams is free to wander from what it decides.
  * Spectators see these live.
  */
 export interface ReasoningFrame {
@@ -306,7 +301,7 @@ export interface ReasoningFrame {
 /**
  * The move.
  *
- * One per act frame; anything after the first is ignored. `to` is the total to
+ * One per act frame; the first one counts. `to` is the total to
  * have in front of you for a bet or a raise, matching the bounds in `legal`.
  */
 export interface DecisionFrame {
@@ -330,11 +325,11 @@ export type ClientFrame = HelloFrame | ReadyFrame | StopFrame | ReasoningFrame |
 /* -------------------------------------------------------------------------- */
 
 /**
- * Reads a frame off the wire without trusting any of it.
+ * Reads a frame off the wire, checking every field.
  *
- * Returns null rather than throwing, because a malformed frame is an expected
- * event on a public socket and not an exceptional one. What makes a frame
- * *legal* is decided elsewhere; this only settles whether it is a frame.
+ * Returns null for a malformed frame, because on a public socket that is an
+ * expected event. What makes a frame *legal* is decided against the hand; this
+ * settles whether it is a frame.
  */
 export function parseClientFrame(raw: string): ClientFrame | null {
   if (raw.length > MAX_FRAME_BYTES) return null;
@@ -369,8 +364,7 @@ export function parseClientFrame(raw: string): ClientFrame | null {
       const decision: DecisionFrame = {
         type: 'decision',
         id: frame.id,
-        // Not checked against the legal set here. That is the arena's job and it
-        // does it against the hand, not against a list in a shared file.
+        // Checked against the legal set by the arena, against the hand itself.
         action: frame.action as DecisionFrame['action'],
       };
       if (typeof frame.to === 'number') decision.to = frame.to;

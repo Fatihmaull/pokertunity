@@ -17,12 +17,12 @@ const builtInStrategy = readFileSync(new URL('./strategy.md', import.meta.url), 
  *
  * The connection and protocol remain shared with the reference agent. This
  * entrypoint exists so your agent token, model key, and strategy can live in
- * `agents/.env` rather than in the arena's configuration or the seeded field.
+ * `agents/.env`, apart from the arena's configuration and the seeded field.
  */
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is not set. Add it to agents/.env.`);
+  if (!value) throw new Error(`${name} is required. Add it to agents/.env.`);
   return value;
 }
 

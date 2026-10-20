@@ -32,7 +32,7 @@ export interface AgentSummary {
   connected: boolean;
   /** Whether it has asked to be queued on that socket. */
   ready: boolean;
-  /** Whether its owner lets it be seated. Asking is not enough without this. */
+  /** Whether its owner lets it be seated. The second gate, after the agent's own `ready`. */
   queueEnabled: boolean;
   lastSeenAt: string | null;
   /** Why its last connection ended, in a sentence an owner can act on. */
@@ -50,9 +50,9 @@ export interface Account {
 /**
  * Everything the connection console shows.
  *
- * Presence comes from the socket registry rather than the database, because a
- * connection is a fact about this process and writing it down would leave a
- * stale "connected" behind after any crash.
+ * Presence comes from the socket registry, because a connection is a fact
+ * about this process, and process memory forgets it the moment a crash ends
+ * the connection.
  */
 export async function account(session: Session): Promise<Account> {
   const [owner] = await db
@@ -61,7 +61,7 @@ export async function account(session: Session): Promise<Account> {
     .where(eq(users.id, session.userId))
     .limit(1);
 
-  if (!owner) throw new ActionError('That account no longer exists.');
+  if (!owner) throw new ActionError('That account is closed.');
 
   const rows = await db
     .select({
@@ -119,9 +119,8 @@ export async function account(session: Session): Promise<Account> {
 /**
  * The chain a request asked to settle on.
  *
- * Every money path resolves the key itself rather than accepting a chain object
- * from the caller, so an unknown or disabled network fails as a bad request
- * instead of reaching the chain layer.
+ * Every money path resolves the key itself from what the caller names, so an
+ * unknown or disabled network fails as a bad request, up front.
  */
 function chainFor(key: string): DeployedChain {
   try {
@@ -148,21 +147,20 @@ export async function startDeposit(session: Session, chips: number, chainKey: st
 
   const chain = chainFor(chainKey);
 
-  // Resolved before the row is written. An intent against a chain with no vault
-  // is an intent the player can never pay, so it is refused rather than stored.
+  // Resolved before the row is written. An intent is stored when the chain
+  // has a vault the player can pay.
   let vault: `0x${string}`;
   try {
     vault = vaultAddress(chain);
   } catch {
-    // Switching is only advice worth giving when there is somewhere to switch
-    // to. Before the first vault is deployed every enabled chain is in this
-    // same state, and telling a player to try the others sends them round all
-    // three to read the identical sentence.
+    // Switching is advice worth giving when another chain has a vault. Before
+    // the first vault is deployed every enabled chain is in this same state, so
+    // the message names that state directly.
     const elsewhere = enabledChains().some((entry) => entry.key !== chain.key && entry.vault);
     throw new ActionError(
       elsewhere
-        ? `Chips cannot be bought on ${chain.name} yet. Switch networks to buy in.`
-        : 'Chips cannot be bought on any network yet. No vault has been deployed.',
+        ? `The ${chain.name} cashier opens once its vault is deployed. Switch networks to buy in.`
+        : 'The cashier opens once a vault is deployed.',
     );
   }
 
@@ -191,9 +189,9 @@ export async function startDeposit(session: Session, chips: number, chainKey: st
 /**
  * What confirming a deposit came to.
  *
- * Pending is an answer rather than an error. A transaction not mined yet, or
- * mined but short of its confirmations, is a deposit on its way, and the cashier
- * keeps polling on this status instead of on the wording of a message.
+ * Pending is an answer. A transaction still being mined, or mined and short of
+ * its confirmations, is a deposit on its way, and the cashier keeps polling on
+ * this status.
  */
 export type DepositResult =
   | { status: 'credited'; chips: number; balance: number }
@@ -202,18 +200,17 @@ export type DepositResult =
 /**
  * Notes the transaction a deposit was paid with, before it has confirmed.
  *
- * Without this a player who closes the tab while waiting has no way back to
- * their money: the intent is spent on chain and the row here has nothing
- * pointing at it. Writing the hash the moment the wallet returns it makes the
- * deposit recoverable, by the player on their next visit or by an operator.
+ * This is a player's way back to their money after closing the tab mid-wait:
+ * the intent is spent on chain, and the hash here points at it. Writing the
+ * hash the moment the wallet returns it makes the deposit recoverable, by the player on their next visit or by an operator.
  */
 export async function noteDepositTx(session: Session, intentId: string, txHash: string): Promise<void> {
-  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new ActionError('That is not a transaction hash.');
-  if (!/^[0-9a-f-]{36}$/i.test(intentId)) throw new ActionError('That is not a deposit.');
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new ActionError('That transaction hash is malformed.');
+  if (!/^[0-9a-f-]{36}$/i.test(intentId)) throw new ActionError('That deposit id is malformed.');
 
   // Several intents may note one hash, because one transaction can pay several
   // of them. The uniqueness that matters is per deposit event and is enforced
-  // when the log is known, at confirmation; a noted row has no log yet.
+  // when the log is known, at confirmation; a noted row waits for its log.
   await db
     .update(depositIntents)
     .set({ txHash })
@@ -227,7 +224,7 @@ export async function noteDepositTx(session: Session, intentId: string, txHash: 
 }
 
 /**
- * Deposits this account has paid for but not yet had credited.
+ * Deposits this account has paid for and is waiting to have credited.
  *
  * The chain comes back with each one. A player who bought on one network and
  * returned on another must still be finished on the network they paid.
@@ -259,36 +256,36 @@ export async function unsettledDeposits(
  * payer is the signed-in wallet, the intent belongs to that same wallet, the
  * amount covers what the intent promised, and the transaction has enough
  * confirmations. The intent row is locked for the length of the transaction and
- * the credit only applies to a row that is still pending, so two requests
- * racing on the same hash cannot both pay out.
+ * the credit applies to a row that is still pending, so two requests racing on
+ * the same hash pay out once.
  *
  * A transaction may carry more than one deposit, from a wallet that batches
  * calls. Every one of them owed to this account is credited in the same call,
- * each against its own log, because nothing else would ever come back for the
- * rest: the cashier stops asking at the first credit, and a batch made outside
- * it was never noted anywhere.
+ * each against its own log, because this call is the one that sees them all:
+ * the cashier stops asking at the first credit, and a batch made outside it
+ * was noted nowhere.
  */
 export async function confirmDeposit(
   session: Session,
   txHash: string,
   chainKey: string,
-  // The chain read, as a parameter so the ledger half can be tested without a
-  // node. Every caller in the app takes the default.
+  // The chain read, as a parameter so the ledger half can be tested with a
+  // stand-in. Every caller in the app takes the default.
   observe: typeof observeDeposit = observeDeposit,
 ): Promise<DepositResult> {
-  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new ActionError('That is not a transaction hash.');
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new ActionError('That transaction hash is malformed.');
 
   const chain = chainFor(chainKey);
 
   const deposits = await observe(chain, txHash as `0x${string}`);
   const required = Number(REQUIRED_CONFIRMATIONS);
 
-  // Not mined yet, which is what the first ask after a wallet returns a hash
-  // nearly always finds. A deposit on its way, not a failure.
+  // Still being mined, which is what the first ask after a wallet returns a
+  // hash nearly always finds. A deposit on its way.
   if (deposits === null) return { status: 'pending', confirmations: 0, required };
 
   if (deposits.length === 0) {
-    throw new ActionError(`No deposit to the ${chain.shortName} vault was found in that transaction.`);
+    throw new ActionError(`That transaction carries zero deposits to the ${chain.shortName} vault.`);
   }
 
   if (deposits[0].confirmations < REQUIRED_CONFIRMATIONS) {
@@ -298,9 +295,9 @@ export async function confirmDeposit(
   const mine = deposits.filter((row) => row.payer.toLowerCase() === session.address.toLowerCase());
   if (mine.length === 0) throw new ActionError('That deposit was sent from a different wallet.');
 
-  // An identifier the vault accepted need not be one of ours: anyone can call
-  // deposit with a bytes32 of their own invention. One that does not decode is
-  // simply not a deposit this arena issued.
+  // An identifier the vault accepted may come from anyone: anyone can call
+  // deposit with a bytes32 of their own invention. One that decodes is a
+  // deposit this arena issued.
   const candidates = mine.flatMap((row) => {
     try {
       return [{ ...row, intentId: bytes32ToIntent(row.intentId) }];
@@ -308,7 +305,7 @@ export async function confirmDeposit(
       return [];
     }
   });
-  if (candidates.length === 0) throw new ActionError('That deposit does not match any request from this account.');
+  if (candidates.length === 0) throw new ActionError('That deposit matches zero requests from this account.');
 
   return db.transaction(async (tx) => {
     let credited = 0;
@@ -317,12 +314,10 @@ export async function confirmDeposit(
     let refusal: string | null = null;
 
     // In the order the logs appear, so two requests for the same hash take
-    // their locks in the same order and wait on each other instead of
-    // deadlocking.
+    // their locks in the same order and wait on each other in turn.
     for (const observed of candidates) {
       // Locked for the length of the transaction. A second request for the
-      // same hash waits here rather than reading a pending row that is about
-      // to be credited out from under it.
+      // same hash waits here and reads the row once the first has finished.
       const [intent] = await tx
         .select()
         .from(depositIntents)
@@ -330,28 +325,26 @@ export async function confirmDeposit(
         .limit(1)
         .for('update');
 
-      // Not an intent of this account's, or not one that exists.
+      // An intent of another account's, or an unknown one.
       if (!intent) continue;
 
       // The vault check above proves the log came from a vault of ours; this
-      // proves it came from the one the intent was issued against. Without it
-      // an intent could be paid on a cheaper chain than the one it was priced
-      // on.
+      // proves it came from the one the intent was issued against, so every
+      // intent is paid on the chain it was priced on.
       if (intent.chainId !== chain.id) {
-        // Not a matter of switching: the money is in this chain's vault and
-        // the intent was priced on another, so no network will ever show a
-        // deposit that can finish it. Saying "switch" sent players to poll a
-        // chain that has no such transaction, for good.
+        // A final answer: the money is in this chain's vault and the intent was
+        // priced on another, so the message says so plainly and the cashier
+        // stops polling.
         const priced = chainById(intent.chainId);
         throw new ActionError(
-          `That deposit was paid on ${chain.name}, but its purchase was priced on ${priced?.name ?? `chain ${intent.chainId}`}, so it cannot be credited.`,
+          `That deposit was paid on ${chain.name}, but its purchase was priced on ${priced?.name ?? `chain ${intent.chainId}`}, so it stays uncredited.`,
         );
       }
 
       // Asked again about a deposit that has already landed, which is
       // ordinary: a cashier closed mid-wait keeps polling while the reopened
-      // one polls the same hash, and whichever asks second must hear the same
-      // answer as the first rather than an error about money that arrived. The
+      // one polls the same hash, and whichever asks second hears the same
+      // answer as the first. The
       // lock above means the credit itself still happens once.
       if (intent.status === 'credited') {
         if (intent.txHash === txHash) already += intent.chips;
@@ -359,7 +352,7 @@ export async function confirmDeposit(
         continue;
       }
 
-      // One short deposit does not hold up the others the same call paid for.
+      // One short deposit leaves the others the same call paid for to carry on.
       if (observed.amountWei < BigInt(intent.expectedWei)) {
         refusal ??= 'That deposit was smaller than the purchase it was for.';
         continue;
@@ -368,9 +361,9 @@ export async function confirmDeposit(
       // Anything sent above the price still buys chips at the same peg.
       const chips = Math.max(intent.chips, weiToChips(observed.amountWei));
 
-      // The status is part of the condition, not just of the payload, so the
-      // credit cannot apply twice even if the lock above is ever lost; and the
-      // log is recorded, so one deposit event can never credit two intents.
+      // The status is part of the condition as well as the payload, so the
+      // credit applies once even if the lock above is ever lost; and the log is
+      // recorded, so one deposit event credits at most one intent.
       const settled = await tx
         .update(depositIntents)
         .set({
@@ -404,7 +397,7 @@ export async function confirmDeposit(
     }
 
     if (credited === 0 && already === 0) {
-      throw new ActionError(refusal ?? 'That deposit does not match any request from this account.');
+      throw new ActionError(refusal ?? 'That deposit matches zero requests from this account.');
     }
 
     if (balance === null) {

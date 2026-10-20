@@ -4,27 +4,27 @@ import { stopMatches } from './registry';
 
 /**
  * Brings the arena up and takes it down cleanly. Booted by `server.ts` once the
- * port is bound, and never from `instrumentation.ts`; that file says why.
+ * port is bound; `instrumentation.ts` says why this is the one boot.
  */
 
-/** How often a process that is not dealing offers to take over. */
+/** How often an idle process offers to take over. */
 const CLAIM_RETRY_MS = 15_000;
 
 let retry: NodeJS.Timeout | null = null;
 let announced = false;
 
 export function bootEngine(): void {
-  // A process that is told not to deal serves pages and nothing else. Useful
-  // for a second instance, and for running the site against a database some
-  // other process is already dealing on without the two racing for the lock.
+  // A process told to stay idle serves pages. Useful for a second instance,
+  // and for running the site against a database some other process is
+  // already dealing on, with the lock left to that process.
   if (process.env.POKERTUNITY_DISABLE_ENGINE === '1') {
-    console.log('[engine] disabled by POKERTUNITY_DISABLE_ENGINE. Serving pages only.');
+    console.log('[engine] disabled by POKERTUNITY_DISABLE_ENGINE. Serving pages.');
     return;
   }
 
-  // Not awaited. A database that is slow or briefly down should delay the room
-  // opening, not the whole server; the matchmaker keeps asking, so a late
-  // database means a late first match rather than a dead process.
+  // Left to run in the background. A database that is slow or briefly down
+  // delays the room opening while the server keeps serving; the matchmaker
+  // keeps asking, so a late database means a late first match.
   void open();
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
@@ -34,7 +34,7 @@ export function bootEngine(): void {
       stopMatchmaker();
       stopMatches();
       // Handed back explicitly so a redeploy's replacement can start dealing
-      // at once instead of waiting for this connection to be noticed as gone.
+      // at once.
       void releaseEngine();
     });
   }
@@ -42,21 +42,20 @@ export function bootEngine(): void {
 
 async function open(): Promise<void> {
   try {
-    // Another process is already dealing. This one serves pages and nothing
-    // else, which is the correct behaviour for a second web instance rather
-    // than an error: two engines would deal two of every hand.
+    // Another process is already dealing. This one serves pages, which is
+    // the correct behaviour for a second web instance: one engine deals each
+    // hand once.
     if (!(await claimEngine())) {
       if (!announced) {
-        console.log('[engine] another process is dealing. Serving pages only.');
+        console.log('[engine] another process is dealing. Serving pages.');
         announced = true;
       }
       return later();
     }
 
     // Any match still marked as being played was left mid-hand by a process
-    // that went away. Having just won the lock, this one knows nothing is
-    // running anywhere, which makes it the only place it is safe to hand those
-    // chips back.
+    // that went away. Having just won the lock, this one knows it is the one
+    // dealer anywhere, which makes it the safe place to hand those chips back.
     const abandoned = await abandonOrphanedMatches();
     if (abandoned > 0) console.log(`[engine] returned the stacks from ${abandoned} abandoned match(es)`);
 
@@ -71,11 +70,10 @@ async function open(): Promise<void> {
 /**
  * Asks again shortly.
  *
- * Claiming once would be enough on a machine that is restarted, and wrong
- * everywhere a deploy overlaps: the replacement starts while the outgoing
- * process still holds the lock, loses the race, and would then serve pages
- * forever with nobody dealing at all. Unreffed so it never holds the process
- * open on its own.
+ * A deploy overlaps: the replacement starts while the outgoing process still
+ * holds the lock and loses the race, so it keeps asking and takes over once
+ * the old process exits. Unreffed, so the server decides when the process
+ * exits.
  */
 function later(): void {
   if (retry) return;

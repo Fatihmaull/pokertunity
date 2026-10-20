@@ -6,16 +6,16 @@
 #   pnpm deploy:vault monad-testnet
 #
 # The chain is named by its key in src/lib/chains.ts, which is also where its
-# id, RPC endpoint and explorer come from, so this script has no network of its
-# own baked in. Needs TREASURY_PRIVATE_KEY and VAULT_OWNER set, and that account
+# id, RPC endpoint and explorer come from, so this script reads every network from
+# there. Needs TREASURY_PRIVATE_KEY and VAULT_OWNER set, and that account
 # funded on the chain being deployed to. Deployment is irreversible: the owner
 # address it is given can sweep the vault's float and pause deposits for the
-# life of the contract, and nothing else. Each chain gets its own vault holding
+# life of the contract; those are its two powers. Each chain gets its own vault holding
 # its own float.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-[ -f .env ] || { echo "no .env. Copy .env.example first."; exit 1; }
+[ -f .env ] || { echo ".env is missing. Copy .env.example first."; exit 1; }
 
 set -a
 # shellcheck disable=SC1091
@@ -30,13 +30,13 @@ if [ -z "$CHAIN_KEY" ]; then
   exit 1
 fi
 
-# One source of truth for what a chain is. The script reads the registry rather
-# than carrying a second copy of the id and the explorer.
+# One source of truth for what a chain is. The script reads the id and the
+# explorer from the registry.
 eval "$(pnpm exec tsx -e "
 import { chainByKey, envPrefix } from './src/lib/chains';
 const chain = chainByKey(process.argv[1]);
 if (!chain) {
-  console.log('echo \"no such chain: ' + process.argv[1] + '\"; exit 1');
+  console.log('echo \"unknown chain: ' + process.argv[1] + '\"; exit 1');
 } else {
   console.log('CHAIN_ID=' + chain.id);
   console.log('CHAIN_NAME=' + JSON.stringify(chain.name));
@@ -57,7 +57,7 @@ export "${CHAIN_PREFIX}_RPC_URL=$RPC_URL"
 
 BALANCE=$(cast balance "$VAULT_OWNER" --rpc-url "$RPC_URL")
 if [ "$BALANCE" = "0" ]; then
-  echo "$VAULT_OWNER has no $CHAIN_SYMBOL on $CHAIN_NAME. Fund it at $CHAIN_FAUCET, then run this again."
+  echo "$VAULT_OWNER holds 0 $CHAIN_SYMBOL on $CHAIN_NAME. Fund it at $CHAIN_FAUCET, then run this again."
   exit 1
 fi
 

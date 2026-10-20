@@ -1,11 +1,10 @@
 /**
  * The parts of the ERC-8004 registries this arena actually calls.
  *
- * Hand-written from the specification rather than generated, because these
- * contracts are not ours: they are per-chain singletons somebody else deployed,
- * and there is no build of theirs here to generate from. Only the functions
- * used are listed, so a change in the parts we ignore cannot silently alter
- * what we send.
+ * Hand-written from the specification, because these contracts belong to the
+ * ERC-8004 team: they are per-chain singletons they deployed, and their build
+ * lives in their repository. The listed functions are the ones used, so what we
+ * send stays exactly what this file says.
  *
  * Specification: https://github.com/erc-8004/erc-8004-contracts
  */
@@ -37,9 +36,9 @@ export const identityRegistryAbi = [
     outputs: [{ name: '', type: 'address' }],
   },
   {
-    // The plain transfer, not the safe one: the receiver is an operator's own
-    // wallet, and the safe variant would refuse any account with code on it,
-    // which is every account carrying an EIP-7702 delegation.
+    // The plain transfer: the receiver is an operator's own wallet, and the
+    // safe variant refuses any account with code on it, which is every account
+    // carrying an EIP-7702 delegation.
     type: 'function',
     name: 'transferFrom',
     stateMutability: 'nonpayable',
@@ -105,8 +104,8 @@ export const reputationRegistryAbi = [
  * the standard defines.
  *
  * Both halves are sent by this arena: it raises the request naming itself as
- * the validator, then answers it. That is not a trust problem, because the
- * request hash commits to the evidence document before the score is posted, and
+ * the validator, then answers it. Trust holds because the request hash
+ * commits to the evidence document before the score is posted, and
  * the document can be re-hashed by anyone.
  */
 export const validationRegistryAbi = [

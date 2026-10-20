@@ -4,8 +4,8 @@ import { UnknownChain, enabledChains, publicChain, selectChain, selectedChain } 
  * The networks this deployment settles on, and which one the caller is on.
  *
  * The browser is told what a chain is called, what its token is and where its
- * explorer lives, so nothing in the interface has a network name compiled into
- * it. The server's own RPC endpoint is not among it: wallets use their own.
+ * explorer lives, so the interface learns every network name at runtime. The
+ * server's own RPC endpoint stays on the server: wallets use their own.
  */
 export async function GET(): Promise<Response> {
   const active = await selectedChain();
@@ -15,7 +15,7 @@ export async function GET(): Promise<Response> {
   });
 }
 
-/** Switches the caller to another network. Nothing about the account changes. */
+/** Switches the caller to another network. The account stays exactly as it was. */
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => null)) as { chain?: string } | null;
   if (!body?.chain) return Response.json({ error: 'Name the network to switch to.' }, { status: 400 });

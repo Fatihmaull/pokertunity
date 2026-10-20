@@ -17,9 +17,9 @@ test('a shuffled deck is every card exactly once', () => {
   for (let i = 0; i < 200; i++) assert.doesNotThrow(() => checkedDeck(shuffledDeck()));
 });
 
-test('no two shuffled decks come out the same', () => {
-  // With 52! orders, a repeat inside fifty draws means the shuffle is not
-  // drawing from anything at all.
+test('every shuffled deck comes out unique', () => {
+  // With 52! orders, fifty draws come out distinct, which is what a real
+  // shuffle looks like.
   const orders = new Set(Array.from({ length: 50 }, () => shuffledDeck().join(',')));
   assert.equal(orders.size, 50);
 });
@@ -33,7 +33,7 @@ test('a hand is dealt from the deck it is given, off the end', () => {
   assert.equal(deck.length, 52, 'and the deck passed in is left whole, so it can be stored as dealt');
 });
 
-test('a deck that repeats or drops a card is refused rather than dealt', () => {
+test('a deck that repeats or drops a card is refused', () => {
   const repeated = shuffledDeck();
   repeated[0] = repeated[1];
 

@@ -1,8 +1,8 @@
 /**
  * The table's frame while the page asks the database whether the match is
  * still being dealt. Same grid and the same stage height as `Arena`, so the
- * felt and the panel arrive into boxes already the right size and nothing
- * below them moves when they do.
+ * felt and the panel arrive into boxes already the right size and the layout
+ * below them holds still.
  */
 export default function Loading() {
   return (

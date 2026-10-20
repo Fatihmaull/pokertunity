@@ -3,22 +3,21 @@ pragma solidity 0.8.28;
 
 /// @title ChipVault
 /// @notice Custodies the native token backing the off-chain chip ledger for Pokertunity.
-/// @dev One vault per chain, each holding only its own float. The chip ledger
-///      itself lives off-chain and spans them. This contract exists so that
-///      deposits are observable as events rather than as bare transfers, which
-///      removes the need to trust a client-supplied transaction hash.
+/// @dev One vault per chain, each holding its own float. The chip ledger
+///      itself lives off-chain and spans them. This contract makes every
+///      deposit an observable event, so the server credits from logs it reads
+///      itself.
 ///
-///      Chips are one-way. There is deliberately no function here that pays a
-///      player, so a chip cannot be turned back into a token by this contract
-///      under any caller, the operator included. Chips buy table time and a
-///      place on the record, and that is the whole of what they are worth.
-///      Making that a property of the deployed bytecode rather than a policy in
-///      the application is the point: a policy can be changed by a deploy.
+///      Chips are bought here. The vault's one outflow is the owner's sweep
+///      to an address the owner names, for every caller, the operator
+///      included. Chips buy table time and a place on the record, and that is
+///      the whole of what they are worth. That property lives in the deployed
+///      bytecode on purpose: an application deploy leaves it intact.
 contract ChipVault {
     /// @notice Address allowed to sweep the vault and change its settings.
     address public owner;
 
-    /// @notice Address that has been nominated but has not yet accepted ownership.
+    /// @notice Address that has been nominated and is waiting to accept ownership.
     address public pendingOwner;
 
     /// @notice When true, new deposits are rejected.
@@ -63,8 +62,8 @@ contract ChipVault {
 
     /// @notice Deposit the chain's native token against an intent issued by the operator.
     /// @param intentId Opaque identifier the operator issued to this player before the deposit.
-    /// @dev The operator must still check that `payer` matches the address the intent was issued
-    ///      to. Consuming the intent here only guarantees a single credit per identifier.
+    /// @dev The operator still checks that `payer` matches the address the intent was issued
+    ///      to. Consuming the intent here guarantees a single credit per identifier.
     function deposit(bytes32 intentId) external payable {
         if (depositsPaused) revert DepositsArePaused();
         if (msg.value < minDeposit) revert DepositTooSmall(msg.value, minDeposit);
@@ -75,9 +74,8 @@ contract ChipVault {
     }
 
     /// @notice Withdraw the vault's balance to the operator.
-    /// @dev This is the operator's own treasury function and is not a player
-    ///      withdrawal path: it can only send to an address the owner names, and
-    ///      nothing in this contract lets a player reach it.
+    /// @dev This is the operator's own treasury function: it sends to an address
+    ///      the owner names, and the owner is the one caller who can reach it.
     function sweep(address recipient, uint256 amount) external onlyOwner {
         if (recipient == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
@@ -89,7 +87,7 @@ contract ChipVault {
         if (!ok) revert TransferFailed();
     }
 
-    /// @notice Top the vault up without crediting any player.
+    /// @notice Top the vault up; the ledger credits deposits alone.
     function fund() external payable {
         if (msg.value == 0) revert ZeroAmount();
         emit Funded(msg.sender, msg.value);

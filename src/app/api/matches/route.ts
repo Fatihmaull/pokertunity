@@ -8,13 +8,10 @@ import { storedMatches } from '@/server/store';
 /**
  * The floor: every match being dealt, and a page of the ones that have ended.
  *
- * Built from the match rows rather than from this process's own runtimes. Only
- * one instance deals, so only that one has runtimes, and a floor read off them
- * would tell every other instance that the arena is empty. That is
- * indistinguishable from the arena being empty, which is the worst way for it
- * to be wrong.
+ * Built from the match rows, which every instance shares, so the floor tells
+ * the same truth everywhere.
  *
- * The dealing instance then overlays what only it can know: the pot in the
+ * The dealing instance then overlays what it alone can know: the pot in the
  * middle right now, and whose turn it is.
  */
 export async function GET(request: Request): Promise<Response> {
@@ -55,11 +52,11 @@ export async function GET(request: Request): Promise<Response> {
 
   return Response.json({
     matches,
-    // Of the ended matches. The live ones are not paged.
+    // Of the ended matches. The live ones all come on every page.
     page: floor.page,
     pages: floor.pages,
     // Which matches the viewer has an agent in, so the interface can point at
-    // them rather than making somebody find their own name in a list.
+    // them directly.
     mine: [...myMatchIds],
   });
 }

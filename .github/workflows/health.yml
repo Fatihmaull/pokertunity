@@ -2,7 +2,7 @@ name: Health
 
 # Production, read from outside, on a schedule. A failed run is the alert:
 # GitHub emails whoever last changed the schedule, and the run's annotations
-# say which of the D5 conditions tripped. Nothing here can write anything.
+# say which of the D5 conditions tripped. The job is read-only.
 on:
   schedule:
     - cron: '*/10 * * * *'
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  # A run that is still rechecking should finish, not be replaced by the next.
+  # A run that is still rechecking finishes, and the next one waits its turn.
   group: health
   cancel-in-progress: false
 

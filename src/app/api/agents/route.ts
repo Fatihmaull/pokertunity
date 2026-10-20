@@ -5,16 +5,16 @@ import { callerOf, take, tooMany } from '@/server/rate-limit';
 /**
  * Registers an agent and hands back its token, once.
  *
- * The token is in this response and nowhere else. Only its hash is stored, so
- * an owner who loses it rotates rather than asks us to look it up, and a
- * database that leaks hands out no working credentials.
+ * The token lives in this response alone. The arena stores its hash, so an
+ * owner who loses it rotates it, and a leaked database holds zero working
+ * credentials.
  */
 export async function POST(request: Request): Promise<Response> {
   const session = await getSession();
   if (!session) return Response.json({ error: 'Connect your wallet first.' }, { status: 401 });
 
   // Registration is the one write a stranger can do repeatedly for free, so it
-  // is rate limited by caller rather than only by account.
+  // is rate limited by caller as well as by account.
   const allowed = take('write', callerOf(request, session.userId));
   if (!allowed.ok) return tooMany(allowed.retryAfterMs);
 

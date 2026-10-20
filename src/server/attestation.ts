@@ -13,29 +13,28 @@ import {
 import { leaderboard } from './metrics';
 
 /**
- * Reading attestations, with nothing here that can sign one.
+ * Reading attestations. This module is read-only.
  *
  * Kept apart from the publishing code on purpose. The route that serves the
  * evidence document is reachable from the web, and the module that posts
- * attestations reads a private key: a route importing that module puts the
- * signing path one mistake away from a request handler, even though the running
- * server has no business ever using it. Publishing lives in `erc8004.ts` and
- * only `pnpm attest` imports it.
+ * attestations reads a private key, so the signing path stays far from every
+ * request handler. Publishing lives in `erc8004.ts`, and `pnpm attest` is its
+ * one importer.
  */
 /**
  * The document an attestation's hash refers to.
  *
  * Serves the attestation as published where there is one, so a reader
- * re-hashing it gets what is on chain, and the live figures where there is not.
- * A live document is explicitly marked unpublished: it is the same measurement,
- * but nothing has committed to it.
+ * re-hashing it gets what is on chain, and the live figures otherwise. A live
+ * document is explicitly marked unpublished: it is the same measurement, still
+ * waiting for a commitment.
  */
 export async function attestationFor(agentId: string): Promise<{ attestation: Attestation; published: boolean } | null> {
   const [latest] = await db
     .select({ evidence: attestations.evidence })
     .from(attestations)
-    // A row is written before its transactions are sent, so one without a
-    // reputation transaction is a record nothing on chain has committed to yet.
+    // A row is written before its transactions are sent, so one whose
+    // reputation transaction is still empty is a record waiting for the chain.
     .where(and(eq(attestations.agentId, agentId), isNotNull(attestations.reputationTx)))
     .orderBy(desc(attestations.createdAt))
     .limit(1);
@@ -64,7 +63,7 @@ export async function attestationFor(agentId: string): Promise<{ attestation: At
 /**
  * One attestation's evidence, exactly as it was hashed.
  *
- * This is what the URI on chain names, so it serves that row and nothing newer:
+ * This is what the URI on chain names, so it serves exactly that row:
  * a reader following a record posted months ago re-hashes these bytes and gets
  * the hash beside it, however far the agent's live figures have moved since.
  */
@@ -84,8 +83,8 @@ export async function attestationById(
 /**
  * The registration file every one of an agent's identities points at.
  *
- * Built from the mints actually recorded, so a chain the agent has not been
- * registered on yet is simply absent rather than listed with a guessed id.
+ * Built from the mints actually recorded, so the file lists exactly the chains
+ * the agent is registered on, each with its real id.
  */
 export async function registrationFor(agentId: string, baseUrl: string): Promise<Registration | null> {
   const [agent] = await db.select({ name: agents.name }).from(agents).where(eq(agents.id, agentId)).limit(1);
@@ -100,12 +99,12 @@ export async function registrationFor(agentId: string, baseUrl: string): Promise
 }
 
 /**
- * Where a reader outside reaches this arena, with no trailing slash.
+ * Where a reader outside reaches this arena, trailing slash trimmed.
  *
  * `PUBLIC_BASE_URL` wins because it is what `pnpm attest` wrote on chain, and a
- * registration file whose links disagree with the URI that led to it is worse
- * than none. `APP_ORIGIN` is the same domain on a deployment that only set the
- * one sign-in already requires.
+ * registration file's links have to agree with the URI that led to it.
+ * `APP_ORIGIN` is the same domain on a deployment that set the one variable
+ * sign-in already requires.
  */
 export function publicBaseUrl(): string | null {
   const configured = process.env.PUBLIC_BASE_URL?.trim() || process.env.APP_ORIGIN?.trim();
@@ -115,9 +114,8 @@ export function publicBaseUrl(): string | null {
 /**
  * Each agent's identity and newest published record, on every chain.
  *
- * Every chain rather than the caller's, so switching networks in the interface
- * is instant and cannot disagree with a poll still in flight. Two queries for
- * the whole page rather than two per agent.
+ * Every chain at once, so switching networks in the interface is instant and
+ * always agrees with a poll still in flight. Two queries for the whole page.
  */
 export async function onchainRecords(agentIds: string[]): Promise<Map<string, OnChainRecord[]>> {
   const found = new Map<string, OnChainRecord[]>();
@@ -153,8 +151,8 @@ export async function onchainRecords(agentIds: string[]): Promise<Map<string, On
   const published = new Map(latest.map((row) => [`${row.agentId}:${row.chainId}`, row]));
 
   for (const identity of identities) {
-    // A chain dropped from the registry since the mint has no explorer to link
-    // to, so it is left out rather than shown half-described.
+    // A chain dropped from the registry since the mint lacks an explorer to
+    // link to, so the list shows the chains it can describe in full.
     const chain = chainById(identity.chainId);
     if (!chain) continue;
 

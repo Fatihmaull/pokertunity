@@ -20,14 +20,14 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const result = await confirmDeposit(session, body.txHash, chainKey);
     // 202 while the chain is still catching up. The cashier keeps asking on the
-    // status code, so rewording a message can never end its wait early.
+    // status code, so its wait is independent of any message wording.
     return Response.json(result, { status: result.status === 'pending' ? 202 : 200 });
   } catch (error) {
     if (error instanceof ActionError) return Response.json({ error: error.message }, { status: 400 });
     // Anything else came from the chain layer, and a driver's error text names
     // the endpoint it was talking to and quotes the request. That belongs in
-    // the log, not in a response to whoever asked.
+    // the log.
     console.error('deposit confirmation failed', error);
-    return Response.json({ error: 'The cashier could not reach the network. Try again shortly.' }, { status: 500 });
+    return Response.json({ error: 'The network is out of reach for the cashier right now. Try again shortly.' }, { status: 500 });
   }
 }

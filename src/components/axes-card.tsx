@@ -16,7 +16,7 @@ import { Stat } from './ui';
 const AXES: Array<{
   key: keyof Axes;
   label: string;
-  /** Under the figure, so the tile says what it measures without a sentence. */
+  /** Under the figure, so the tile says what it measures in a word. */
   hint: string;
   /** The whole question, on hover. */
   asks: string;
@@ -75,11 +75,10 @@ function keep(agentId: string, axes: Axes): void {
 }
 
 export function AxesCard({ agentId }: { agentId: string }) {
-  // Read once, as the card is first drawn. It is only ever drawn in the
-  // browser, once the account has loaded, so there is no server render for a
-  // remembered answer to disagree with.
+  // Read once, as the card is first drawn. It is drawn in the browser, once
+  // the account has loaded, so the remembered answer is the first render.
   const [axes, setAxes] = useState<Axes | null>(() => recall(agentId));
-  /** Set when the measurement could not be fetched, which is not the same as there being none. */
+  /** Set when the fetch failed, which differs from an empty measurement. */
   const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
@@ -90,17 +89,14 @@ export function AxesCard({ agentId }: { agentId: string }) {
     // minute to the next, while the route is the most expensive read there is
     // and is limited to match. A console with every agent an account may run
     // asks for all of them on each load, so re-asking on every reload ran the
-    // page into its own limit by the third. A recent answer is reused instead.
+    // page into its own limit by the third. A recent answer is reused.
     if (recall(agentId)) return;
 
     // Told to wait, it waits as long as it was told and asks again, for as long
-    // as the card is on screen, rather than reporting a refusal as though the
-    // agent had not played. Giving up after a fixed number of tries lost the
-    // race whenever more cards were waiting than the limit refills in that
-    // time; asking again costs nothing, since the limit refuses before any
-    // measuring is done. The cards of one console are told the same wait, so
-    // each adds a little of its own or they all return on the same instant and
-    // are refused together again.
+    // as the card is on screen, so a refusal reads as a pause. Asking again is
+    // free, since the limit refuses before any measuring is done. The cards of
+    // one console are told the same wait, so each adds a little jitter of its
+    // own and they come back spread out.
     const load = () => {
       fetch(`/api/agents/${agentId}/axes`, { cache: 'no-store' })
         .then(async (response) => {
@@ -132,10 +128,10 @@ export function AxesCard({ agentId }: { agentId: string }) {
     };
   }, [agentId]);
 
-  // Null is not zero. It means this agent has not played enough for the
-  // measurement to say anything, and a dash beats printing a figure that would
-  // read as a finding. Nor is a measurement not yet fetched a measurement of
-  // nothing, so nothing is claimed until the answer has arrived.
+  // Null is distinct from zero. It means this agent is still short of the
+  // sample the measurement needs, and a dash says exactly that. A fetch in
+  // flight is distinct too, so the card claims a figure once the answer has
+  // arrived.
   const measured = axes === null ? 0 : AXES.filter((axis) => axes[axis.key] !== null).length;
   const status =
     axes === null
@@ -155,9 +151,8 @@ export function AxesCard({ agentId }: { agentId: string }) {
         <span className="mono text-xs text-muted tabular-nums">{status}</span>
       </div>
 
-      {/* No tiles until there is a figure to put in one. Four empty tiles
-          under a row of real ones read as the record being broken, not as the
-          profile being early. */}
+      {/* Tiles appear once there is a figure to put in one, so the profile reads
+      as early, which it is. */}
       {measured > 0 ? (
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
           {AXES.map((axis) => {
@@ -168,7 +163,7 @@ export function AxesCard({ agentId }: { agentId: string }) {
                 label={axis.label}
                 title={axis.asks}
                 hint={value === null ? 'needs more hands' : axis.hint}
-                value={value === null ? <span className="text-faint">—</span> : axis.format(value)}
+                value={value === null ? <span className="text-faint">–</span> : axis.format(value)}
               />
             );
           })}

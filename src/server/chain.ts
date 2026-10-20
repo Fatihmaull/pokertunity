@@ -14,16 +14,14 @@ import { chipVaultAbi } from './vault-abi';
 /**
  * Chain access, for whichever chain the caller names.
  *
- * Nothing here imports a network: the viem chain is built from this
- * deployment's own registry, so a chain that viem has never heard of works as
- * soon as it has a row in `src/lib/chains.ts`.
+ * The viem chain is built from this deployment's own registry, so any chain
+ * works as soon as it has a row in `src/lib/chains.ts`.
  *
- * Read-only by design: nothing in the running server signs a transaction, and
- * there is no wallet client here to do it with. The treasury key exists for
- * deploying a vault and is never loaded by the app.
+ * Read-only by design: the running server holds a public client alone. The
+ * treasury key belongs to the vault deploy script.
  */
 
-/** Confirmations required before a deposit is credited. One block is not final. */
+/** Confirmations required before a deposit is credited. Three, for finality. */
 export const REQUIRED_CONFIRMATIONS = 3n;
 
 const chainDefinitions = new Map<number, Chain>();
@@ -66,17 +64,15 @@ export interface ObservedDeposit {
 }
 
 /**
- * Reads a deposit back off the chain, or null when it has not been mined yet.
+ * Reads a deposit back off the chain, or null while it is still being mined.
  *
- * Nothing here trusts the caller beyond the transaction hash. The receipt is
- * fetched over our own RPC, the log must come from that chain's vault, and the
- * payer and amount are taken from the event rather than from anything the
- * client claimed.
+ * The caller supplies the transaction hash and the chain supplies the rest. The
+ * receipt is fetched over our own RPC, the log comes from that chain's vault,
+ * and the payer and amount are taken from the event itself.
  *
- * Not mined is the ordinary first answer, not a fault: the cashier asks the
- * moment the wallet hands back a hash, before any node holds a receipt for it.
- * Surfaced as an error, it would end the cashier's wait on its very first poll,
- * for a deposit that is on its way.
+ * Still being mined is the ordinary first answer: the cashier asks the moment
+ * the wallet hands back a hash, before any node holds a receipt for it. Null
+ * keeps the cashier waiting for a deposit that is on its way.
  */
 export async function observeDeposit(chain: DeployedChain, txHash: Hash): Promise<ObservedDeposit[] | null> {
   const client = publicClientFor(chain);
@@ -94,10 +90,8 @@ export async function observeDeposit(chain: DeployedChain, txHash: Hash): Promis
   const head = await client.getBlockNumber();
   const confirmations = head >= receipt.blockNumber ? head - receipt.blockNumber + 1n : 0n;
 
-  // Every deposit in the transaction, not the first. One call can carry several
-  // intents, and returning only one would strand the rest: their chips are in
-  // the vault, their intent is spent on chain, and nothing would ever credit
-  // them.
+  // Every deposit in the transaction. One call can carry several intents,
+  // and returning all of them credits each one whose chips are in the vault.
   const found: ObservedDeposit[] = [];
 
   for (const log of receipt.logs) {

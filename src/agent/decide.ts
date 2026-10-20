@@ -11,15 +11,15 @@ import { type AgentDecision, type DecisionOutcome, defaultAction, validateDecisi
  *
  * The arena settles three things before it asks anybody anything: what the hand
  * actually is, what it is worth, and which moves are legal. The agent chooses
- * among legal moves and explains itself. It never computes the equity that gets
- * published and it never decides what is allowed.
+ * among legal moves and explains itself. The arena computes the equity that
+ * gets published and decides what is allowed.
  *
- * Nothing here trusts the far end. An answer that is late, malformed, outside
- * the legal set, or absent because the socket died all arrive at the same
- * place: the seat checks when checking is free and folds when it is not, and
- * that is recorded as a timeout or an error rather than as a fold. An agent
- * that walked away is not the same as an agent that decided to give up, and the
- * record should not claim otherwise.
+ * Everything from the far end is checked. An answer that is late, malformed,
+ * outside the legal set, or absent because the socket died all arrive at the
+ * same place: the seat checks when checking is free and folds when it costs
+ * chips, and that is recorded as a timeout or an error. An agent that walked
+ * away and an agent that chose to fold are different events, and the record
+ * keeps them apart.
  */
 
 /** The narrow slice of a connection this needs. Anything that can answer will do. */
@@ -35,10 +35,9 @@ export interface DecideOptions {
   /**
    * The open connection to this agent, resolved on demand.
    *
-   * A function rather than a value because a socket can drop and come back
-   * inside one decision, and the connection that returns is a different object
-   * from the one that left. Holding the old one would mean a two-second network
-   * blip cost a hand.
+   * A function because a socket can drop and come back inside one decision, and
+   * the connection that returns is a different object from the one that left.
+   * Resolving it fresh means a two-second network blip costs the agent nothing.
    */
   link: () => Askable | null;
   state: HandState;
@@ -53,13 +52,13 @@ export interface DecideOptions {
    * The engine numbers the players in a hand densely from zero and renumbers
    * them as agents bust out. An agent needs a number that means the same thing
    * all match, so everything that crosses the wire is a chair and this is the
-   * only place the two are reconciled.
+   * one place the two are reconciled.
    */
   chairs: readonly number[];
   /**
    * Display name for each agent id at the table. Opponents read as the names
-   * their owners gave them; without this they arrive as bare identifiers, which
-   * tells an agent nothing and leaks internals.
+   * their owners gave them, which tells an agent who it faces and keeps internal
+   * identifiers on the server.
    */
   opponentNames?: ReadonlyMap<string, string>;
   /** How long each chair's last decision took, which is public at a real table. */
@@ -77,7 +76,7 @@ export interface DecisionRecord extends AgentDecision {
   read: HandRead;
   outcome: DecisionOutcome;
   elapsedMs: number;
-  /** Plain statement of what went wrong, or null when nothing did. */
+  /** Plain statement of what went wrong, or null when all went well. */
   failure: string | null;
 }
 
@@ -129,8 +128,8 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
     };
   }
 
-  // No socket at all means the agent is simply not here. It keeps its chips and
-  // its seat until the match ends, so it plays out as a seat that never acts.
+  // A missing socket means the agent is away. It keeps its chips and its seat
+  // until the match ends, so it plays out as a seat that checks or folds.
   if (!link()) {
     return {
       action: defaultAction(legal),
@@ -140,7 +139,7 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
       read,
       outcome: 'error',
       elapsedMs: Date.now() - started,
-      failure: 'not connected',
+      failure: 'disconnected',
     };
   }
 
@@ -178,9 +177,8 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
   };
 
   const clock = new AbortController();
-  // The clock starts here, not where this function did: the equity simulation
-  // above runs before anybody is asked anything, and charging an agent for it
-  // would be telling it that it has less time than it does.
+  // The clock starts here: the equity simulation above runs before anybody is
+  // asked anything, so the agent's clock covers its own thinking alone.
   const clockStartedAt = Date.now();
   const timer = setTimeout(() => clock.abort(), clockMs);
   const signal = options.signal ? AbortSignal.any([options.signal, clock.signal]) : clock.signal;
@@ -194,9 +192,9 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
   let reply: DecisionFrame | null = null;
   try {
     // Asked at most twice. A null answer with time still on the clock means the
-    // socket went away rather than the agent thinking too long, so it is given
-    // a moment to come back and is asked again on whatever connection returns.
-    // Beyond that the seat acts without it, because the table cannot wait.
+    // socket went away, so the agent is given a moment to come back and is asked
+    // again on whatever connection returns. After that the seat acts by the
+    // fallback rule, because the table keeps moving.
     for (let attempt = 0; attempt < 2 && !clock.signal.aborted; attempt++) {
       const open = link();
       if (!open) {
@@ -204,10 +202,9 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
         continue;
       }
 
-      // A second attempt reports the clock it actually has rather than the one
-      // the first ask began with, or an agent budgets against time that has
-      // already been spent waiting for it to reconnect. The id does not move:
-      // it is the same question, asked again because the connection did.
+      // A second attempt reports the clock it actually has, so an agent budgets
+      // against the time truly left after the reconnect. The id stays the same:
+      // it is the same question, asked again because the connection changed.
       reply = await open.ask(
         attempt === 0 ? frame : { ...frame, remainingMs: remaining(clockStartedAt, clockMs) },
         hear,
@@ -231,12 +228,12 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
       read,
       outcome: timedOut ? 'timeout' : 'error',
       elapsedMs: Date.now() - started,
-      failure: timedOut ? 'ran out of time' : 'sent no usable answer',
+      failure: timedOut ? 'ran out of time' : 'sent an unusable answer',
     };
   }
 
   // Reasoning arrives as a stream and the decision arrives as a frame, so the
-  // two are stitched here rather than expecting an agent to repeat itself.
+  // two are stitched here, so an agent says each thing once.
   const decision = validateDecision({ ...reply, reasoning }, legal);
   if (!decision) {
     return {
@@ -247,7 +244,7 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
       read,
       outcome: 'error',
       elapsedMs: Date.now() - started,
-      failure: `asked for ${reply.action}, which is not legal here`,
+      failure: `asked for ${reply.action}, outside the legal moves`,
     };
   }
 
@@ -262,13 +259,12 @@ export async function decide(options: DecideOptions): Promise<DecisionRecord> {
 }
 
 /**
- * Guards for spots where no judgement is involved: a move with no alternative,
- * or a call that cannot win on any runout.
+ * Guards for spots that take zero judgement: a forced move, or a call that
+ * loses on every runout.
  *
  * Both are rare in practice. Hold'em almost always leaves at least two options,
  * and a hand with literally zero equity against a random holding is close to
- * unreachable, so this is a correctness guard rather than a way to save round
- * trips.
+ * unreachable, so this is a correctness guard.
  */
 function forcedMove(legal: LegalActions, equity: Equity): AgentDecision | null {
   const options: Action[] = [];
@@ -294,7 +290,7 @@ function forcedMove(legal: LegalActions, equity: Equity): AgentDecision | null {
  *
  * Short enough that a genuinely absent agent barely slows the table, long
  * enough to cover the reconnect a flaky network causes. The act clock is still
- * the outer bound; this only decides how much of it is spent waiting.
+ * the outer bound; this decides how much of it is spent waiting.
  */
 const RECONNECT_GRACE_MS = 750;
 
@@ -336,7 +332,7 @@ function describeOpponents(
       status: seat.folded ? 'folded' : seat.allIn ? 'all-in' : 'in',
       lastAction: lastAction.get(seat.index) ?? null,
       // How long a seat took is public at a real table. Why it took that long
-      // is not, and never travels.
+      // stays private, on the server.
       lastActionMs: timing.get(chairOf(seat.index)) ?? null,
     }));
 }

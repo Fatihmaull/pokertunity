@@ -33,7 +33,7 @@ test('seven-deuce offsuit is the worst starting hand', () => {
 });
 
 test('ties are counted as half a pot', () => {
-  // The board plays: neither hand can improve on a royal flush.
+  // The board plays: a royal flush tops both hands.
   const { equity, tie, samples } = equityVsRandom(hole('2c 3d'), cards('As Ks Qs Js Ts'), 1, 500, mulberry32(9));
   assert.equal(tie, samples);
   assert.equal(equity, 0.5);
@@ -54,10 +54,10 @@ test('reads made hands and draws in plain terms', () => {
   assert.equal(gutshot.openEnded, false);
 
   const broadwayDraw = readHand(hole('Ac Kd'), cards('Qh Js 2c'));
-  assert.equal(broadwayDraw.gutshot, true, 'AKQJ completes only with a ten');
+  assert.equal(broadwayDraw.gutshot, true, 'AKQJ completes with a ten');
 
   const wheelDraw = readHand(hole('Ac 2d'), cards('3h 4s 9c'));
-  assert.equal(wheelDraw.gutshot, true, 'A234 completes only with a five');
+  assert.equal(wheelDraw.gutshot, true, 'A234 completes with a five');
   assert.equal(wheelDraw.openEnded, false);
 
   const lowOpenEnder = readHand(hole('2c 3d'), cards('4h 5s 9c'));

@@ -47,11 +47,11 @@ export async function loadSeats(matchId: string): Promise<SeatedAgent[]> {
 }
 
 /**
- * Marks the seats a hand is being played with, so nothing else settles one from
- * under it.
+ * Marks the seats a hand is being played with, so the hand owns them until it
+ * is stored.
  *
- * The only other writer is the code that abandons a match after a restart. That
- * is rare, and this is what makes it safe rather than merely unlikely.
+ * The other writer is the code that abandons a match after a restart. That is
+ * rare, and this is what makes it safe as well as rare.
  */
 export async function markInHand(matchId: string, seatIndexes: number[]): Promise<number[]> {
   if (seatIndexes.length === 0) return [];
@@ -77,12 +77,12 @@ export async function balanceOf(userId: string): Promise<number> {
 }
 
 /**
- * Why each connected agent is not in a match, when it is not.
+ * Why each connected agent is waiting outside a match.
  *
  * The queue query below silently drops anyone who cannot cover a seat, which is
- * correct for matchmaking and useless to the owner: their agent says it is
- * ready, the arena says nothing, and no match ever comes. This returns the same
- * facts unfiltered so the matchmaker can say so on the socket.
+ * correct for matchmaking and leaves the owner guessing: their agent says it is
+ * ready and waits. This returns the same facts unfiltered so the matchmaker can
+ * tell the agent why on the socket.
  */
 export async function seatingStatus(
   readyIds: readonly string[],
@@ -111,22 +111,21 @@ export interface Candidate {
   rating: Rating;
   /** The published figure, which is what the bands are drawn on. */
   published: number;
-  /** Matches finished. Zero means the published figure is a starting point, not a measurement. */
+  /** Matches finished. Zero means the published figure is a starting point. */
   matchesPlayed: number;
 }
 
 /**
  * Everyone waiting for a game, out of those currently connected and ready.
  *
- * Readiness is not a column: an agent is looking for a game when it
- * has a socket open and has said so on it. The caller passes in who that is,
- * because only the process holding the sockets knows, and this adds the three
- * conditions the database owns: its owner has switched matches on, it is not
- * already seated, and it is able to cover a seat.
+ * Readiness lives on the socket: an agent is looking for a game when it has a
+ * socket open and has said so on it. The caller passes in who that is, because
+ * the process holding the sockets is the one that knows, and this adds the
+ * three conditions the database owns: its owner has switched matches on, it is
+ * unseated, and it is able to cover a seat.
  *
- * How long each has waited is deliberately not answered here. A row's mtime is
- * whatever last touched it, and the only thing that knows when an agent asked
- * for a game is the socket it asked on.
+ * How long each has waited is deliberately left to the caller. The socket an
+ * agent asked on is what knows when it asked.
  */
 export async function queuedAgents(readyIds: readonly string[]): Promise<Candidate[]> {
   if (readyIds.length === 0) return [];
@@ -166,15 +165,13 @@ export async function queuedAgents(readyIds: readonly string[]): Promise<Candida
 }
 
 /**
- * The band a match was drawn from, or null when nobody in it has been rated.
+ * The band a match was drawn from, or null for a field of newcomers.
  *
  * Averaged over every entrant, unrated ones included, because that is what the
- * matchmaker actually banded on. The one thing the average cannot describe is a
- * field where nobody has played yet: that is zero by construction, and floating
- * point will not hand back a clean zero to test against, since mu minus three
- * sigma over a stored default lands a hair either side of it. Recording the
- * absence as an absence is both safer to read and the truer claim — a field
- * nobody has rated is not a field rated zero.
+ * matchmaker actually banded on. A field of newcomers averages zero by
+ * construction, and floating point hands back a hair either side of it, since
+ * mu minus three sigma over a stored default lands there. Recording it as null
+ * is both safer to read and the truer claim: a field still to be rated.
  */
 function bandOf(entrants: readonly Candidate[]): number | null {
   if (entrants.every((entrant) => entrant.matchesPlayed === 0)) return null;
@@ -185,8 +182,8 @@ function bandOf(entrants: readonly Candidate[]): number | null {
  * Opens a match and seats everyone in it, as one transaction.
  *
  * The buy-in and the fee both leave the owner's balance here, so chips are
- * never in a seat and a balance at once, and never in neither. An entrant that
- * cannot be charged is dropped rather than seated on credit; if that leaves too
+ * always in exactly one place, a seat or a balance. An entrant that cannot be
+ * charged is dropped, so every seat is paid for; if that leaves too
  * few players the whole thing rolls back and the matchmaker tries again next
  * tick with whoever is still there.
  */
@@ -216,7 +213,7 @@ export async function createMatch(
     for (const entrant of entrants) {
       // Conditional on the balance still covering it, so an agent charged for
       // another match between the queue being read and this running is simply
-      // left out rather than overdrawn.
+      // left out, and every balance stays at zero or above.
       const [debited] = await tx
         .update(users)
         .set({ chips: raw`${users.chips} - ${SEAT_COST}` })
@@ -226,8 +223,7 @@ export async function createMatch(
       if (!debited) continue;
 
       // Two entries, because they are two different things. One is chips moving
-      // onto a table and coming back; the other is the house's cut, which does
-      // not.
+      // onto a table and coming back; the other is the house's cut, which stays.
       await tx.insert(ledgerEntries).values([
         {
           userId: entrant.ownerId,
@@ -246,8 +242,8 @@ export async function createMatch(
       ]);
 
       // Densely numbered from zero. An entrant that failed the balance check
-      // above leaves no gap, because a match has no chair anybody can arrive
-      // in later: the seats it opens with are the seats it has.
+      // above leaves the numbering dense, because the seats a match opens with
+      // are the seats it has for good.
       await tx.insert(seats).values({
         matchId: match.id,
         seatIndex: seated,
@@ -263,12 +259,11 @@ export async function createMatch(
     }
 
     // The table is as big as the field that turned up. The field is fixed for
-    // the whole match, so a chair nobody is sitting in is not an open seat, it
-    // is a drawing of one, and every screen counting seats would report a table
-    // waiting for players that will never come.
+    // the whole match, so every chair has someone in it and every screen counts
+    // the seats truthfully.
     await tx.update(matches).set({ seatCount: seated }).where(eq(matches.id, match.id));
 
-    // The row's own figures, not the module's. A match describes itself for its
+    // The row's own figures. A match describes itself for its
     // whole life, so one dealt under different settings still plays by the ones
     // it was opened with.
     return {
@@ -284,9 +279,9 @@ export async function createMatch(
       },
     };
   }).catch((error: unknown) => {
-    // `rollback` throws rather than returning, so a match that could not seat
-    // two arrives here. Letting it travel would fail the matchmaker's whole
-    // tick and leave every other group it had formed unopened.
+    // `rollback` throws, so a match that could not seat two arrives here.
+    // Catching it keeps the matchmaker's tick going for every other group it
+    // had formed.
     if (error instanceof TransactionRollbackError) return null;
     throw error;
   });
@@ -307,9 +302,9 @@ export interface Finish {
 
 /** What closing a match came to. */
 export interface Settlement {
-  /** Everyone who held a seat, rated or not, and the stack each was paid back. */
+  /** Everyone who held a seat, rated and unrated, and the stack each was paid back. */
   entrants: Array<{ agentId: string; finalStack: number }>;
-  /** Places and ratings. Empty when the match rates nobody. */
+  /** Places and ratings. Empty for an abandoned match. */
   finishes: Finish[];
 }
 
@@ -317,9 +312,9 @@ export interface Settlement {
  * Closes a match: returns every stack, works out the finishing order, and
  * updates everybody's rating from it.
  *
- * An abandoned match returns the chips and rates nobody. Nothing about a match
- * the server walked out of says anything about how well anyone played. Its
- * entrants are still named, because each of them is owed being told it ended.
+ * An abandoned match returns the chips and leaves ratings as they were: a match
+ * the server walked out of measures the server. Its entrants are still named,
+ * because each of them is owed being told it ended.
  */
 export async function settleMatch(matchId: string, ending: MatchEnding, handsPlayed: number): Promise<Settlement> {
   return db.transaction(async (tx): Promise<Settlement> => {
@@ -340,8 +335,8 @@ export async function settleMatch(matchId: string, ending: MatchEnding, handsPla
       .for('update', { of: seats });
 
     for (const row of rows) {
-      // A stack of nothing is nothing to return. Everything else goes back to
-      // the owner it was taken from, whatever place the agent finished in.
+      // Every stack above zero goes back to the owner it was taken from,
+      // whatever place the agent finished in.
       if (row.stack <= 0) continue;
 
       const [updated] = await tx
@@ -365,9 +360,9 @@ export async function settleMatch(matchId: string, ending: MatchEnding, handsPla
       .set({ status: ending, handsPlayed, endedAt: new Date() })
       .where(eq(matches.id, matchId));
 
-    // An abandoned match rates nobody: it says nothing about how anyone played.
-    // Neither does a match that somehow ended with one entrant, since a place
-    // needs somebody to be placed above.
+    // Ratings move after a match that ran to its end with two or more
+    // entrants: an abandoned match measures the server, and a place needs
+    // somebody to be placed above.
     const entrants = rows.map((row) => ({ agentId: row.agentId, finalStack: row.stack }));
     if (ending === 'abandoned' || rows.length < 2) return { entrants, finishes: [] };
 
@@ -449,7 +444,7 @@ function placeOf(
   return better.length + 1;
 }
 
-/** Matches this process was dealing before it went away. Returned, never rated. */
+/** Matches a dead process was dealing. Stacks returned, ratings left as they were. */
 export async function liveMatchIds(): Promise<string[]> {
   const rows = await db.select({ id: matches.id }).from(matches).where(eq(matches.status, 'playing'));
   return rows.map((row) => row.id);
@@ -458,11 +453,10 @@ export async function liveMatchIds(): Promise<string[]> {
 /**
  * How many hands a match actually got through, counted from the hands.
  *
- * The runtime keeps its own tally, but a process recovering somebody else's
- * abandoned match has no runtime to ask and would otherwise record a zero over
- * hands that were dealt, stored and are sitting in the table right now. Nothing
- * about money or rating reads this, which is exactly why it is worth getting
- * right: a number nobody checks is the one that quietly stays wrong.
+ * The runtime keeps its own tally, and a process recovering somebody else's
+ * abandoned match reads the stored hands, which are the truth. Money and
+ * rating both ignore this figure, which is exactly why it is worth getting
+ * right: an unchecked number is the one that quietly drifts.
  */
 export async function handsDealt(matchId: string): Promise<number> {
   const [row] = await db
@@ -482,8 +476,8 @@ export interface RecordedDecision {
   street: string;
   /**
    * What the action came to, read off this decision's own event: the level
-   * reached for a bet or a raise, the chips put in for a call. Searching the
-   * hand for it afterwards found the seat's last call rather than this one.
+   * reached for a bet or a raise, the chips put in for a call. Reading it off
+   * this decision's own event is what ties it to this decision.
    */
   amount: number;
 }
@@ -506,11 +500,10 @@ export interface PersistedHand {
  * Stores a finished hand and everything it changed, as one transaction.
  *
  * The hand, its decisions, the results and counters, the stacks it left, the
- * seats it knocked out and the release of the seats land together or not at
- * all. Written separately, a failure between them would leave results and
- * counters describing a hand whose stacks never moved: numbers published about
- * chips that stayed where they were, and a table that dealt on from the old
- * stacks.
+ * seats it knocked out and the release of the seats land together, all at
+ * once. One transaction keeps the results, the counters and the stacks
+ * describing the same hand, and the next hand deals from the stacks this one
+ * left.
  */
 export async function recordHand(hand: PersistedHand): Promise<void> {
   await db.transaction(async (tx) => {
@@ -600,7 +593,7 @@ export async function recordHand(hand: PersistedHand): Promise<void> {
 
       await tx.update(seats).set({ stack }).where(chair);
 
-      // A stack too short to post a big blind cannot play another hand. The
+      // A stack short of the big blind is out of the match. The
       // hand number fixes finishing order among everyone who went out, and the
       // stack is deliberately left alone: those chips are still the owner's and
       // go back at settlement like anyone else's.
@@ -612,7 +605,7 @@ export async function recordHand(hand: PersistedHand): Promise<void> {
       }
     }
 
-    // The chips are on record, so no seat belongs to a hand any more.
+    // The chips are on record, so every seat is released from the hand.
     await tx.update(seats).set({ inHand: false }).where(eq(seats.matchId, hand.matchId));
 
     await tx
@@ -676,7 +669,7 @@ export async function ratingsOf(agentIds: string[]): Promise<Map<string, Rating>
   return new Map(rows.map((row) => [row.id, { mu: row.mu, sigma: row.sigma }]));
 }
 
-/** A match as it can be described without the process that is dealing it. */
+/** A match as any instance can describe it, from the database. */
 export interface StoredMatch {
   matchId: string;
   number: number;
@@ -697,21 +690,18 @@ export const HISTORY_PAGE = 20;
 
 /**
  * Every match being dealt and one page of the ones that have ended, read from
- * the database rather than from process memory.
+ * the database.
  *
- * Only one instance deals, so only that one has runtimes to describe. A lobby
- * read off them would tell every other instance that the room is empty, which
- * is indistinguishable from the room being empty and is the worst way for it to
- * be wrong.
+ * One instance deals, and every instance serves the lobby, so the lobby reads
+ * the database that all of them share and tells the same truth everywhere.
  *
- * The live matches come with every page. There are few of them, and one that
- * was paged out behind the matches that ended around it would read as nothing
- * being dealt.
+ * The live matches come with every page. There are few of them, and keeping
+ * them on every page keeps the floor visibly live.
  */
 export async function storedMatches(page = 1): Promise<{ matches: StoredMatch[]; page: number; pages: number }> {
-  // Abandoned matches belong here too. Without them, a match somebody had chips
-  // in would vanish from the floor the moment the process dealing it went away,
-  // and the entrant would be left looking at a lobby that had never heard of it.
+  // Abandoned matches belong here too, so a match somebody had chips in stays
+  // on the floor after the process dealing it went away, and the entrant can
+  // find it.
   const ended = inArray(matches.status, ['elimination', 'cap', 'abandoned']);
 
   const [{ total }] = await db.select({ total: count() }).from(matches).where(ended);
@@ -748,7 +738,7 @@ export async function storedMatches(page = 1): Promise<{ matches: StoredMatch[];
   };
 }
 
-/** What a match is called, for its page's title. Null for an id that names no match. */
+/** What a match is called, for its page's title. Null for an unknown id. */
 export async function matchNumber(matchId: string): Promise<number | null> {
   const [row] = await db.select({ number: matches.number }).from(matches).where(eq(matches.id, matchId)).limit(1);
   return row?.number ?? null;
@@ -758,11 +748,11 @@ export interface MatchEntrant {
   agentId: string;
   name: string;
   color: string;
-  /** Null for an abandoned match, which produces no finishing order. */
+  /** Null for an abandoned match, which ends unplaced. */
   place: number | null;
   finalStack: number | null;
   bustedAtHand: number | null;
-  /** Published rating before and after, or null when nobody was rated. */
+  /** Published rating before and after, or null for an abandoned match. */
   ratingBefore: number | null;
   ratingAfter: number | null;
   /** Chips won and lost across the hands actually played. */
@@ -786,9 +776,9 @@ export interface MatchSummary {
   /** The viewer's own agent among the entrants, if it had a seat here. */
   mine: string | null;
   /**
-   * What the viewer's own account got back, if it had a seat here. Zero rather
-   * than null for an agent that went out with nothing: no ledger row is written
-   * for a stack of nothing, but the owner is still owed being told so.
+   * What the viewer's own account got back, if it had a seat here. Zero for an
+   * agent that went out empty: the ledger skips a zero stack, and the owner is
+   * still owed being told.
    */
   cashOut: number | null;
 }
@@ -801,17 +791,17 @@ export interface MatchSummary {
  *
  * Two shapes come back, because two things can have happened. A match that ran
  * to an elimination or to the cap has a finishing order in `matchResults`. One
- * the server walked out of has none and never will — it rates nobody — so its
- * entrants are recovered from the hands that were played, and the summary says
- * plainly that there is no result rather than inventing a placing.
+ * the server walked out of ends unplaced and leaves ratings as they were, so
+ * its entrants are recovered from the hands that were played, and the
+ * summary says plainly that the match ended unplaced.
  */
 export async function matchSummary(matchId: string, viewerUserId: string | null): Promise<MatchSummary | null> {
   const [row] = await db.select().from(matches).where(eq(matches.id, matchId)).limit(1);
   if (!row) return null;
 
   // Chips won and lost per agent, which exists for every match that dealt a
-  // hand, abandoned or not. It is the only per-agent figure an abandoned match
-  // leaves behind, since its seats are deleted and it writes no result rows.
+  // hand, abandoned ones included. It is the one per-agent figure an abandoned match
+  // leaves behind, since its seats are deleted and it writes zero result rows.
   const nets = await db
     .select({ agentId: results.agentId, net: raw<number>`sum(${results.net})::int`, name: agents.name, color: agents.color })
     .from(results)
@@ -867,8 +857,7 @@ export async function matchSummary(matchId: string, viewerUserId: string | null)
         .sort((a, b) => b.net - a.net);
 
   // Written by `settleMatch` in the same transaction that returned the chips,
-  // so this is the record of what actually landed rather than a recomputation
-  // of what should have.
+  // so this is the record of what actually landed.
   let cashOut: number | null = null;
   let mine: string | null = null;
   if (viewerUserId) {
@@ -884,7 +873,7 @@ export async function matchSummary(matchId: string, viewerUserId: string | null)
       )
       .limit(1);
 
-    // One owner holds at most one seat in a match, so this is one agent or none.
+    // One owner holds at most one seat in a match, so this is one agent at most.
     const owned = new Set(
       (await db.select({ id: agents.id }).from(agents).where(eq(agents.userId, viewerUserId))).map((row) => row.id),
     );

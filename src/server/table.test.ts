@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-// Must come before anything that reaches the database module. Nothing here
-// runs a query, but that module refuses to load without a connection string.
+// Must come before anything that reaches the database module. Every test here
+// runs in memory, and that module needs a connection string to load.
 import '../dev/test-env';
 import { cardName } from '../poker/cards';
 import { applyAction, startHand } from '../poker/engine';
@@ -36,7 +36,7 @@ function sparseTable() {
   return { runtime, state: internals.state as ReturnType<typeof startHand> };
 }
 
-test('a viewer sees its own cards and nobody else’s when chairs are sparse', () => {
+test('a viewer sees exactly its own cards when chairs are sparse', () => {
   const { runtime, state } = sparseTable();
   const seats = runtime.view('alice').seats;
 
@@ -44,7 +44,7 @@ test('a viewer sees its own cards and nobody else’s when chairs are sparse', (
   const bob = seats.find((seat) => seat.agentId === 'bob')!;
 
   assert.equal(alice.index, 1, 'Alice is drawn in the chair she is sitting in');
-  assert.deepEqual(alice.hole, state.seats[0].hole!.map(cardName), 'her own cards, not the next seat along');
+  assert.deepEqual(alice.hole, state.seats[0].hole!.map(cardName), 'her own cards, from her own chair');
   assert.equal(bob.hole, null, 'an opponent’s cards stay hidden');
 });
 
@@ -54,10 +54,10 @@ test('a sparse table reports each chair the stack it is actually playing', () =>
 
   assert.equal(seats[1].stack, state.seats[0].stack, 'chair 1 holds the first engine seat');
   assert.equal(seats[2].stack, state.seats[1].stack, 'chair 2 holds the second');
-  assert.notEqual(seats[1].stack, seats[2].stack, 'the blinds are not the same size');
+  assert.notEqual(seats[1].stack, seats[2].stack, 'the blinds differ in size');
 });
 
-test('the dealer button lands on one chair and only one', () => {
+test('the dealer button lands on exactly one chair', () => {
   const { runtime } = sparseTable();
   const dealers = runtime.view(null).seats.filter((seat) => seat.isDealer);
 
@@ -72,7 +72,7 @@ test('two agents wearing one colour are told apart at the table', () => {
   const runtime = new MatchRuntime('m-1', 1, config, () => {});
   const internals = runtime as unknown as Record<string, unknown>;
 
-  // Past the tenth account, colours are reused. Six of them cannot share a felt.
+  // Past the tenth account, colours are reused. Six of them each need their own at one felt.
   internals.seated = [
     { seatIndex: 0, agentId: 'a', name: 'A', color: 'red', stack: 1, bustedAtHand: null },
     { seatIndex: 1, agentId: 'b', name: 'B', color: 'red', stack: 1, bustedAtHand: null },
@@ -80,10 +80,10 @@ test('two agents wearing one colour are told apart at the table', () => {
   internals.palette = tablePalette(internals.seated as SeatedAgent[]);
 
   const colors = runtime.view(null).seats.filter((seat) => seat.agentId).map((seat) => seat.color);
-  assert.equal(new Set(colors).size, colors.length, 'no two seated agents draw in the same colour');
+  assert.equal(new Set(colors).size, colors.length, 'every seated agent draws in its own colour');
 });
 
-test('a seat with no chips is not dealt into the next hand', () => {
+test('a seat with zero chips sits out the next hand', () => {
   const { runtime } = sparseTable();
   const internals = runtime as unknown as Record<string, unknown>;
 
@@ -95,13 +95,13 @@ test('a seat with no chips is not dealt into the next hand', () => {
   assert.deepEqual(
     alive.map((seat) => seat.agentId),
     ['bob'],
-    'an eliminated agent stays on the record but is never dealt to again',
+    'an eliminated agent stays on the record and sits out every later hand',
   );
 });
 
-test('a stack too short to post a big blind is out, whether or not it is marked', () => {
+test('a stack short of the big blind is out, marked or unmarked', () => {
   // The marker is written after the hand that broke the seat. Between the two,
-  // the stack itself is what says the agent cannot play, so both are checked.
+  // the stack itself is what says the agent is out, so both are checked.
   const { runtime } = sparseTable();
   const internals = runtime as unknown as Record<string, unknown>;
 
@@ -140,7 +140,7 @@ test('a decision in a live hand reaches every viewer sealed, its own owner inclu
     assert.equal(brain.reasoning, '');
     assert.equal(brain.equity, null);
     assert.equal(brain.handRead, null);
-    assert.equal(brain.action, 'raise', 'what it did is public, only why is not');
+    assert.equal(brain.action, 'raise', 'what it did is public, and why stays sealed');
     assert.equal(brain.elapsedMs, 2100, 'and so is how long it took');
   }
 });
@@ -157,7 +157,7 @@ test('a decision opens once its cards have been turned over', () => {
   assert.match(brain.reasoning, /nut flush/);
 });
 
-test('each decision is stored with what it came to, not with the seat’s last action of that kind', () => {
+test('each decision is stored with what it came to, read off its own event', () => {
   // A seat that calls twice in one hand made two different calls. Reading the
   // amount back out of the finished hand found the later one for both.
   let state = startHand({
@@ -183,11 +183,11 @@ test('each decision is stored with what it came to, not with the seat’s last a
 
   cursor = state.events.length;
   state = applyAction(state, { type: 'call' });
-  assert.equal(amountOf(state, cursor), 40, 'and this call is its own, not the one before it');
+  assert.equal(amountOf(state, cursor), 40, 'and this call carries its own amount');
 
   cursor = state.events.length;
   state = applyAction(state, { type: 'check' });
-  assert.equal(amountOf(state, cursor), 0, 'a check puts nothing in');
+  assert.equal(amountOf(state, cursor), 0, 'a check puts zero in');
 });
 
 function thinking(): BrainView {
@@ -209,8 +209,8 @@ function thinking(): BrainView {
 }
 
 test('the hand log names a bet or raise by the level it reaches, and a call by what it cost', () => {
-  // A small blind shoving 2,000 puts in 1,990. Logged as "raises 1990" it
-  // read as a raise of 1,990 on top of something, which is not what happened.
+  // A small blind shoving 2,000 puts in 1,990. Logged by level, it reads as
+  // what happened: a raise to 2,000.
   assert.equal(describeAction('Alpha', 'raise', 1_990, 2_000), 'Alpha raises to 2000.');
   assert.equal(describeAction('Alpha', 'bet', 60, 60), 'Alpha bets 60.');
   assert.equal(describeAction('Alpha', 'call', 40, 60), 'Alpha calls 40.');

@@ -12,7 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Postgres data, Foundry artefacts, and generated SQL are not source.
+    // Postgres data, Foundry artefacts, and generated SQL are generated output.
     ".data/**",
     "contracts/**",
     "drizzle/**",

@@ -11,9 +11,9 @@ function match(places: number[], ratings?: Rating[]): Array<Placing<number>> {
   );
 }
 
-test('an agent nobody has seen publishes nothing', () => {
-  // Not 25. We have no evidence about it at all, and the published number is
-  // the pessimistic end of what we know.
+test('a newcomer publishes zero', () => {
+// Zero, because the evidence is still to come, and the published number is
+// the pessimistic end of what we know.
   assert.equal(conservative(DEFAULT_RATING), 0);
 });
 
@@ -28,7 +28,7 @@ test('finishing order is the order of the ratings that come out', () => {
   assert.ok(mus[5] < DEFAULT_RATING.mu, 'last place lost');
 });
 
-test('one match moves an estimate without pretending to settle it', () => {
+test('one match moves an estimate and leaves it open', () => {
   const [winner] = match([1, 2, 3, 4, 5, 6]);
 
   // The guard against the version of this that summed every comparison
@@ -86,12 +86,12 @@ test('a tie pulls two estimates toward each other', () => {
     { entrant: 'behind', rating: behind, place: 1 },
   ]);
 
-  assert.ok(a.rating.mu < ahead.mu, 'the favourite drops for only drawing');
+  assert.ok(a.rating.mu < ahead.mu, 'the favourite drops for a draw');
   assert.ok(b.rating.mu > behind.mu, 'the underdog gains for holding on');
-  assert.ok(a.rating.mu > b.rating.mu, 'but one draw does not make them equal');
+  assert.ok(a.rating.mu > b.rating.mu, 'and one draw keeps them apart');
 });
 
-test('doubt shrinks with play and never reaches zero', () => {
+test('doubt shrinks with play toward a floor above zero', () => {
   let ratings = Array.from({ length: 6 }, fresh);
 
   for (let round = 0; round < 400; round++) {
@@ -105,13 +105,13 @@ test('doubt shrinks with play and never reaches zero', () => {
   // Drift keeps a floor under it on purpose: an owner can rewrite an agent
   // between matches, and a rating that had collapsed to certainty would take
   // far too long to notice.
-  assert.ok(ratings[0].sigma > 0.5, 'and it settles above the floor rather than on it');
+  assert.ok(ratings[0].sigma > 0.5, 'and it settles just above the floor');
 });
 
 test('a better agent separates from the field over a season of matches', () => {
-  // Deterministic rather than random, so this test cannot flake. The hero
+  // Deterministic, so this test is stable. The hero
   // cycles through a genuinely better set of finishes, and the places left over
-  // rotate through the field so no seat gets a standing head start.
+  // rotate through the field so every seat starts level.
   const HERO_FINISHES = [1, 1, 2, 3, 3];
   let hero = fresh();
   let field = Array.from({ length: 5 }, fresh);
@@ -133,7 +133,7 @@ test('a better agent separates from the field over a season of matches', () => {
   assert.ok(hero.sigma < 3, `and we are reasonably sure of it: sigma ${hero.sigma.toFixed(2)}`);
 });
 
-test('a mismatch far outside the model does not produce nonsense', () => {
+test('a mismatch far outside the model still produces sane numbers', () => {
   // The tail is where the truncated-normal ratio underflows. A NaN here would
   // spread to every agent in the match and then to the leaderboard.
   const after = updateRatings([
@@ -149,7 +149,7 @@ test('a mismatch far outside the model does not produce nonsense', () => {
   assert.ok(after[0].rating.mu > -200, 'the enormous upset moved the winner up');
 });
 
-test('a match nobody else turned up to changes nothing', () => {
+test('a match with a single entrant leaves the rating as it was', () => {
   const alone = updateRatings([{ entrant: 'solo', rating: fresh(), place: 1 }]);
 
   assert.deepEqual(alone[0].rating, DEFAULT_RATING);

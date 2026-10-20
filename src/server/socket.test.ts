@@ -1,7 +1,7 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-// Must come before anything that reaches the database module. Nothing here runs
-// a query, but that module refuses to load without a connection string.
+// Must come before anything that reaches the database module. Every test here
+// runs in memory, and that module needs a connection string to load.
 import '../dev/test-env';
 import type { WebSocket } from 'ws';
 import {
@@ -15,12 +15,12 @@ import { QUEUE_OFF_REASON, attach, connectionsFor, detach, linkFor } from './pre
 import { SocketLink, greet } from './socket';
 
 /**
- * A socket that records rather than transmits.
+ * A socket that records what it would transmit.
  *
- * The paths worth testing here are the ones a well-behaved agent never reaches:
- * a reply to a hand that has moved on, a flood, an agent that streams forever.
- * None of them can be produced on demand from a real agent, and all of them are
- * what will actually happen once the arena is public.
+ * The paths worth testing here are the ones a well-behaved agent avoids: a reply
+ * to a hand that has moved on, a flood, an agent that streams forever. A
+ * scripted socket produces them on demand, and all of them are what will
+ * actually happen once the arena is public.
  */
 class FakeSocket {
   readonly OPEN = 1;
@@ -94,7 +94,7 @@ function linked(): { ws: FakeSocket; link: SocketLink } {
   const ws = new FakeSocket();
   const link = new SocketLink(ws as unknown as WebSocket, 'agent-1', 'owner-1');
   // The registry is global, so a test that attaches has to leave it as it found
-  // it or the next test inherits a connection it never made.
+  // it, so each test starts with a clean registry.
   after(() => detach(link));
   return { ws, link };
 }
@@ -120,10 +120,10 @@ const ACT: ActFrame = {
   remainingMs: 30_000,
 };
 
-test('connecting is not the same as asking for a game', () => {
+test('connecting and asking for a game are separate steps', () => {
   const { ws, link } = linked();
 
-  assert.equal(link.ready, false, 'an agent debugging against a live arena is not entered into a tournament');
+  assert.equal(link.ready, false, 'an agent debugging against a live arena stays unseated');
 
   ws.receive({ type: 'ready' });
   assert.equal(link.ready, true);
@@ -139,7 +139,7 @@ test('asking for a game is refused while its owner has matches switched off', ()
   ws.receive({ type: 'ready' });
   assert.equal(link.ready, true, 'it has still asked, which is what the queue reads once the switch is on');
   const [told] = ws.frames().filter((frame) => frame.type === 'queued');
-  assert.equal(told.queued, false, 'an agent told it is queued would wait for a game that is never coming');
+  assert.equal(told.queued, false, 'the agent hears it is waiting, and why');
   assert.equal(told.reason, QUEUE_OFF_REASON);
 
   // The matchmaker reads the switch on its next tick and says so once.
@@ -151,7 +151,7 @@ test('asking for a game is refused while its owner has matches switched off', ()
   );
 });
 
-test('the queue status is sent when it changes, not every time it is asked', () => {
+test('the queue status is sent when it changes', () => {
   const { ws, link } = linked();
 
   ws.receive({ type: 'ready' });
@@ -169,19 +169,18 @@ test('the queue status is sent when it changes, not every time it is asked', () 
 });
 
 test('how long an agent has waited is measured from when it asked', () => {
-  // The matchmaker widens its rating band by this, so it has to mean waiting
-  // rather than last touched. An agent returning after a day away would
-  // otherwise arrive with a band wide enough to swallow the whole field.
+  // The matchmaker widens its rating band by this, so it means exactly
+  // waiting. An agent returning after a day away starts with a narrow band.
   const { ws, link } = linked();
 
-  assert.equal(link.readySince, null, 'a connection that has not asked is not waiting');
+  assert.equal(link.readySince, null, 'a connection that is yet to ask is idle');
 
   ws.receive({ type: 'ready' });
   const asked = link.readySince;
   assert.ok(asked !== null);
 
   ws.receive({ type: 'ready' });
-  assert.equal(link.readySince, asked, 'saying it twice does not send it to the back of its own queue');
+  assert.equal(link.readySince, asked, 'saying it twice keeps its place in the queue');
 
   ws.receive({ type: 'stop' });
   assert.equal(link.readySince, null);
@@ -196,10 +195,10 @@ test('a decision for the hand in flight is the one that counts', async () => {
   assert.deepEqual(await answer, { type: 'decision', id: ACT.id, action: 'call' });
 });
 
-test('a decision carrying the wrong id is ignored, not applied', async () => {
+test('a decision carrying the wrong id is ignored', async () => {
   // The case this exists for: an agent times out on hand four, the arena moves
-  // on, and its answer lands during hand five. Without the correlation check it
-  // would be a legal-looking move made from a position that no longer exists.
+  // on, and its answer lands during hand five. The correlation check keeps a
+  // legal-looking move from a finished position out of the live hand.
   const { ws, link } = linked();
   const clock = new AbortController();
 
@@ -207,10 +206,10 @@ test('a decision carrying the wrong id is ignored, not applied', async () => {
   ws.receive({ type: 'decision', id: 'some:other:hand', action: 'raise', to: 1800 });
 
   clock.abort();
-  assert.equal(await answer, null, 'the stale answer settled nothing');
+  assert.equal(await answer, null, 'the stale answer is ignored');
 });
 
-test('reasoning reaches the panel only while its own hand is live', async () => {
+test('reasoning reaches the panel while its own hand is live', async () => {
   const { ws, link } = linked();
   const seen: string[] = [];
   const clock = new AbortController();
@@ -225,7 +224,7 @@ test('reasoning reaches the panel only while its own hand is live', async () => 
   clock.abort();
 });
 
-test('an agent that streams forever loses the connection, not the arena', async () => {
+test('an agent that streams forever loses its connection, and the arena plays on', async () => {
   const { ws, link } = linked();
   const clock = new AbortController();
 
@@ -236,10 +235,10 @@ test('an agent that streams forever loses the connection, not the arena', async 
 
   assert.equal(ws.closedWith?.code, CLOSE.FLOODING);
   assert.match(ws.closedWith!.reason, new RegExp(String(MAX_REASONING_BYTES)));
-  assert.equal(await answer, null, 'the hand settles as nothing rather than stalling');
+  assert.equal(await answer, null, 'the hand settles as null and moves on');
 });
 
-test('a frame flood is closed with a reason rather than dropped silently', () => {
+test('a frame flood is closed with a stated reason', () => {
   const { ws } = linked();
 
   for (let i = 0; i < MAX_FRAMES_PER_SECOND + 5; i++) ws.receive({ type: 'ping' });
@@ -249,7 +248,7 @@ test('a frame flood is closed with a reason rather than dropped silently', () =>
   assert.match(ws.closedWith!.reason, /a second/);
 });
 
-test('a frame that is not a frame closes the connection', () => {
+test('a malformed frame closes the connection', () => {
   const { ws } = linked();
 
   ws.emit('message', Buffer.from('not json at all'));
@@ -257,7 +256,7 @@ test('a frame that is not a frame closes the connection', () => {
   assert.equal(ws.closedWith?.code, CLOSE.MALFORMED);
 });
 
-test('a socket that vanishes mid-hand settles the hand rather than hanging it', async () => {
+test('a socket that vanishes mid-hand settles the hand', async () => {
   const { ws, link } = linked();
 
   const answer = link.ask(ACT, () => {}, new AbortController().signal);
@@ -279,11 +278,10 @@ test('asking again abandons whatever the last question was waiting for', async (
   assert.equal(await second, null);
 });
 
-test('frames that arrived during the handshake are not lost', () => {
-  // A client that pipelines hello and ready does not wait for the welcome, and
-  // authenticating is a database round trip. Without somewhere to put what
-  // arrives in that window, such an agent is welcomed, never queued, and never
-  // told why.
+test('frames that arrived during the handshake are kept', () => {
+// A client that pipelines hello and ready sends both before the welcome, and
+// authenticating is a database round trip. Holding what arrives in that
+// window gets such an agent welcomed and queued, in order.
   const { link } = linked();
 
   assert.equal(link.ready, false);
@@ -291,16 +289,16 @@ test('frames that arrived during the handshake are not lost', () => {
   assert.equal(link.ready, true);
 });
 
-test('a replaced connection does not stamp its goodbye over the live one', () => {
+test('a replaced connection leaves the live one’s status alone', () => {
   const first = linked();
   const second = linked();
 
   attach(first.link);
   attach(second.link);
 
-  // The older socket closes after the newer one has taken its place. What an
-  // owner must not then read is "disconnected" about an agent that is sitting
-  // at a table right now.
+  // The older socket closes after the newer one has taken its place. The
+  // owner keeps reading "connected" about an agent sitting at a table right
+  // now.
   first.ws.close(CLOSE.REPLACED, 'connected again from somewhere else');
 
   assert.equal(linkFor('agent-1'), second.link, 'the newer connection survives');
@@ -309,10 +307,10 @@ test('a replaced connection does not stamp its goodbye over the live one', () =>
   assert.equal(linkFor('agent-1'), undefined);
 });
 
-test('an agent reconnecting is not counted against its own account', () => {
-  // The cap counts the sockets an account holds. An agent whose last socket has
-  // not been noticed as gone yet is replacing that socket, not adding one, and
-  // refusing it is refusing the owner's own agent at the moment it needs back in.
+test('an agent reconnecting is left out of its own account’s count', () => {
+// The cap counts the sockets an account holds. An agent whose last socket is
+// still on record is replacing that socket, so it gets back in at the moment
+// it needs to.
   const ws = new FakeSocket();
   const link = new SocketLink(ws as unknown as WebSocket, 'agent-cap', 'owner-cap');
   attach(link);
@@ -323,7 +321,7 @@ test('an agent reconnecting is not counted against its own account', () => {
   assert.equal(connectionsFor('owner-cap', 'agent-other'), 1, 'a different agent is one more connection');
 });
 
-test('a client that hangs up while its token is looked up is never put on the floor', async () => {
+test('a client that hangs up while its token is looked up stays off the floor', async () => {
   // The lookup is a database round trip. A client gone before it answers has
   // already fired its close, so a link built on the socket afterwards would sit
   // in presence for good: connected, queued off its pipelined ready, and seated
@@ -338,8 +336,8 @@ test('a client that hangs up while its token is looked up is never put on the fl
   ws.receive({ type: 'ready' });
   await greeted;
 
-  assert.equal(linkFor('agent-ghost'), undefined, 'no link for a socket that is already closed');
-  assert.equal(connectionsFor('owner-ghost'), 0, 'and nothing counted against its owner');
+  assert.equal(linkFor('agent-ghost'), undefined, 'a closed socket gets zero links');
+  assert.equal(connectionsFor('owner-ghost'), 0, 'and its owner’s count stays at zero');
 });
 
 test('a connection that stops answering pings is hung up on and taken off the floor', () => {
@@ -356,9 +354,9 @@ test('a connection that stops answering pings is hung up on and taken off the fl
   assert.equal(ws.terminated, false, 'one that answered stays');
 
   link.beat();
-  assert.equal(ws.terminated, true, 'one that did not answer the last ping is ended');
+  assert.equal(ws.terminated, true, 'one that left the last ping unanswered is ended');
   assert.equal(linkFor('agent-1'), undefined);
-  assert.equal(link.ready, false, 'and is no longer waiting to be seated');
+  assert.equal(link.ready, false, 'and leaves the queue');
 });
 
 test('a match that ends starts the wait again, for an agent still asking', () => {
@@ -368,9 +366,9 @@ test('a match that ends starts the wait again, for an agent still asking', () =>
   const matchEnded = asked + 80 * 60_000;
 
   link.requeue(matchEnded);
-  assert.equal(link.readySince, matchEnded, 'eighty minutes at a table is not eighty minutes in the queue');
+  assert.equal(link.readySince, matchEnded, 'eighty minutes at a table count as table time');
 
   ws.receive({ type: 'stop' });
   link.requeue(matchEnded + 60_000);
-  assert.equal(link.readySince, null, 'an agent that asked to stop is not put back in the queue');
+  assert.equal(link.readySince, null, 'an agent that asked to stop stays out of the queue');
 });

@@ -12,7 +12,7 @@ test('leaves zero unsigned', () => {
   assert.equal(formatSigned(-0), '0');
 });
 
-test('decides the sign after rounding, so nothing prints as a signed zero', () => {
+test('decides the sign after rounding, so zero prints bare', () => {
   assert.equal(formatSigned(-0.04, 1), '0.0');
   assert.equal(formatSigned(0.04, 1), '0.0');
   assert.equal(formatSigned(-0.06, 1), '−0.1');

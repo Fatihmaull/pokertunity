@@ -84,7 +84,7 @@ function Hero() {
   );
 }
 
-/** Three steps, in the order they happen. The numbering is the sequence, not decoration. */
+/** Three steps, in the order they happen. The numbering is the sequence. */
 const STEPS = [
   {
     title: 'Connect your agent',
@@ -101,9 +101,9 @@ const STEPS = [
 ];
 
 /*
-  The steps run down the page beside their heading rather than across it, so
-  they read as one sequence instead of three equal claims. The numeral is set
-  large and quiet: it orders the steps without competing with their titles.
+  The steps run down the page beside their heading, so they read as one
+  sequence. The numeral is set large and quiet: it orders the steps and lets
+  their titles lead.
   The display voice stays off both, since it belongs to page titles and moves.
 */
 function HowItWorks() {
@@ -148,8 +148,8 @@ function AgentSummary() {
     }),
     { hands: 0, won: 0, chips: 0, matches: 0 },
   );
-  // Among agents that have a rating at all. An unrated agent's number is a
-  // prior, not a result, and it can sit above a real one.
+  // Among agents that have a rating. An unrated agent's number is a prior,
+  // and the real results rank among themselves.
   const best = account.agents
     .filter((agent) => agent.matchesPlayed > 0)
     .sort((a, b) => b.rating - a.rating)[0];
@@ -169,7 +169,7 @@ function AgentSummary() {
                   </span>
                 ))}
                 {account.agents.length === 0 ? (
-                  <span className="text-base text-muted">None registered yet.</span>
+                  <span className="text-base text-muted">Your first agent appears here.</span>
                 ) : null}
               </div>
               {account.agents.length > 0 ? (
@@ -178,13 +178,13 @@ function AgentSummary() {
                     ? 'One of them is in a match right now.'
                     : connected > 0
                       ? `${connected} connected and waiting for a match.`
-                      : 'None connected.'}
+                      : 'All offline.'}
                 </p>
               ) : null}
             </div>
 
             {/* The primary button is the next thing this owner has to do:
-                register an agent if there is none, watch it if it is seated,
+                register the first agent, watch one if it is seated,
                 otherwise look after the ones they have. */}
             <div className="flex flex-wrap items-center gap-2">
               {account.agents.length === 0 ? (
@@ -213,13 +213,13 @@ function AgentSummary() {
           </div>
 
           {/* The same rule as each agent's own record: counts are numbers, a
-              figure that does not exist yet is a dash, and a hint that would
-              describe nothing is left off. The Matches tile beside the rating
-              already says why it is a dash. */}
+              figure still to come is a dash, and a hint appears once it has
+              something to describe. The Matches tile beside the rating already says
+              why it is a dash. */}
           <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5 sm:grid-cols-4">
             <Stat
               label="Best rating"
-              value={best ? best.rating.toFixed(1) : <span className="text-faint">—</span>}
+              value={best ? best.rating.toFixed(1) : <span className="text-faint">–</span>}
               hint={best?.name}
             />
             <Stat label="Matches" value={formatChips(totals.matches)} />
@@ -240,7 +240,7 @@ function AgentSummary() {
 }
 
 /**
- * Written against no network, because the page is the same whichever one a
+ * Network-neutral, because the page is the same whichever one a
  * visitor has picked; the cashier is where a chain and its token get named.
  */
 const FACTS = [
@@ -250,15 +250,15 @@ const FACTS = [
   },
   {
     question: 'Can an agent just make up a bet?',
-    answer: 'No. An illegal reply is thrown away and the seat checks if it can, folds if it cannot.',
+    answer: 'Every reply is checked. An illegal one is thrown away and the seat checks if it can, folds otherwise.',
   },
   {
     question: 'Is any of this real money?',
-    answer: 'No. Chips are bought with testnet tokens, which have no market value.',
+    answer: 'It is testnet money. Chips are bought with testnet tokens, which carry zero market value.',
   },
   {
     question: 'Can I change network?',
-    answer: 'Yes, from the cashier or the header. Your chips and agents are unaffected.',
+    answer: 'Yes, from the cashier or the header. Your chips and agents stay as they are.',
   },
   {
     question: 'What happens if my agent disconnects mid-match?',
@@ -273,7 +273,7 @@ function GoodToKnow() {
         <SectionHeading title="FAQ" />
         {/* Every answer is one sentence, so all of them are shown: reading
             five short answers costs less than a click per question. Flowed in
-            columns so each pair stays whole and nothing lines up in a table. */}
+            columns so each pair stays whole and the page reads as prose. */}
         <dl className="gap-x-16 md:columns-2">
           {FACTS.map((fact) => (
             <div key={fact.question} className="mb-8 break-inside-avoid">

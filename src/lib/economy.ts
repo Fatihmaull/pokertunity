@@ -1,13 +1,12 @@
 /**
  * Chips are the unit of play. They are a fixed peg on the native token of
- * whichever chain a deposit settled on, not a separate currency: one chip is
- * always worth 0.00001 of it, in both directions. All balances and pots are
- * integer chip counts, so no pot arithmetic ever touches a float or a wei
- * value.
+ * whichever chain a deposit settled on: one chip is always worth 0.00001 of
+ * it, in both directions. All balances and pots are integer chip counts, so pot
+ * arithmetic stays in whole numbers, apart from floats and wei.
  *
- * The peg is deliberately the same number on every chain. Test tokens have no
- * market to price against each other, so a peg that varied by network would be
- * arbitrary and would make a pot mean different things on different networks.
+ * The peg is deliberately the same number on every chain. Test tokens trade
+ * separately from each other, so one peg everywhere keeps a pot meaning the
+ * same thing on every network.
  */
 
 /** Wei backing a single chip. 0.00001 of the chain's native token. */
@@ -18,7 +17,7 @@ export function chipsToWei(chips: number): bigint {
   return BigInt(chips) * WEI_PER_CHIP;
 }
 
-/** Rounds down. A deposit that does not fill a whole chip buys nothing. */
+/** Rounds down to whole chips. */
 export function weiToChips(wei: bigint): number {
   if (wei < 0n) throw new Error('negative wei');
   return Number(wei / WEI_PER_CHIP);
@@ -62,20 +61,19 @@ export function formatNative(wei: bigint): string {
  * The match.
  *
  * Every game in the arena is the same game: one blind level, one buy-in, the
- * same seats, the same length. That is not a simplification for its own sake.
- * A field this size cannot fill several stakes, and offering a choice of them
- * hands a well-funded agent a way to pick softer company, which is the exact
- * behaviour the arena exists to measure rather than to reward.
+ * same seats, the same length. One stake fills from a field this size, and it
+ * keeps every agent in the same company, so a well-funded agent has to earn its
+ * rating against the same opponents as everybody else.
  */
 
 /** Six-handed is where multiway pots live, which is where reading an opponent pays. */
 export const MAX_SEATS = 6;
 
 /**
- * Two is a game. Fewer is not.
+ * Two is a game.
  *
- * A match would rather start short than not start, because an empty queue
- * teaches nobody anything. The matchmaker holds briefly for a full table first.
+ * A match would rather start short than wait, because a played match teaches
+ * something. The matchmaker holds briefly for a full table first.
  */
 export const MIN_SEATS = 2;
 
@@ -96,10 +94,10 @@ export const BUY_IN = BIG_BLIND * BUY_IN_BB;
 /**
  * The house's cut, charged once at the door.
  *
- * Tournaments charge a fee to enter and never touch a pot, which is the right
- * model here. A fee is the same for everybody, so it shifts every result by the
- * same amount and reorders nobody. It is also the only thing removing chips
- * from the arena, so without it the supply would only ever grow.
+ * Tournaments charge a fee to enter and leave every pot whole, which is the
+ * right model here. A fee is the same for everybody, so it shifts every result
+ * by the same amount and keeps the order intact. It is also how chips leave
+ * the arena, which keeps the supply in balance.
  */
 export const ENTRY_FEE_BPS = 200;
 export const ENTRY_FEE = Math.floor((BUY_IN * ENTRY_FEE_BPS) / 10_000);
@@ -108,36 +106,36 @@ export const ENTRY_FEE = Math.floor((BUY_IN * ENTRY_FEE_BPS) / 10_000);
 export const SEAT_COST = BUY_IN + ENTRY_FEE;
 
 /**
- * How long a match runs when nobody busts.
+ * How long a match runs when the field survives.
  *
- * Blinds never rise, so something has to end it. A hundred hands costs each
+ * Blinds stay level, so the cap is what ends it. A hundred hands costs each
  * agent around twenty-five big blinds in blinds alone, which is enough pressure
- * to punish folding without turning the endgame into a shoving contest. Shorter
+ * to punish folding and keeps the endgame a game of poker. Shorter
  * matches also mean more finishing orders, and a rating converges on the number
- * of results rather than on the number of hands inside them.
+ * of results.
  *
  * Overridable because a hundred hands is roughly eighty minutes once pacing is
  * counted, and a public arena wants matches a visitor can watch reach an end. A
- * match stores the cap it was played under, so lowering it here does not make a
- * liar of any result already recorded.
+ * match stores the cap it was played under, so every recorded result keeps its
+ * own cap.
  */
 export const DEFAULT_HAND_CAP = 100;
 
 /**
- * Reads the override, refusing anything that is not a hand count.
+ * Reads the override, accepting a positive hand count.
  *
  * `Number('')` is zero and `Number('thirty')` is NaN, and a bare `??` lets both
  * through: the first ends every match before a card is dealt, the second means
- * the cap never arrives and a table runs until somebody busts. Neither reads as
- * a configuration mistake from the outside, so an unusable value plays the
- * default and says so.
+ * the cap never arrives and a table runs until somebody busts. Both look like a
+ * working arena from outside, so an unusable value plays the default and says
+ * so.
  */
 export function handCapFrom(raw: string | undefined): number {
   if (raw === undefined || raw.trim() === '') return DEFAULT_HAND_CAP;
 
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed < 1) {
-    console.warn(`HAND_CAP is not a hand count: ${JSON.stringify(raw)}. Playing ${DEFAULT_HAND_CAP} instead.`);
+    console.warn(`HAND_CAP needs a positive hand count, got ${JSON.stringify(raw)}. Playing ${DEFAULT_HAND_CAP}.`);
     return DEFAULT_HAND_CAP;
   }
 
@@ -149,13 +147,11 @@ export const HAND_CAP = handCapFrom(process.env.HAND_CAP);
 /**
  * What a new account starts with.
  *
- * An owner who has to buy chips before their agent can play has been asked to
- * pay to find out whether the thing works, and most will not. This is four
- * seats outright, and a fifth as soon as any buy-in comes back, which is enough
+ * An owner gets to find out whether the thing works before paying anything.
+ * This is four seats outright, and a fifth as soon as any buy-in comes back, which is enough
  * to see whether an agent is hopeless. After that, chips come from the cashier.
  *
- * A round figure rather than a multiple of the seat, so it reads as a sum an
- * owner was given rather than a count of matches the arena owes them.
+ * A round figure, so it reads as a sum an owner was given.
  */
 export const STARTING_GRANT = 10_000;
 

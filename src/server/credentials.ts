@@ -8,15 +8,13 @@ import { noteQueueSwitch } from './presence';
 /**
  * How an agent proves who it is.
  *
- * An agent is a program somebody else runs, so it cannot hold a browser session
- * and there is nobody at a keyboard to sign a challenge for it. It gets a
- * bearer token instead, minted once when the agent is registered from an
+ * An agent is a program somebody else runs, unattended and outside a browser,
+ * so it gets a bearer token, minted once when the agent is registered from an
  * owner's signed-in session.
  *
- * Only the hash is stored. A database that leaks should not hand out working
- * credentials, which also means nobody can ever look a lost token up: the
- * answer to losing one is to rotate it, and that is the honest answer rather
- * than an inconvenience worked around.
+ * The hash alone is stored, so a leaked database holds zero working
+ * credentials, and the answer to losing a token is to rotate it, which is
+ * the honest answer.
  */
 
 /** Bytes of entropy in a token. 32 is well past anything worth guessing at. */
@@ -42,8 +40,8 @@ function hashToken(token: string): string {
  * Looks an agent up by the token it presented.
  *
  * The lookup is by hash, so the comparison Postgres does is already on a fixed
- * width digest rather than on the secret. The extra constant-time check guards
- * the case where a future caller compares hashes in JavaScript instead.
+ * width digest. The extra constant-time check guards the case where a future
+ * caller compares hashes in JavaScript.
  */
 export async function agentByToken(token: string): Promise<{
   agentId: string;
@@ -82,9 +80,9 @@ export class RegistrationError extends Error {}
 /**
  * Creates an agent for an owner and hands back its token, once.
  *
- * The colour is picked against every colour in use rather than the owner's own,
- * because it identifies the agent at a table full of strangers and two seats
- * wearing one colour is a spectator's problem, not an owner's.
+ * The colour is picked against every colour in use across the arena, because
+ * it identifies the agent at a table full of strangers, and the spectator is
+ * the one who needs the seats told apart.
  */
 export async function registerAgent(userId: string, name: string): Promise<{ agentId: string; token: string }> {
   const trimmed = name.trim().slice(0, MAX_AGENT_NAME);
@@ -98,12 +96,11 @@ export async function registerAgent(userId: string, name: string): Promise<{ age
       throw new RegistrationError(`One account can run ${MAX_AGENTS_PER_ACCOUNT} agents.`);
     }
 
-    // Within one account only. Two people are allowed to call their agents the
+    // Within one account. Two people are allowed to call their agents the
     // same thing, the same way two people may share a first name, and the
-    // standings tell them apart by rating and record rather than by name. What
-    // is not workable is one owner holding four agents called "Agent 1": every
-    // screen that names one then names all of them, and rotating the right
-    // token becomes guesswork.
+    // standings tell them apart by rating and record. Inside one account each
+    // name is unique, so every screen names exactly one agent and rotating the
+    // right token is certain.
     if (mine.some((agent) => agent.name.toLowerCase() === trimmed.toLowerCase())) {
       throw new RegistrationError(`You already have an agent called ${trimmed}.`);
     }
@@ -127,17 +124,15 @@ export async function registerAgent(userId: string, name: string): Promise<{ age
  * Issues a new token and invalidates the old one.
  *
  * A token ends up in a config file and a config file ends up in a repository,
- * so this is a routine operation rather than an incident response. Any socket
- * still open on the old token keeps working until it drops, because cutting a
- * live agent off mid-hand would cost its owner a match.
+ * so this is a routine operation. Any socket still open on the old token keeps
+ * working until it drops, so the owner keeps the match a live agent is playing.
  *
  * Be exact about what that leaves open. Rotating stops the old token opening
- * *new* connections; it does nothing to one already authenticated on it. So a
- * leak is not closed by rotating alone — whoever holds the old token keeps a
- * live seat until that socket drops. The owner closes it by connecting on the
- * new token: a second connection for an agent replaces the first, and the seat
- * belongs to the agent, not the socket, so nothing is forfeited. The agents
- * page says so.
+ * *new* connections, and one already authenticated on it keeps going. So a
+ * leak is closed in two steps: rotate, then connect on the new token. A second
+ * connection for an agent replaces the first, and the seat belongs to the
+ * agent, so the match carries on in the owner's hands. The agents page says
+ * so.
  */
 export async function rotateToken(userId: string, agentId: string): Promise<string> {
   const token = mint();
@@ -148,7 +143,7 @@ export async function rotateToken(userId: string, agentId: string): Promise<stri
     .where(and(eq(agents.id, agentId), eq(agents.userId, userId)))
     .returning({ id: agents.id });
 
-  if (rotated.length === 0) throw new RegistrationError('No such agent on this account.');
+  if (rotated.length === 0) throw new RegistrationError('That agent is unknown on this account.');
   return token;
 }
 
@@ -175,8 +170,8 @@ export async function renameAgent(userId: string, agentId: string, name: string)
 /**
  * Lets an agent be seated, or stops it being seated in the next match.
  *
- * A match already under way is not touched, because every seat plays its match
- * to the end: turning this off stops the next seat being bought.
+ * A match already under way plays on, because every seat plays its match to
+ * the end: turning this off applies from the next seat.
  */
 export async function setQueueEnabled(userId: string, agentId: string, enabled: boolean): Promise<void> {
   const updated = await db

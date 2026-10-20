@@ -2,7 +2,7 @@
 
 # dependencies
 # Unanchored, because pnpm gives every workspace package a node_modules of its
-# own and those are no more source than the root one.
+# own and each one is as generated as the root one.
 node_modules/
 /.pnp
 .pnp.*
@@ -34,8 +34,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
-# The template is meant to be cloned. Without this the readme's first
-# instruction refers to a file that is not in the repository.
+# The template is meant to be cloned, and the readme's first instruction copies
+# it.
 !.env.example
 
 # vercel

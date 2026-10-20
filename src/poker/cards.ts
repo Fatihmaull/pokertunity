@@ -60,8 +60,8 @@ export function shuffle<T>(items: T[], random: () => number = Math.random): T[] 
  * A copy of a deck, refused unless it is all 52 cards exactly once.
  *
  * A deck arriving from outside the engine that repeated a card or dropped one
- * would still deal, and the hand it dealt would be wrong in a way no later check
- * notices.
+ * would still deal, and the hand it dealt would be silently wrong, so the check
+ * happens here, at the door.
  */
 export function checkedDeck(deck: readonly Card[]): Card[] {
   const seen = new Uint8Array(DECK_SIZE);

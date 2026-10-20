@@ -8,9 +8,9 @@ export const ACT_CLOCK_MS = 30_000;
  *
  * A hand that resolves as fast as the engine can resolve it is unreadable: six
  * decisions, three streets and a showdown arrive inside a second and a viewer
- * sees only the aftermath. Every beat below buys back one thing a spectator has
+ * sees the aftermath alone. Every beat below buys back one thing a spectator has
  * to be able to read before the next thing overwrites it, so they are sized by
- * what is on screen during them rather than by taste.
+ * what is on screen during them.
  */
 /** A decision stays alone on screen before the next seat is put to act. */
 export const ACTION_BEAT_MS = 900;
@@ -33,10 +33,10 @@ export const BETWEEN_HANDS_MS = 4_000;
  * How long to hold a decision on screen.
  *
  * A decision far from the break-even price resolves quickly; one sitting on top
- * of it stalls. That is what makes an agent look like it is agonising rather
- * than computing, and it is honest, because the gap between equity and price is
- * exactly what made the decision hard. The model's own latency counts toward
- * this floor, so a slow answer is never padded further.
+ * of it stalls. That is what makes an agent look like it is agonising, and it
+ * is honest, because the gap between equity and price is exactly what made the
+ * decision hard. The model's own latency counts toward this floor, so a slow
+ * answer pays the floor once.
  */
 export function pacingFloor(equity: number, potOdds: number | null): number {
   const breakEven = potOdds ?? 0.5;

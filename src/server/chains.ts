@@ -14,7 +14,7 @@ const CHAIN_COOKIE = 'ah_chain';
 
 export interface DeployedChain extends ChainInfo {
   rpcUrl: string;
-  /** Null until a vault has been deployed here. Watching still works; buying does not. */
+  /** Null until a vault has been deployed here. Watching works from day one; buying opens with the vault. */
   vault: `0x${string}` | null;
 }
 
@@ -23,13 +23,13 @@ function settingsFor(chain: ChainInfo): DeployedChain {
   const vault = process.env[`${prefix}_VAULT_ADDRESS`]?.trim();
 
   if (vault && !/^0x[0-9a-fA-F]{40}$/.test(vault)) {
-    throw new Error(`${prefix}_VAULT_ADDRESS is not an address: ${vault}`);
+    throw new Error(`${prefix}_VAULT_ADDRESS must be an address, got ${vault}`);
   }
 
   return {
     ...chain,
     rpcUrl: process.env[`${prefix}_RPC_URL`]?.trim() || chain.defaultRpcUrl,
-    // An empty variable is an undeployed chain, not an address of length zero.
+    // An empty variable is an undeployed chain.
     vault: vault ? (vault as `0x${string}`) : null,
   };
 }
@@ -46,7 +46,7 @@ export function enabledChains(): DeployedChain[] {
 
   return configured.map((key) => {
     const chain = chainByKey(key);
-    if (!chain) throw new Error(`CHAINS names a chain that does not exist: ${key}. Add it to src/lib/chains.ts.`);
+    if (!chain) throw new Error(`CHAINS names an unknown chain: ${key}. Add it to src/lib/chains.ts.`);
     return settingsFor(chain);
   });
 }
@@ -58,16 +58,16 @@ function defaultChain(): DeployedChain {
   if (!preferred) return enabled[0];
 
   const chosen = enabled.find((chain) => chain.key === preferred);
-  if (!chosen) throw new Error(`DEFAULT_CHAIN is ${preferred}, which CHAINS does not enable.`);
+  if (!chosen) throw new Error(`DEFAULT_CHAIN is ${preferred}, which needs to be in CHAINS too.`);
   return chosen;
 }
 
-/** Raised when a request names a chain this deployment does not settle on. */
+/** Raised when a request names a chain outside this deployment's set. */
 export class UnknownChain extends Error {}
 
 export function requireChain(key: string): DeployedChain {
   const chain = enabledChains().find((entry) => entry.key === key);
-  if (!chain) throw new UnknownChain(`This deployment does not settle on ${key}.`);
+  if (!chain) throw new UnknownChain(`This deployment settles on other chains than ${key}.`);
   return chain;
 }
 
@@ -75,12 +75,12 @@ export function requireChain(key: string): DeployedChain {
  * The vault a deposit is paid into.
  *
  * Separate from `requireChain` because a chain can be enabled before its vault
- * exists, and the difference between "no such network" and "nothing deployed
- * there yet" is worth saying out loud.
+ * exists, and "unknown network" and "vault still to deploy" are worth saying
+ * apart.
  */
 export function vaultAddress(chain: DeployedChain): `0x${string}` {
   if (!chain.vault) {
-    throw new Error(`${envPrefix(chain.key)}_VAULT_ADDRESS is not set. Deploy ChipVault to ${chain.name} first.`);
+    throw new Error(`${envPrefix(chain.key)}_VAULT_ADDRESS is required. Deploy ChipVault to ${chain.name} first.`);
   }
   return chain.vault;
 }
@@ -88,8 +88,8 @@ export function vaultAddress(chain: DeployedChain): `0x${string}` {
 /**
  * The chain the caller is currently on.
  *
- * Held in an unsigned cookie because it selects a public network rather than
- * granting anything: every request that moves money re-resolves the chain here
+ * Held in an unsigned cookie because it selects a public network and grants
+ * nothing: every request that moves money re-resolves the chain here
  * and checks it against the record it is settling.
  */
 export async function selectedChain(): Promise<DeployedChain> {
@@ -122,9 +122,9 @@ export async function clearChainChoice(): Promise<void> {
 /**
  * A chain as the browser is told about it.
  *
- * The configured RPC endpoint is deliberately left out: it may carry an API key,
- * and the browser never talks to a node directly. A wallet being asked to add
- * the network gets the registry's public endpoint instead.
+ * The configured RPC endpoint deliberately stays on the server: it may carry an
+ * API key, and the browser reaches a chain through the wallet. A wallet being
+ * asked to add the network gets the registry's public endpoint.
  */
 export function publicChain(chain: DeployedChain): PublicChain {
   const { rpcUrl, ...rest } = chain;

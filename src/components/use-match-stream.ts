@@ -9,14 +9,14 @@ export interface StreamState {
   isStreaming: boolean;
   idleReason: string | null;
   connected: boolean;
-  /** The feed refused often enough that asking again is not worth doing. */
+  /** The feed refused often enough to stop asking. */
   gaveUp: boolean;
   /** Seats whose stack changed on the last event, so the figure settles once. */
   moved: number[];
   /**
    * A counter per seat that steps every time that seat acts. It is the key the
-   * action badge is drawn under, so a second identical action still replays the
-   * animation instead of the same element sitting there unchanged.
+   * action badge is drawn under, so a second identical action replays the
+   * animation too.
    */
   actionKeys: Record<number, number>;
   /** Steps whenever the pot grows, so the figure can react to money arriving. */
@@ -50,7 +50,7 @@ function reduce(state: StreamState, action: Action): StreamState {
     case 'snapshot':
       return {
         ...state,
-        // The server's epoch is not this browser's. Anchoring what is left of
+        // The server keeps its own epoch. Anchoring what is left of
         // the clock to the local one keeps the countdown honest across skew.
         table: {
           ...event.table,
@@ -64,10 +64,9 @@ function reduce(state: StreamState, action: Action): StreamState {
       };
 
     case 'idle':
-      // The match is over. Nobody is deciding and no clock is running, and the
-      // feed closes behind this event, so nothing will come to say otherwise:
-      // left alone, the last seat to act reads as thinking forever under a
-      // badge that still says the feed is live.
+      // The match is over. The clock stops and the deciding seat is cleared
+      // here, because the feed closes behind this event and this is the last
+      // word: the table reads as finished.
       return {
         ...state,
         idleReason: event.reason,
@@ -118,8 +117,8 @@ function reduce(state: StreamState, action: Action): StreamState {
         isStreaming: false,
         moved: [event.seat],
         actionKeys: { ...state.actionKeys, [event.seat]: (state.actionKeys[event.seat] ?? 0) + 1 },
-        // Only money moving beats the pot. A fold is an action and changes
-        // nothing in the middle, so it must not make the middle react.
+        // Money moving is what beats the pot. A fold leaves the middle as it
+        // was, so the middle stays still.
         potKey: event.pot === table.pot ? state.potKey : state.potKey + 1,
         table: {
           ...table,
@@ -165,7 +164,7 @@ function reduce(state: StreamState, action: Action): StreamState {
     case 'street': {
       if (!table) return state;
       // A snapshot can arrive holding cards this event is also carrying. The
-      // board is a set of five, so anything already dealt is not dealt again.
+      // board is a set of five, so each card is dealt once.
       const fresh = event.cards.filter((card) => !table.board.includes(card));
       return {
         ...state,
@@ -249,23 +248,22 @@ const RETRY_MIN_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
 
 /**
- * How many refusals before the feed is treated as one that is not coming.
+ * How many refusals before the feed is treated as closed for good.
  *
- * There has to be a number. A match that has ended answers 503 for good, and a
- * client that reads that as "try again shortly" retries until the tab closes —
- * which is what this did, every thirty seconds, on every finished match anybody
- * opened. Six attempts is about a minute of backoff, comfortably longer than a
+ * There has to be a number. A match that has ended answers 503 for good, so
+ * the client stops after a set number of tries. Six attempts is about a minute
+ * of backoff, comfortably longer than a
  * deploy handing the room from one process to the next, which is the case the
  * retry exists for.
  */
 const RETRY_LIMIT = 6;
 
 /**
- * Subscribes to one table's feed. Passing null subscribes to nothing, which
- * lets a page decide what to watch without breaking the rules of hooks.
+ * Subscribes to one table's feed. Passing null leaves it unsubscribed, which
+ * lets a page decide what to watch while keeping the rules of hooks.
  *
- * A dropped connection is retried by the browser itself, but a refused one is
- * not: `EventSource` gives up for good on anything other than a 200, and a 503
+ * A dropped connection is retried by the browser itself, and a refused one is
+ * retried here: `EventSource` closes for good on any status other than 200, and a 503
  * is what the feed answers while a deploy hands the room from one process to
  * the next. So a source the browser has closed is reopened here, backing off,
  * until the match says it is over.
@@ -310,10 +308,10 @@ export function useMatchStream(matchId: string | null): StreamState {
         try {
           event = JSON.parse(message.data) as ArenaEvent;
         } catch {
-          // A malformed frame is dropped rather than breaking the arena.
+          // A malformed frame is dropped, and the arena carries on.
           return;
         }
-        // Nothing more is coming, and reconnecting would only be told so again.
+        // The feed is finished, so the source closes for good.
         if (event.type === 'idle') {
           over = true;
           current.close();

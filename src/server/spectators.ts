@@ -2,26 +2,25 @@
  * How many people may watch one match at once.
  *
  * Every spectator costs the dealing process work on every event, because the
- * feed is rendered and serialised per viewer. That is not an inefficiency to
- * optimise away: the per-viewer render is the redaction, and sharing one
- * rendered event across subscribers would put one viewer's hole cards in
- * another viewer's stream. So the cost is O(N) on the process that deals, and
- * the only safe lever is N.
+ * feed is rendered and serialised per viewer. That cost is the point: the
+ * per-viewer render is the redaction, which keeps each viewer's stream to what
+ * that viewer may see. So the cost is O(N) on the process that deals, and N is
+ * the safe lever.
  *
  * Held in memory, like the rate limits and for the same reason: a stream is a
- * fact about this process, and only the dealing process serves them.
+ * fact about this process, and the dealing process is the one that serves them.
  */
 
 /**
  * The ceiling per match.
  *
- * Measured, not guessed. One six-seat table held a thousand subscribers without
- * its pacing slipping: hand times stayed in their unloaded range, CPU averaged
- * under five percent and p99 event-loop delay did not move. What did grow was
+ * Measured. One six-seat table held a thousand subscribers with its pacing
+ * intact: hand times stayed in their unloaded range, CPU averaged under five
+ * percent and p99 event-loop delay held flat. What did grow was
  * memory, about 0.2MB a subscriber, and the worst single stall, 125ms at a
  * thousand. Half of that is the cap, because a thousand was measured on one
  * table on a developer machine, and the process deals every match at once on
- * hardware that is probably smaller. Raise it only against a new measurement on
+ * hardware that is probably smaller. Raise it against a new measurement on
  * the hardware it will run on; the pull request that set it has the table.
  */
 export const SPECTATOR_CAP = 500;
@@ -30,8 +29,8 @@ export const SPECTATOR_CAP = 500;
  * The ceiling per caller per match.
  *
  * One person has the landing page and the table open, perhaps in a second tab.
- * Fifty streams from one caller is not a person, and is exactly the shape that
- * fills the match-wide cap and locks everybody else out. Signed-out callers are
+ * Fifty streams from one caller is a script, and exactly the shape that would
+ * fill the match-wide cap for everybody else. Signed-out callers are
  * counted by address, so a handful of people sharing one are still let in.
  */
 export const SPECTATORS_PER_CALLER = 8;
@@ -42,7 +41,7 @@ export const SPECTATORS_PER_CALLER = 8;
  * The match ceiling alone let the total grow with the number of tables, and
  * one process deals them all. Measured on four live tables at once: event-loop
  * p99 held under 100ms to 4,000 spectators and reached 380ms at 8,000, while
- * hand times, being pacing, never moved. Half the last flat point, by the same
+ * hand times, being pacing, held steady. Half the last flat point, by the same
  * reasoning as the match ceiling, and the pull request that set it has the
  * table.
  */
@@ -60,7 +59,7 @@ const matches = new Map<string, Watching>();
 export type Admission = { ok: true; release: () => void } | { ok: false; reason: 'full' | 'caller' };
 
 /**
- * Takes a seat in the gallery, or says why there is none.
+ * Takes a seat in the gallery, or says why the gallery is full.
  *
  * The release is idempotent because a stream can end several ways at once, the
  * client leaving and the match finishing among them, and a slot handed back
@@ -90,8 +89,8 @@ export function admit(matchId: string, who: string): Admission {
       const left = (watching.byCaller.get(who) ?? 1) - 1;
       if (left > 0) watching.byCaller.set(who, left);
       else watching.byCaller.delete(who);
-      // A match nobody watches leaves nothing behind, so finished matches do
-      // not accumulate here for the life of the process.
+      // A match with zero watchers is dropped from the map, so memory stays
+      // flat for the life of the process.
       if (watching.total === 0) matches.delete(matchId);
     },
   };

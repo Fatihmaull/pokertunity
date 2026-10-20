@@ -2,28 +2,26 @@
  * What an agent is worth, and how sure we are of it.
  *
  * A win rate says how an agent did against whoever it happened to face. Once
- * the arena matches agents by strength, that stops separating anybody: sort a
- * field into tiers and everyone in every tier breaks about even. So the
- * standings rank on a rating instead, which asks a different question. Not how
- * many chips did it win, but how often did it finish above players we already
- * believed were good.
+ * the arena matches agents by strength, everyone in every tier breaks about
+ * even. So the standings rank on a rating, which asks a sharper question: how
+ * often did it finish above players we already believed were good.
  *
  * Two numbers carry that. `mu` is the estimate. `sigma` is how uncertain we
  * still are. The published figure is the pessimistic end of the range, so an
- * agent climbs by playing rather than by running hot once.
+ * agent climbs by playing, over many matches.
  *
  * This is the TrueSkill family, computed as pairwise comparisons within one
- * match's finishing order rather than as a full factor graph. That is the
+ * match's finishing order. That is the
  * Thurstone-Mosteller form of the online ranking method Weng and Lin published,
  * and at this scale the difference from full TrueSkill is far smaller than the
  * noise in the results feeding it. It is a short pure function, which matters
- * more here: the definitions can be argued with and tested without a database.
+ * more here: the definitions can be argued with and tested in plain memory.
  */
 
 export interface Rating {
   /** The estimate of skill. Higher is better. Starts at 25 by convention. */
   mu: number;
-  /** How unsure we are. Falls as an agent plays, never quite to zero. */
+  /** How unsure we are. Falls as an agent plays, toward a floor above zero. */
   sigma: number;
 }
 
@@ -41,8 +39,8 @@ export const PUBLISHED_SIGMAS = 3;
 /**
  * The published number: three standard deviations below the estimate.
  *
- * A brand new agent scores zero, not 25, because we have no evidence about it
- * at all. It climbs as the uncertainty closes.
+ * A brand new agent scores zero, because the arena is still to gather evidence
+ * about it. It climbs as the uncertainty closes.
  */
 export function conservative(rating: Rating): number {
   return rating.mu - PUBLISHED_SIGMAS * rating.sigma;
@@ -50,7 +48,7 @@ export function conservative(rating: Rating): number {
 
 export interface RatingConfig {
   /**
-   * How much one result reflects skill rather than luck.
+   * How much of one result is skill, and how much is luck.
    *
    * This is the parameter poker gets wrong if it is copied from other games.
    * A good player losing a hundred-hand match is completely ordinary, so the
@@ -68,12 +66,11 @@ export interface RatingConfig {
    * How much skill is assumed to drift between matches.
    *
    * Kept higher than the usual default because an agent is a program its owner
-   * can rewrite between matches. That is a real change in skill rather than
-   * measurement noise, and a rating that had collapsed to certainty would take
-   * far too long to notice it.
+   * can rewrite between matches. That is a real change in skill, and keeping
+   * some uncertainty open lets the rating notice it quickly.
    */
   tau: number;
-  /** How close two results have to be before they count as a tie rather than a finish. */
+  /** How close two results have to be to count as a tie. */
   drawMargin: number;
 }
 
@@ -83,7 +80,7 @@ const POKER: RatingConfig = {
   drawMargin: 0.1,
 };
 
-/** Sigma never reaches zero. A rating nothing can move is not a measurement. */
+/** Sigma's floor. A measurement keeps room to move. */
 const MIN_SIGMA = 0.5;
 
 export interface Placing<T> {
@@ -101,9 +98,9 @@ export interface Placing<T> {
  * anything, because that was expected. Finishing above someone we thought was
  * better moves a lot. Losing to someone far below costs.
  *
- * Comparisons are combined rather than simply added up. Adding them outright
+ * Comparisons are combined with a damping factor. Adding them outright
  * over-counts: an agent's five results in a six-handed match all come from one
- * performance at one table, so they are not five independent observations.
+ * performance at one table, so they count as one correlated observation.
  * Dividing by the count under-counts the other way, because a finishing order
  * really does say more than a single head-to-head. The square root of the
  * comparison count is the usual middle for observations that share a common
@@ -113,7 +110,7 @@ export function updateRatings<T>(placings: readonly Placing<T>[], config: Rating
   if (placings.length < 2) return placings.map((entry) => ({ ...entry }));
 
   return placings.map((self) => {
-    // Drift is applied before the comparison, not after, so an agent that has
+    // Drift is applied before the comparison, so an agent that has
     // sat out a while is treated as slightly less known before this result is
     // weighed against what we thought we knew.
     const sigma = Math.sqrt(self.rating.sigma ** 2 + config.tau ** 2);
@@ -129,7 +126,7 @@ export function updateRatings<T>(placings: readonly Placing<T>[], config: Rating
       const margin = config.drawMargin / c;
       const drew = self.place === other.place;
       // A lower place number is a better finish, so this is the sign of the
-      // result rather than of the arithmetic.
+      // result.
       const won = self.place < other.place;
 
       const v = drew ? drawV(t, margin) : won ? winV(t, margin) : -winV(-t, margin);
@@ -140,8 +137,8 @@ export function updateRatings<T>(placings: readonly Placing<T>[], config: Rating
     }
 
     // Every comparison shrinks the uncertainty, and several of them together
-    // can still drive the factor past zero. Clamping keeps a match from ever
-    // claiming to have removed more doubt than there was.
+    // can still drive the factor past zero. Clamping keeps every match within
+    // the doubt there was to remove.
     const updated = Math.sqrt(Math.max(sigma ** 2 * Math.max(1 - doubtRemoved, 0.0001), MIN_SIGMA ** 2));
 
     return { ...self, rating: { mu: self.rating.mu + muDelta, sigma: updated } };
@@ -159,9 +156,9 @@ export function updateRatings<T>(placings: readonly Placing<T>[], config: Rating
 function winV(t: number, margin: number): number {
   const x = t - margin;
   const denominator = cdf(x);
-  // Far out in the tail the ratio underflows to nothing over nothing. The limit
-  // there is the distance itself, which is what this returns rather than a NaN
-  // that would poison every rating in the match.
+  // Far out in the tail the ratio underflows to zero over zero. The limit there
+  // is the distance itself, which is what this returns, keeping every rating in
+  // the match a real number.
   return denominator < 1e-10 ? -x : pdf(x) / denominator;
 }
 

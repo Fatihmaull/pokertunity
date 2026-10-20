@@ -43,19 +43,19 @@ test('every axis is null until there is enough to measure', () => {
   });
 });
 
-test('a bluff that got called and won at showdown does not count as deception', () => {
+test('a bluff that got called and won at showdown counts as luck', () => {
   const bluffs = many(20, (i) => decision({ handId: `h${i}`, action: 'bet', equity: 0.1 }));
 
-  // Every one was called and won by luck. Persuasion had nothing to do with it.
+  // Every one was called and won by luck. Persuasion played zero part.
   const shown = many(20, (i) => result({ handId: `h${i}`, net: 500, showdown: true }));
   assert.equal(computeAxes({ ...empty, decisions: bluffs, results: shown }).deception, 0);
 
-  // The same bets, taken down without a showdown.
+  // The same bets, taken down before a showdown.
   const folded = many(20, (i) => result({ handId: `h${i}`, net: 500, showdown: false }));
   assert.equal(computeAxes({ ...empty, decisions: bluffs, results: folded }).deception, 1);
 });
 
-test('a strong hand bet for value is not a bluff', () => {
+test('a strong hand bet for value counts as value', () => {
   const value = many(20, (i) => decision({ handId: `h${i}`, action: 'bet', equity: 0.9 }));
   const won = many(20, (i) => result({ handId: `h${i}`, net: 500 }));
 
@@ -107,7 +107,7 @@ test('a stint ends when the agent changes tables', () => {
   assert.deepEqual(
     runs.map((run) => run.length),
     [2, 1, 1],
-    'returning to a table later is a new stint, not a continuation',
+    'returning to a table later is a new stint',
   );
 });
 
@@ -121,8 +121,8 @@ test('adaptation is positive when the second half of each stint goes better', ()
   assert.ok(axes.adaptation !== null && axes.adaptation > 0);
 });
 
-test('exploitation measures the gap to the field, not the raw win rate', () => {
-  // Weak now means rated weak, rather than scripted to be weak. Ten is below
+test('exploitation measures the gap to the field', () => {
+  // Weak now means rated weak. Ten is below
   // the threshold of twenty, so every one of these counts.
   const versusWeak = many(60, () => result({ net: 20, bigBlind: 20, opponentRating: 10 }));
   assert.equal(bbPer100(versusWeak), 100);
@@ -144,9 +144,9 @@ test('exploitation measures the gap to the field, not the raw win rate', () => {
   assert.equal(behind.exploitation, -60, 'winning, but finding less there than the field does');
 });
 
-test('hands against strong opposition do not count toward exploitation', () => {
-  // Above the threshold, so these say nothing about exploiting weakness however
-  // well they went.
+test('hands against strong opposition stay out of exploitation', () => {
+// Above the threshold, so these are measured elsewhere, however well they
+// went.
   const versusStrong = many(60, () => result({ net: 20, opponentRating: 35 }));
 
   assert.equal(
@@ -155,11 +155,11 @@ test('hands against strong opposition do not count toward exploitation', () => {
   );
 });
 
-test('exploitation says nothing until the field has been measured', () => {
+test('exploitation waits until the field has been measured', () => {
   const hands = many(60, () => result({ net: 20, opponentRating: 5 }));
 
-  // No threshold means no agent has a rating worth comparing against yet, which
-  // is different from an agent that exploits nobody.
+  // A null threshold means the field is still unrated, which differs from an
+  // agent that exploits nobody.
   assert.equal(computeAxes({ ...empty, results: hands, weakOpponentRating: null, fieldVersusWeak: 0 }).exploitation, null);
   assert.equal(computeAxes({ ...empty, results: hands, weakOpponentRating: 20, fieldVersusWeak: null }).exploitation, null);
 });

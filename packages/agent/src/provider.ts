@@ -1,6 +1,6 @@
 /**
- * Model access, behind one small interface so the provider can change without
- * the rest of the agent noticing.
+ * Model access, behind one small interface so the provider can change while
+ * the rest of the agent stays the same.
  *
  * Paying for thinking is the agent's problem: every call is made on its owner's
  * key, which keeps the arena's running costs flat however many people play.
@@ -36,10 +36,9 @@ const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models
 /**
  * Thinking budget to request, or null to leave the model's default alone.
  *
- * Read when a request is made, not when this module loads. `pnpm agent` loads
- * `agents/.env` in its own body, which runs after its imports, so a value read
- * at load time was always the one from before that file was read: setting it
- * there, as the error below tells people to, silently did nothing.
+ * Read when a request is made. `pnpm agent` loads `agents/.env` in its own
+ * body, which runs after its imports, so reading at request time is what picks
+ * up a value set there, as the error below tells people to.
  */
 export function thinkingBudget(raw = process.env.GEMINI_THINKING_BUDGET): number | null {
   if (raw === undefined || raw.trim() === '') return null;
@@ -67,7 +66,7 @@ class GeminiProvider implements ModelProvider {
             temperature: request.temperature,
             maxOutputTokens: request.maxOutputTokens,
             // A reasoning model can spend the whole budget thinking and return
-            // no text at all, which reaches the table as a silent fold. Set
+            // an empty answer, which reaches the table as a silent fold. Set
             // GEMINI_THINKING_BUDGET to bound or disable that when the model in
             // use supports it; unset, the model's own default stands.
             ...(budget === null ? {} : { thinkingConfig: { thinkingBudget: budget } }),
@@ -102,13 +101,13 @@ class GeminiProvider implements ModelProvider {
       }
     }
 
-    // A stream that ends without a word is a failure, not an empty opinion.
-    // Saying why beats letting the seat fold with nothing on the panel.
+    // A stream that ends silent is a failure, and saying why puts the reason on
+    // the panel next to the fold.
     if (produced === 0) {
       throw new ProviderError(
         finish === 'MAX_TOKENS'
           ? `${this.name} hit its output limit before writing anything. Raise AGENT_MAX_OUTPUT_TOKENS or set GEMINI_THINKING_BUDGET.`
-          : `${this.name} returned no text${finish ? ` (${finish})` : ''}`,
+          : `${this.name} returned an empty answer${finish ? ` (${finish})` : ''}`,
       );
     }
   }
@@ -117,8 +116,8 @@ class GeminiProvider implements ModelProvider {
 /**
  * The provider the model brain streams from.
  *
- * Gemini is the only one shipped. Playing without a key is not a provider at
- * all: `AGENT_BRAIN=heuristic` never builds one.
+ * Gemini is the one shipped. Keyless play is the brain's choice:
+ * `AGENT_BRAIN=heuristic` plays from the frame alone.
  */
 export function createProvider(model = process.env.GEMINI_MODEL ?? 'gemini-3-flash'): ModelProvider {
   return new GeminiProvider(model);
@@ -164,6 +163,6 @@ async function safeText(response: Response): Promise<string> {
   try {
     return (await response.text()).slice(0, 300);
   } catch {
-    return '<no body>';
+    return '<unreadable body>';
   }
 }

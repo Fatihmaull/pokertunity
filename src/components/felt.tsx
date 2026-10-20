@@ -11,15 +11,14 @@ import { useRemaining } from './use-remaining';
 
 /**
  * The table itself: the cloth, the seats around it and the board in the middle.
- * Everything here is drawn for a spectator who is not playing, so nothing is
- * interactive and every figure is one somebody watching has to be able to read
- * before the next event replaces it.
+ * Everything here is drawn for a spectator, so the table is display-only and
+ * every figure is one somebody watching has to be able to read before the next
+ * event replaces it.
  *
- * Only one thing on this table is drawn in an agent's own colour, and it is the
- * disc with the agent's initial in it. A colour per agent is fine for saying
- * whose seat this is and useless for saying what is happening at it: with six
- * agents the table ends up with six different "your turn" colours and none of
- * them means anything. State has one palette, the same at every seat.
+ * One thing on this table is drawn in an agent's own colour: the disc with the
+ * agent's initial in it. A colour per agent says whose seat this is, and state
+ * is a separate question, so state has one palette, the same at every seat, and
+ * "your turn" means one thing everywhere.
  */
 
 export function Felt({
@@ -46,14 +45,13 @@ export function Felt({
 
   const focus = table?.seats.findIndex((seat) => seat.agentId && myAgentIds.has(seat.agentId)) ?? -1;
   const anchor = focus >= 0 ? focus : 0;
-  // An eliminated seat keeps its chair, so it is in the list but not in play.
+  // An eliminated seat keeps its chair, so it is in the list and out of play.
   const seated = table?.seats.filter((seat) => seat.agentId && seat.status !== 'out').length ?? 0;
 
   return (
     <div
-      // The ref stays on this element in every state. Handing back a different
-      // element while the table loads leaves the observer with nothing to
-      // attach to, and it never gets a second chance: the effect runs once.
+      // The ref stays on this element in every state, so the observer, which
+      // attaches once when the effect runs, always has this element to attach to.
       ref={felt}
       className="felt relative overflow-hidden rounded-card border border-line md:h-[var(--stage-h)]"
     >
@@ -64,19 +62,18 @@ export function Felt({
       ) : (
         <>
           {/*
-            The oval, drawn only where there is width to hold it. The cloth
-            stays in percentages; only the objects sitting on it are scaled,
-            because shrinking the layer as a whole would pull the seats together
-            by exactly as much as it shrank them and fix nothing.
+            The oval, drawn where there is width to hold it. The cloth stays in
+            percentages and the objects sitting on it are scaled, because scaling
+            each object is what actually makes room between the seats.
           */}
           <div className="absolute inset-0 hidden md:block">
             {/*
               Flatter than it is wide, by a lot. A poker table is that shape
-              because the players sit along its sides, and an oval drawn any
-              rounder pushes them into its ends and leaves its middle empty.
+              because the players sit along its sides, and a flat oval keeps them
+              there with the middle full.
 
-              The inset is not symmetric, because the seat ring it carries is
-              not centred on the felt either. Cards stand above the plate they
+              The inset is lopsided, because the seat ring it carries sits off the
+              felt's centre too. Cards stand above the plate they
               belong to, so the ring sits low and the cloth sits low with it,
               which is what leaves the seats at the top of the table room to
               hold a hand.
@@ -197,7 +194,7 @@ function Centre({
       <div className="board-recess flex items-end gap-1.5 rounded-[10px] p-2">
         {table.board.map((card, index) => (
           // The flop arrives as three cards and is staggered; the turn and
-          // the river arrive alone and have nothing to be staggered against.
+          // the river arrive alone.
           <PlayingCard
             key={`${card}-${index}`}
             card={card}
@@ -218,7 +215,7 @@ function Centre({
 const BOARD_CARD = 66;
 
 /**
- * A board card's width in the column, which nothing scales. Five cards, the
+ * A board card's width in the column, at a fixed size. Five cards, the
  * gaps between them and the recess around them have to cross a phone with air
  * to spare, and at the oval's size they are wider than a phone is.
  */
@@ -229,8 +226,8 @@ function columnCard(width: number): number {
 
 /**
  * How far a seat reaches from the middle of its plate, at full size. The two
- * directions differ because a seat is not symmetric: cards stand well above the
- * plate, and below it there is only the action strip, which hangs off the
+ * directions differ because a seat is lopsided: cards stand well above the
+ * plate, and below it hangs the action strip alone, which hangs off the
  * bottom edge and is one line high.
  */
 const SEAT_UP = 72;
@@ -244,10 +241,9 @@ const BOARD_TOP = 0.5;
  *
  * The middle of the table is one column centred on `BOARD_TOP` and the pot is
  * the first thing in it, so the pot sits half the column's height up and then
- * back down by its own half. This is the only number here that is a measurement
- * of the layout rather than a decision about it, so it moves when the column
- * does: it is what chips aim at, and chips landing beside the figure they are
- * supposed to be joining is worse than no chips at all.
+ * back down by its own half. This is the one number here that measures the
+ * layout, so it moves when the column does: it is what chips aim at, and chips
+ * have to land on the figure they are joining.
  */
 const POT_ANCHOR_Y = -CENTRE_HEIGHT / 2 + 42;
 /**
@@ -255,7 +251,7 @@ const POT_ANCHOR_Y = -CENTRE_HEIGHT / 2 + 42;
  * as fractions of the felt. The cloth has far more width than height, which is
  * the whole reason a poker table is the shape it is.
  *
- * The ring has its own centre and it is not the board's. Cards are drawn above
+ * The ring has its own centre, separate from the board's. Cards are drawn above
  * the plate they belong to, so a seat reaches much further up than down, and
  * the ring has to sit low enough that the seat at the top of it still has felt
  * above its cards.
@@ -264,30 +260,28 @@ const SEAT_CENTRE_Y = 0.55;
 const SEAT_RADIUS = 0.4;
 const SEAT_SPREAD = 0.4;
 /**
- * Half a place of turn on the whole ring, so that an even table has no seat on
- * the vertical line through the middle of it.
+ * Half a place of turn on the whole ring, so that an even table keeps the
+ * vertical line through the middle of it clear of seats.
  *
- * That line is where the pot and the board are, and it is the one direction a
- * seat cannot give ground in: a seat above the board is squeezed against the
- * top of the felt and a seat below it has its cards pointing straight at the
- * board. Without the turn an even number of seats puts one at both ends of that
- * line, and both of them are in trouble. Turned, the seats straddle it and the
+ * That line is where the pot and the board are, and it is the one direction
+ * where a seat is cramped: a seat above the board is squeezed against the top
+ * of the felt and a seat below it has its cards pointing straight at the
+ * board. Turned, an even number of seats straddles the line and the
  * room they need comes out of the width, which is the dimension a poker table
  * has to spare. A table is as big as the field that turned up, so it can be
  * odd, and turned, an odd ring keeps one seat on the line: at the top, where
  * the fit below gives it room.
  *
- * The cost is that the viewer's own seat is at the bottom corner rather than
- * the bottom middle. It is still the seat nearest the viewer and still the one
+ * The cost is that the viewer's own seat is at the bottom corner. It is still
+ * the seat nearest the viewer and still the one
  * everything else is measured around.
  */
 const SEAT_TURN = 0.5;
 /**
  * Clear air kept around every seat, in unscaled pixels.
  *
- * Sizing the seats to fit exactly is sizing them to clip: a border, a shadow or
- * a font that measures a pixel taller than assumed has nowhere to go. This is
- * the slack that makes the fit a fit rather than a coincidence.
+ * A border, a shadow or a font that measures a pixel taller than assumed needs
+ * room to go. This is the slack that makes the fit a fit by design.
  */
 const SEAT_MARGIN = 12;
 /** Half the width of a seat, avatar included, and half the width of the board. */
@@ -322,7 +316,7 @@ function useFeltBox(ref: React.RefObject<HTMLDivElement | null>, count: number):
     return () => observer.disconnect();
   }, [ref]);
 
-  // Derived rather than stored, because it depends on how many seats the table
+  // Derived on every render, because it depends on how many seats the table
   // has as well as how big the felt is, and a table can be looked at before its
   // first frame says how many that is.
   const scale = feltScale(size.width, size.height, count);
@@ -335,26 +329,27 @@ function useFeltBox(ref: React.RefObject<HTMLDivElement | null>, count: number):
  * Everything on the cloth is drawn at one size, so the fit is one number and
  * the worst-off seat decides it. Four things can take a seat's room away: the
  * top edge of the felt, the bottom edge, the sides, and the column of pot and
- * board in the middle. This walks the seats rather than assuming which one is
- * worst, because that depends on how many there are.
+ * board in the middle. This walks every seat to find the worst one, because
+ * that depends on how many there are.
  *
  * The middle column is the interesting one. A seat clears it by being far
- * enough to the side of it or far enough above or below it, and either will do,
+ * enough to the side of it or far enough above or below it, and either works,
  * so the seat takes whichever is the more generous. That is what pays for
  * turning the ring: a seat pushed off the vertical line clears the board
- * sideways and stops competing with it for height.
+ * sideways and leaves the height to the board.
  *
  * The sides and the middle pull against each other. A felt with the panel
  * beside it is narrow enough that the seats at the ends of the ring would hang
  * off its edges, so the ring pulls in (`ringSpread`), and every pixel it pulls
  * in is a pixel less between those seats and the board.
  *
- * Scaling the whole layer instead would be no help at all: it would pull the
- * seats together by exactly as much as it shrank them.
+ * Scaling each object, as opposed to the whole layer, is what makes room:
+ * scaling the layer would pull the seats together by exactly as much as it
+ * shrank them.
  */
 function feltScale(width: number, height: number, count: number): number {
-  // Nothing measured yet. Below the breakpoint the answer goes unread: the oval
-  // is not drawn there and the seats are a list that reflows on its own.
+  // Still unmeasured. Below the breakpoint the answer goes unread: the seats
+  // are a list there, reflowing on its own.
   if (width === 0 || height === 0) return 1;
 
   const boardY = BOARD_TOP * height;
@@ -369,7 +364,7 @@ function feltScale(width: number, height: number, count: number): number {
     const y = (SEAT_CENTRE_Y + SEAT_RADIUS * sin) * height;
     const side = Math.abs(cos);
 
-    // A seat below the board points its cards at it; one above it turns only
+    // A seat below the board points its cards at it; one above it turns just
     // its foot that way. Which end faces the board decides how much room the
     // seat needs to clear it, and how much it needs to clear the felt itself.
     const towards = y > boardY ? SEAT_UP : SEAT_DOWN;
@@ -407,7 +402,7 @@ function centreOf(box: FeltBox): { x: number; y: number } {
   return { x: box.width / 2, y: BOARD_TOP * box.height + POT_ANCHOR_Y * box.scale };
 }
 
-/** Where a seat sits, in the felt's own pixels rather than in percentages. */
+/** Where a seat sits, in the felt's own pixels. */
 function seatPoint(index: number, anchor: number, count: number, box: FeltBox): { x: number; y: number } {
   const { cos, sin } = seatAngle(index, anchor, count);
   return { x: (0.5 + box.spread * cos) * box.width, y: (SEAT_CENTRE_Y + SEAT_RADIUS * sin) * box.height };
@@ -416,11 +411,10 @@ function seatPoint(index: number, anchor: number, count: number, box: FeltBox): 
 /**
  * The offset from a seat's cards back to the middle of the table.
  *
- * In that seat's own pixels, not the felt's. Everything inside a seat is drawn
- * through `scale`, so a translate written there covers `scale` times the ground
- * it says it does and has to be divided back out first. Before the felt has
- * been measured there is no direction to give, and a card with no origin falls
- * into place instead, which is what it did before any of this existed.
+ * In that seat's own pixels. Everything inside a seat is drawn through
+ * `scale`, so a translate written there covers `scale` times the ground it
+ * says it does and is divided back out first. Before the felt has been
+ * measured, a card falls straight into place.
  */
 function dealOrigin(index: number, anchor: number, count: number, box: FeltBox): CardOrigin | null {
   if (box.width === 0) return null;
@@ -435,9 +429,8 @@ function dealOrigin(index: number, anchor: number, count: number, box: FeltBox):
  * One seat: a disc on the outer side and a plate reading inwards from it.
  *
  * The plate is the fixed part and everything else hangs off it. That matters
- * more than it sounds, because an empty seat has no cards and no anything, and
- * if the plate were laid out in flow beneath them then half the table would sit
- * at one height and half at another. Six plates on one line is what makes a
+ * more than it sounds: an empty seat is a bare plate, and anchoring every plate
+ * keeps all six on one line whatever hangs off them, which is what makes a
  * table scannable.
  */
 function Seat({
@@ -470,14 +463,14 @@ function Seat({
   const won = (seat.won ?? 0) > 0;
   const cards = cardsOf(seat, table);
   const leaving = useMuck(cards);
-  // The plate reaches over the strip rather than containing it, so it has to
+  // The plate reaches over the strip, so it has to
   // know whether there is one before it draws its own edge.
   const line = stripLine(seat, seat.won);
 
   return (
     <div
       // The positioning transform lives here and the sizing one on the child,
-      // so neither can quietly overwrite the other.
+      // so each keeps its own.
       className="absolute -translate-x-1/2 -translate-y-1/2"
       style={{ left: position.left, top: position.top, zIndex: thinking || won ? 12 : 10 }}
     >
@@ -495,17 +488,17 @@ function Seat({
             />
 
             {/*
-              The hand is a sister of the plate rather than a child of it, and
+              The hand is a sister of the plate, and
               it comes first: the cards stand behind the plate and tuck their
               bottom edge under it, and painting order is what puts them there.
-              A child of the plate would draw over the plate whatever z-index
-              it carried.
+              As a sister it can sit behind the plate, which z-index on a child
+              would fail to do.
             */}
             <div className="relative">
               {/*
-                Face-up cards at a seat that is not yours only ever got there by
-                being shown, so they turn over. Your own were dealt to you face
-                up and were never anything else, so they are dealt.
+                Face-up cards at another seat got there by being shown, so they turn
+                over. Your own were dealt to you face up from the start, so they are
+                dealt.
               */}
               <Hand cards={cards} leaving={leaving} folded={folded} origin={origin} reveal={!isMine} />
 
@@ -515,8 +508,7 @@ function Seat({
                 } ${won ? 'plate-won' : ''} ${folded || seat.status === 'out' ? 'plate-out' : ''}`}
               >
                 {/*
-                  Centred in the room the avatar leaves rather than in the
-                  plate, so the type reads as centred to an eye that sees the
+                  Centred in the room the avatar leaves, so the type reads as centred to an eye that sees the
                   disc as part of the seat.
                 */}
                 <div className={`px-2.5 pt-1.5 pb-1.5 text-center ${mirrored ? 'pr-4' : 'pl-4'}`}>
@@ -549,13 +541,13 @@ function Seat({
   );
 }
 
-/** Two cards nobody at this table is entitled to see yet. */
+/** Two cards still face down to this viewer. */
 const FACE_DOWN = [null, null];
 
 /**
- * What a seat holds, as far as this viewer may know. Nothing between hands, and
- * nothing at all for a seat that has been eliminated: it keeps its chair, and
- * cards in front of it would say it was still being dealt in.
+ * What a seat holds, as far as this viewer may know. Empty between hands, and
+ * empty for a seat that has been eliminated: it keeps its chair, and its bare
+ * plate says it sits the hands out.
  */
 function cardsOf(seat: SeatView, table: TableView): Array<string | null> | null {
   if (seat.status === 'out') return null;
@@ -563,7 +555,7 @@ function cardsOf(seat: SeatView, table: TableView): Array<string | null> | null 
 }
 
 /**
- * A seat's name, as its owner wrote it. A name is read rather than scanned, so
+ * A seat's name, as its owner wrote it. A name is read, so
  * it keeps its own case, which also fits the most of it on a plate before it
  * truncates. It stays quieter than the stack under it, the figure that moves.
  */
@@ -572,17 +564,16 @@ const SEAT_NAME = 'truncate text-xs leading-tight font-medium text-white/65';
 /**
  * A seat's hand, sitting square on the top edge of its plate.
  *
- * Squarely, not fanned. Card art has a printed border and a rounded corner, and
- * tilting one against the other puts those borders out of parallel, which reads
- * as a rendering fault rather than as a hand of cards.
+ * Squarely. Card art has a printed border and a rounded corner, and square
+ * cards keep those borders parallel, which reads as a hand of cards.
  *
- * Cards nobody may see only have to say that this seat is still in the hand, so
- * they stay small. Cards that have been turned over, or that belong to the
+ * Face-down cards just say that this seat is still in the hand, so they stay
+ * small. Cards that have been turned over, or that belong to the
  * person watching, have to be read, so they are drawn larger.
  *
- * A folded hand stays where it was and goes dim. Cards that vanish take the
- * seat's shape with them, and a row of plates that changes height as the hand
- * plays out is harder to read than one that dims in place.
+ * A folded hand stays where it was and goes dim, which keeps the seat's shape,
+ * and a row of plates that holds its height as the hand plays out is easy to
+ * read.
  */
 function Hand({
   cards,
@@ -600,7 +591,7 @@ function Hand({
   reveal: boolean;
 }) {
   // The cards keep their keys across the change, so the hand that is leaving is
-  // the same elements swapping animation rather than a new pair appearing.
+  // the same elements swapping animation.
   const showing = cards ?? leaving;
   if (!showing) return null;
   const shown = showing[0] !== null;
@@ -631,11 +622,10 @@ function Hand({
 /**
  * The hand a seat had a moment ago, held just long enough to be seen leaving.
  *
- * The end of a hand takes every seat's cards away by giving it nothing to draw,
- * and nothing to draw is not something anybody can watch happen. Cards at a
- * real table go somewhere when they stop being in play, so they are held here
- * long enough to be seen going. A fold does not come through here: those cards
- * stay on the plate and dim instead.
+ * The end of a hand takes every seat's cards away. Cards at a real table go
+ * somewhere when they stop being in play, so they are held here long enough to
+ * be seen going. A fold takes its own path: those cards stay on the plate and
+ * dim.
  */
 const MUCK_MS = 380;
 
@@ -648,16 +638,15 @@ function useMuck(cards: Cards): Cards {
   const key = cards ? cards.map((card) => card ?? '?').join(' ') : '';
   const [state, setState] = useState<{ key: string; cards: Cards; leaving: Cards }>({ key, cards, leaving: null });
 
-  // Worked out while rendering rather than in an effect. The hand leaving is
-  // derived from the hand that is there, and an effect would draw the seat
-  // empty for a frame before putting the cards back to take them away.
+  // Worked out while rendering. The hand leaving is derived from the hand that
+  // is there, so the seat keeps its cards on every frame until they go.
   if (state.key !== key) {
     const going = cards === null && state.cards !== null && !stillness();
     setState({ key, cards, leaving: going ? state.cards : null });
   }
 
-  // Clearing it is the one part that really is a timer: nothing else knows
-  // when the cards have finished leaving.
+  // Clearing it is the one part that really is a timer: the timer is what
+  // knows when the cards have finished leaving.
   useEffect(() => {
     if (state.leaving === null) return;
     const timer = setTimeout(() => setState((current) => ({ ...current, leaving: null })), MUCK_MS);
@@ -668,12 +657,12 @@ function useMuck(cards: Cards): Cards {
 }
 
 /**
- * The disc, and the only place an agent's own colour is used. It is muted well
- * down from the chip it is sampled from: six saturated discs around a table is
- * a set of warning lights, and none of them is telling you anything.
+ * The disc, and the one place an agent's own colour is used. It is muted well
+ * down from the chip it is sampled from, so six discs around a table read as
+ * identity and stay calm.
  *
  * The act clock is the ring around it, because the seat you are watching and
- * the clock you are watching it against should not be in two different places.
+ * the clock you are watching it against belong in one place.
  */
 function Avatar({
   seat,
@@ -718,8 +707,7 @@ function initialOf(name: string | null): string {
 }
 
 /**
- * What a seat has left. The number and nothing else: a bar beside it was one
- * more thing to read that never said anything the number had not already said.
+ * What a seat has left. The number alone, because the number says it all.
  */
 function StackFigure({ stack, settling }: { stack: number; settling: boolean }) {
   const shown = useCountUp(stack);
@@ -737,14 +725,14 @@ function StackFigure({ stack, settling }: { stack: number; settling: boolean }) 
 /**
  * What this seat last did, hanging off the bottom edge of its plate.
  *
- * The plate itself is only as tall as the name and the figure, so this arrives
- * by sliding out from under it instead of by making it taller: a seat that has
- * nothing to say is a smaller object than one that is talking, and the moment
- * it starts talking is the moment worth catching out of the corner of an eye.
+ * The plate itself is as tall as the name and the figure, so this arrives by
+ * sliding out from under it: a quiet seat is a smaller object than one that is
+ * talking, and the moment it starts talking is the moment worth catching out of
+ * the corner of an eye.
  */
 function ActionStrip({ line, inline = false }: { line: StripLine; inline?: boolean }) {
-  // In a row it is a pill beside the name rather than the foot of a plate, so
-  // it is rounded all the way round and has no plate to line its corners up to.
+  // In a row it is a pill beside the name, so it is rounded all the way round
+  // and stands on its own.
   if (inline) {
     return <strong className={`strip strip-inline ${line.tone} ${line.fresh ? 'badge-pop' : ''}`}>{line.body}</strong>;
   }
@@ -759,19 +747,19 @@ function ActionStrip({ line, inline = false }: { line: StripLine; inline?: boole
 }
 
 /**
- * The one sentence a seat is saying, or nothing at all when it has none.
+ * The one sentence a seat is saying, or null when it is quiet.
  *
  * It changes rarely enough to be worth reading every time it does: what a seat
  * won outranks what it last did, and being out of the hand outlasts both,
- * because the badge that said "fold" is cleared when the street sweeps and
- * without this a seat that is out looks exactly like one that is waiting. Being
- * all in outlasts the sweep for the same reason: left with only its stack, an
- * all-in seat shows nothing, which reads as broke. Being out of the match
+ * because the badge that said "fold" is cleared when the street sweeps and this
+ * keeps a seat that is out distinct from one that is waiting. Being all in
+ * outlasts the sweep for the same reason: the line keeps an all-in seat from
+ * reading as broke. Being out of the match
  * outranks everything but a win.
  *
  * `fresh` marks the lines that arrive because the seat just did something, as
- * against the ones that only describe where it stands. Those are the ones that
- * animate; a seat that has been folded for a minute does not re-announce it.
+ * against the ones that describe where it stands. Those are the ones that
+ * animate; a seat that has been folded for a minute stays still.
  */
 type StripLine = { tone: string; body: ReactNode; fresh: boolean };
 
@@ -785,8 +773,8 @@ function stripLine(seat: SeatView, won: number | null): StripLine | null {
   const move = lastMove(seat);
   if (move) {
     return {
-      // Chips going in is the only distinction that changes how the next seat
-      // has to think, so it is the only one drawn in colour.
+      // Chips going in is the distinction that changes how the next seat has to
+      // think, so it is the one drawn in colour.
       tone: move.amount !== null ? 'strip-money' : 'strip-quiet',
       fresh: true,
       body: (
@@ -798,13 +786,13 @@ function stripLine(seat: SeatView, won: number | null): StripLine | null {
     };
   }
 
-  // Being made to post is not acting, so it ranks below anything the seat chose
-  // to do. It is still worth a line: a seat that has not acted yet is not the
-  // same as one that is already in for a blind.
+  // Being made to post is separate from acting, so it ranks below anything the
+  // seat chose to do. It is still worth a line: a seat already in for a blind
+  // differs from one still waiting to act.
   if (seat.blind) {
     return {
       // Green like a call or a raise, because chips went in either way. The
-      // difference is only whether the seat chose to put them there.
+      // difference is whether the seat chose to put them there.
       tone: 'strip-money',
       fresh: false,
       body: (
@@ -883,7 +871,7 @@ function SeatRow({
         {rowLine ? <ActionStrip key={actionKey} line={rowLine} inline /> : null}
       </div>
 
-      {/* Two cards wide whether or not any are dealt, so every row's strip
+      {/* Two cards wide at all times, so every row's strip
           stays in the same column. */}
       <div className="flex w-[3.5rem] shrink-0 justify-end gap-1">
         {cards?.map((card, index) =>
@@ -899,17 +887,15 @@ function SeatRow({
 }
 
 /**
- * Chips crossing the cloth, read off the table rather than off the feed.
+ * Chips crossing the cloth, read off the table state.
  *
- * What makes a chip travel is money changing places, and there are only two
- * places it goes: a seat's commitment growing is chips going into the middle,
+ * What makes a chip travel is money changing places, and it goes two places: a seat's commitment growing is chips going into the middle,
  * and a seat's winnings growing is the middle coming back. Deriving it from the
- * view means every route into the view moves chips — an action, a blind, a
- * reconnect — and no new event type has to remember to.
+ * view means every route into the view moves chips (an action, a blind, a
+ * reconnect) and every new event type gets chips for free.
  *
  * The token stays a token. The figures on the plate and in the middle are the
- * exact answer to how much moved, and a countable pile of chips beside them
- * would be a second, worse one.
+ * exact answer to how much moved.
  */
 const FLIGHT_MS = 620;
 /** Three chips, thrown a beat apart, because one chip on its own is a cursor. */
@@ -927,7 +913,7 @@ interface Flight {
 type Totals = Map<number, { committed: number; won: number }>;
 
 interface FlightState {
-  /** The view these were worked out from, so the same view is not read twice. */
+  /** The view these were worked out from, so each view is read once. */
   source: TableView | null;
   totals: Totals;
   flights: Flight[];
@@ -948,8 +934,8 @@ function advance(state: FlightState, table: TableView | null): FlightState {
 
   if (!stillness()) {
     for (const [index, now] of totals) {
-      // A seat we are seeing for the first time has nothing to be compared
-      // against, so joining a table mid-hand does not replay its betting.
+      // A seat we are seeing for the first time sets the baseline, so joining a
+      // table mid-hand starts from the current betting.
       const was = state.totals.get(index);
       if (!was) continue;
       if (now.committed > was.committed) started.push({ id: serial++, seat: index, kind: 'bet' });
@@ -961,8 +947,8 @@ function advance(state: FlightState, table: TableView | null): FlightState {
     source: table,
     totals,
     serial,
-    // Kept as the same array when nothing set off, so the clearing timer below
-    // is not restarted by every event that happens to change nothing.
+    // Kept as the same array when zero chips set off, so the clearing timer below
+    // restarts when chips actually move.
     flights: started.length === 0 ? state.flights : [...state.flights, ...started].slice(-12),
   };
 }
@@ -977,7 +963,7 @@ function useChipFlights(table: TableView | null): Flight[] {
 
   if (state.source !== table) setState(advance(state, table));
 
-  // The chips hold their finished frame, which is nothing, so clearing them
+  // The chips hold their finished frame, which is empty, so clearing them
   // late is invisible and one timer for the whole set is enough.
   useEffect(() => {
     if (state.flights.length === 0) return;
@@ -1007,8 +993,8 @@ function ChipFlights({
   const size = 14 * box.scale;
 
   return (
-    // Above the seats rather than between them: a chip that passes behind a
-    // nameplate on its way to the pot has gone under the table.
+    // Above the seats: a chip on its way to the pot travels over every
+    // nameplate, across the top of the table.
     <div className="pointer-events-none absolute inset-0 z-[15]" aria-hidden>
       {flights.map((flight) => {
         const seat = seatPoint(flight.seat, anchor, count, box);
@@ -1044,18 +1030,18 @@ function ChipFlights({
   );
 }
 
-/** Anybody who has asked for less motion gets the state and none of the travel. */
+/** Anybody who has asked for less motion gets the state, held still. */
 function stillness(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**
- * Chip counts roll to their new value instead of snapping to it.
+ * Chip counts roll to their new value.
  *
  * A pot that jumps from 120 to 640 between frames reads as a different number
  * appearing; one that travels there reads as money arriving, and the travel is
- * what tells a spectator how much moved without doing the subtraction. Anyone
- * who has asked for less motion gets the number and none of the travel.
+ * what tells a spectator how much moved at a glance. Anyone who has asked for
+ * less motion gets the number, held still.
  */
 const COUNT_MS = 420;
 
@@ -1075,7 +1061,7 @@ function useCountUp(value: number): number {
     const startedAt = performance.now();
     const step = (now: number) => {
       const t = Math.min(1, (now - startedAt) / COUNT_MS);
-      // Ease out, so the number lands rather than stopping dead.
+      // Ease out, so the number lands softly.
       const eased = 1 - (1 - t) ** 3;
       setShown(Math.round(start + (value - start) * eased));
       if (t < 1) frame.current = requestAnimationFrame(step);

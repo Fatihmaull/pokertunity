@@ -3,8 +3,8 @@ import { signIn } from '@/server/auth';
 import { callerOf, take, tooMany } from '@/server/rate-limit';
 
 export async function POST(request: Request): Promise<Response> {
-  // Signature checking is cheap but not free, and this is the one route that
-  // will be found and hammered by anything scanning for wallet logins.
+  // Signature checking costs a little, and this is the one route that
+  // anything scanning for wallet logins will find and hammer.
   const allowed = take('sign-in', callerOf(request, null));
   if (!allowed.ok) return tooMany(allowed.retryAfterMs);
 

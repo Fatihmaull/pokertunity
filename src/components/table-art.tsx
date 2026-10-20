@@ -3,17 +3,15 @@ import { colorById } from '@/agent/colors';
 
 /**
  * The physical objects on the felt. The cards and the seat marker are the actual
- * art from `public/cards` and `public/chips`, not a CSS approximation of it.
+ * art from `public/cards` and `public/chips`.
  *
- * Money is deliberately not among them. A chip tower says roughly how much is
- * there and never says exactly, which is the wrong trade at a table where the
- * amount of a bet is the whole story; stacks and bets are figures instead, and
- * live in the arena beside the seat they belong to.
+ * Money is deliberately shown as figures. At a table where the amount of a bet
+ * is the whole story, the exact number is what matters, so stacks and bets live
+ * in the arena beside the seat they belong to.
  *
  * These use plain `<img>` on purpose. The card and chip files are already small
- * fixed-size PNGs served from our own origin, so routing them through the image
- * optimiser would add work and cache pressure without changing a byte that
- * reaches the browser.
+ * fixed-size PNGs served from our own origin, already in their final form, so
+ * plain tags serve them directly.
  */
 
 const CARD_RATIO = 630 / 420;
@@ -22,9 +20,9 @@ const CARD_RATIO = 630 / 420;
  * Where a card came from, as an offset in pixels from where it ends up.
  *
  * A seat hands back the vector to the middle of the table, so its cards are
- * dealt out of the middle instead of dropping into place, and the same vector
- * run the other way is where the hand goes when it is mucked. Anything with no
- * particular origin passes nothing and keeps the plain drop.
+ * dealt out of the middle, and the same vector run the other way is where the
+ * hand goes when it is mucked. Anything else leaves it unset and keeps the
+ * plain drop.
  */
 export interface CardOrigin {
   x: number;
@@ -36,7 +34,7 @@ export interface CardMotion {
   origin?: CardOrigin | null;
   /**
    * `reveal` turns the card face up; `deal` slides it in from `origin`; `none`
-   * draws it in place, for a card that only illustrates a hand.
+   * draws it in place, for a card that illustrates a hand.
    */
   entrance?: 'deal' | 'reveal' | 'none';
   /** The hand is out of play and on its way back to the middle. */
@@ -50,8 +48,8 @@ function motionClass({ entrance = 'deal', leaving = false }: CardMotion): string
 }
 
 function motionStyle({ delayMs = 0, origin }: CardMotion): React.CSSProperties {
-  // Custom properties are not in React's CSS type, and the alternative is a
-  // prop per direction wired through every caller for the same two numbers.
+  // Custom properties sit outside React's CSS type, and casting here keeps
+  // the two numbers in one prop for every caller.
   const style: Record<string, string> = { animationDelay: `${delayMs}ms` };
   if (origin) {
     style['--deal-x'] = `${Math.round(origin.x)}px`;
@@ -102,10 +100,8 @@ export function CardBack({
 }
 
 /**
- * A board position no card has reached yet. It marks the place without
- * pretending to be an object: a dashed outline the size of a card reads as five
- * empty boxes on the felt, which is louder than the cards that eventually fill
- * them.
+ * A board position still waiting for its card. It marks the place quietly, so
+ * the cards that fill it stay the loudest thing on the felt.
  */
 export function CardSlot({ size = 84 }: { size?: number }) {
   return (

@@ -1,10 +1,10 @@
 /**
  * Every chain this deployment can settle on.
  *
- * Nothing above this file names a network. Screens, wallet prompts, deploy
+ * This is the one file that names a network. Screens, wallet prompts, deploy
  * scripts and explorer links all read from these entries, so adding a chain is
- * adding a row here plus two environment variables, and no code that knows what
- * a chip is has to change.
+ * adding a row here plus two environment variables, and the code that knows
+ * what a chip is stays as it is.
  *
  * This module is pure and shared by both halves of the app. Which of these
  * chains are actually switched on, and where their vaults live, is environment
@@ -24,10 +24,10 @@ export interface ChainInfo {
   id: number;
   /** Full name, as a wallet should show it when adding the network. */
   name: string;
-  /** What the interface calls it where there is no room for the full name. */
+  /** What the interface calls it where space is tight. */
   shortName: string;
   nativeCurrency: NativeCurrency;
-  /** Public endpoint, used when the environment does not override it. */
+  /** Public endpoint, the default an environment variable can override. */
   defaultRpcUrl: string;
   explorer: { name: string; url: string };
   /** Where a player with an empty wallet goes. Every entry here is a testnet. */
@@ -73,8 +73,8 @@ export const CHAINS: ChainInfo[] = [
 
 /**
  * A chain as the browser is told about it: the registry entry plus where the
- * vault lives, which is public by nature. The server's own RPC endpoint is
- * deliberately not part of this.
+ * vault lives, which is public by nature. The server's own RPC endpoint stays
+ * on the server.
  */
 export interface PublicChain extends ChainInfo {
   vault: `0x${string}` | null;
@@ -90,7 +90,7 @@ export function chainById(id: number): ChainInfo | undefined {
 
 /**
  * The environment variable prefix a chain's settings live under, `bnb-testnet`
- * becoming `BNB_TESTNET`. Derived rather than stored so the two cannot drift.
+ * becoming `BNB_TESTNET`. Derived from the key, so the two always agree.
  */
 export function envPrefix(key: string): string {
   return key.toUpperCase().replace(/-/g, '_');

@@ -105,9 +105,9 @@ const noSubscription = () => () => {};
  * The address agents dial, read from the page's own location.
  *
  * The socket is served on the same host as this page, so the tab already knows
- * it, down to `ws:` on a local http arena where a written-in `wss:` would fail.
- * Reading it from configuration instead would put it in a page `next build` may
- * prerender, which freezes whatever the build stage saw.
+ * it, down to `ws:` on a local http arena and `wss:` behind TLS. Reading it
+ * from the location keeps it out of anything `next build` may prerender, which
+ * would freeze whatever the build stage saw.
  */
 function useArenaUrl(): string {
   return useSyncExternalStore(
@@ -119,8 +119,8 @@ function useArenaUrl(): string {
 
 /**
  * A complete agent per language, so the fastest way in is paste, run, and then
- * make it yours. Tabs rather than both at once, because the reader only ever
- * wants the one in their language and each is forty lines.
+ * make it yours. Tabs, because the reader wants the one in their language and
+ * each is forty lines.
  */
 function Starters({ url }: { url: string }) {
   const [language, setLanguage] = useState<StarterLanguage>('javascript');
@@ -169,7 +169,7 @@ function Starters({ url }: { url: string }) {
             </button>
           ))}
         </div>
-        {/* Keyed on the language so a switch does not still read "Copied" about
+        {/* Keyed on the language so a switch resets "Copied" for
             the code that was on screen before it. */}
         <CopyButton key={language} text={code} className="mb-1.5" />
       </div>
@@ -207,7 +207,7 @@ function Step({ n, title, children }: { n: number; title: React.ReactNode; child
   );
 }
 
-/** Text meant to be copied exactly, so it scrolls sideways rather than wrapping. */
+/** Text meant to be copied exactly, so it scrolls sideways and keeps every line whole. */
 function Block({ className = '', children }: { className?: string; children: string }) {
   return (
     <pre className={`scroll-x mono rounded-control border border-line bg-surface-2 p-3 text-xs text-ink ${className}`}>
@@ -225,9 +225,9 @@ function Note({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * A clipboard write can be refused, on an insecure origin or without a gesture
- * the browser saw. The text stays on screen to select by hand when it is, so a
- * refusal only leaves the button saying Copy.
+ * A clipboard write can be refused, on an insecure origin or when the browser
+ * missed the gesture. The text stays on screen to select by hand when it is, so
+ * a refusal leaves the button saying Copy.
  */
 function CopyButton({ text, className = '' }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);

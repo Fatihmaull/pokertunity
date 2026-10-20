@@ -11,14 +11,14 @@ import { BackLink, Badge, ButtonLink, Card, PageHeader } from './ui';
  *
  * An abandoned match is shown as emphatically as a finished one. It is the case
  * an entrant is most likely to be confused by: their chips left, the hands were
- * dealt, and then the match disappeared without ever saying what happened to
- * the stack.
+ * dealt, and then the match ended early, so this page says plainly what
+ * happened to the stack.
  */
 
 function endingOf(status: string): string {
   if (status === 'elimination') return 'One agent took every chip.';
   if (status === 'cap') return 'The hands ran out. Remaining stacks decided the order.';
-  return 'The server stopped mid-match. Every stack was returned and nobody was rated.';
+  return 'The server stopped mid-match. Every stack was returned and ratings stayed as they were.';
 }
 
 export function MatchResult({ summary }: { summary: MatchSummary }) {
@@ -27,8 +27,7 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
   return (
     <div className="page mx-auto w-full max-w-[84rem] px-4 py-8 sm:px-6 sm:py-10">
       <div className="max-w-4xl">
-        {/* These are the terms of the match, not its result, so they do not
-            get a card each. */}
+        {/* These are the terms of the match, so they sit in the header. */}
         <PageHeader
           back={<BackLink href="/matches">Matches</BackLink>}
           title={matchLabel(summary.number)}
@@ -47,18 +46,17 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
         {/*
           The one figure an entrant actually came back for. It is read from the
           ledger entry written in the same transaction that moved the chips, so it
-          is what landed rather than what ought to have.
+          is what actually landed.
         */}
         {summary.cashOut !== null && (
           <Card className="mb-5 p-4">
             <p className="label text-faint">Returned to your balance</p>
-            {/* An amount, not a change, so it carries no sign: "+0" read as a
-                gain of nothing rather than as nothing coming back. */}
+            {/* An amount, so it is unsigned: it is what came back. */}
             <p className="mono mt-1 text-2xl text-accent tabular-nums">{formatChips(summary.cashOut)}</p>
           </Card>
         )}
 
-        {/* Five columns do not fit a phone, so there the two figures the
+        {/* A phone is narrower than five columns, so there the two figures the
             match changed are one quiet line under the name, the way the
             standings set theirs, and the names keep the width. The place is
             set in ink: on this page it is the result. */}
@@ -90,7 +88,7 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
                           entrant.place === null ? 'text-faint' : 'text-ink'
                         }`}
                       >
-                        {entrant.place ?? '—'}
+                        {entrant.place ?? '–'}
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-semibold text-ink">{entrant.name}</span>
@@ -105,11 +103,11 @@ export function MatchResult({ summary }: { summary: MatchSummary }) {
                         </span>
                       </td>
                       <td className="mono px-4 py-3 text-right align-top text-ink tabular-nums sm:align-middle">
-                        {entrant.finalStack === null ? '—' : formatChips(entrant.finalStack)}
+                        {entrant.finalStack === null ? '–' : formatChips(entrant.finalStack)}
                       </td>
                       <td className={`mono hidden px-4 py-3 text-right tabular-nums sm:table-cell ${wonTone}`}>{won}</td>
                       <td className="mono hidden px-4 py-3 text-right text-muted tabular-nums sm:table-cell">
-                        {rating ?? <span className="text-faint">—</span>}
+                        {rating ?? <span className="text-faint">–</span>}
                       </td>
                     </tr>
                   );

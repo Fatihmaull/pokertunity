@@ -22,9 +22,8 @@ import {
  *
  * Matching by rating has one consequence worth being honest about. If it works
  * perfectly, everyone faces opponents of their own strength and every win rate
- * converges on nothing. That is why the standings rank on the rating rather
- * than on chips won, and why the bands here are deliberately loose rather than
- * tight.
+ * converges on zero. That is why the standings rank on the rating, and why the
+ * bands here are deliberately loose.
  */
 
 /** How often the queue is looked at. Frequent enough to feel immediate, cheap enough to ignore. */
@@ -42,9 +41,9 @@ const FULL_TABLE_WAIT_MS = 60_000;
 /**
  * How far apart two agents can be rated and still be seated together.
  *
- * Loose on purpose. A tight band would sort a small field into matches of two
- * and, at scale, would flatten every result to a coin flip. This is meant to
- * keep the strongest away from the weakest, not to manufacture dead heats.
+ * Loose on purpose. A loose band fills six-handed tables from a small field
+ * and keeps results meaningful at scale. Its job is to keep the strongest away
+ * from the weakest.
  */
 const BAND_START = 6;
 
@@ -102,9 +101,9 @@ export function stopMatchmaker(): void {
 /**
  * Returns every match that was being dealt when the last process went away.
  *
- * Stacks go back to their owners and nobody is rated. A match the server walked
- * out of says nothing about how well anyone played, and resuming one would mean
- * storing and replaying its whole state for a case that should be rare.
+ * Stacks go back to their owners and ratings stay as they were. A match the
+ * server walked out of measures the server, and ending it cleanly keeps a rare
+ * case simple.
  */
 export async function abandonOrphanedMatches(): Promise<number> {
   const orphaned = await liveMatchIds();
@@ -126,24 +125,22 @@ export async function abandonOrphanedMatches(): Promise<number> {
 
 async function tick(): Promise<void> {
   // Settlements that failed last time go first. Their agents stay seated until
-  // the chips land, so every tick one waits is a tick those agents cannot queue.
+  // the chips land, so settling first gets those agents back in the queue.
   for (const matchId of [...unsettled().keys()]) await settle(matchId);
 
   // Readiness is a fact about the sockets this process holds, so it is read
-  // from the connections rather than from a column. An agent that is not here
-  // cannot be seated, because a match holds every seat until it ends.
+  // from the connections. The arena seats agents that are here, because a
+  // match holds every seat until it ends.
   const ready = readyAgents();
 
-  // Before the gate below, not after. An agent whose owner cannot cover a seat
-  // is dropped from the queue query in silence, and the one thing worse than
-  // not being seated is not being told why: the agent says ready, the arena
-  // says nothing, and no match ever arrives.
+  // Before the gate below. An agent whose owner cannot cover a seat is dropped
+  // from the queue query in silence, so this is where it hears why it is
+  // waiting.
   await explain([...ready.keys()]);
 
   if (ready.size < MIN_SEATS) return;
 
-  // Longest wait first, measured from when each agent asked rather than from
-  // anything the database remembers about it.
+  // Longest wait first, measured from when each agent asked on its socket.
   const waiting = (await queuedAgents([...ready.keys()]))
     .map((candidate) => ({ ...candidate, waitingSince: ready.get(candidate.agentId) ?? Date.now() }))
     .sort((a, b) => a.waitingSince - b.waitingSince);
@@ -160,20 +157,19 @@ async function tick(): Promise<void> {
 }
 
 /**
- * Tells each waiting agent whether it is queued, and why not when it is not.
+ * Tells each waiting agent whether it is queued, and why it is waiting when it
+ * is.
  *
  * The connection remembers what it last said, so an answer goes out when it
- * changes rather than every few seconds: an agent refused once and then left
- * alone knows where it stands, and one told the same sentence twelve times a
- * minute is being flooded by the arena that caps how often it may speak. Kept
- * on the connection rather than here, so an agent that reconnects is told
- * afresh instead of inheriting silence from the socket it replaced.
+ * changes: an agent refused once knows where it stands, and the arena that
+ * caps how often an agent may speak keeps to the same courtesy. Kept on the
+ * connection, so an agent that reconnects is told afresh.
  */
 async function explain(ready: readonly string[]): Promise<void> {
   const statuses = await seatingStatus(ready);
 
   for (const status of statuses) {
-    // Playing, so its own match is the answer to why it is not in another one.
+    // Playing, so its own match is the answer.
     if (status.playing) continue;
 
     const link = linkFor(status.agentId);
@@ -198,9 +194,9 @@ type Entrant = Candidate & { waitingSince: number };
  * Splits the queue into the matches that should start right now.
  *
  * Whoever has waited longest anchors a table, and the band is drawn around
- * them, so a lonely agent at the edge of the field gets a wider net rather than
- * waiting forever for a neighbour who never arrives. A group that is not yet
- * full and has not waited long enough is left in the queue to try again.
+ * them, so a lonely agent at the edge of the field gets a wider net as it
+ * waits. A group that is still filling and still inside its wait is left in
+ * the queue to try again.
  */
 function groupsFrom(waiting: readonly Entrant[], now = Date.now()): Entrant[][] {
   // Longest wait first: the queue is already in that order, and rebuilding it
@@ -220,7 +216,7 @@ function groupsFrom(waiting: readonly Entrant[], now = Date.now()): Entrant[][] 
       if (group.length >= MAX_SEATS) break;
       if (Math.abs(candidate.published - anchor.published) > band) continue;
       // One owner, one seat. Two agents with the same owner at one table would
-      // be a pair without ever agreeing anything: the owner sees both sets of
+      // be a pair by construction: the owner sees both sets of
       // cards, and one can fold every pot the other contests until the chips
       // have moved to whichever account they want them in.
       if (owners.has(candidate.ownerId)) continue;
@@ -231,7 +227,7 @@ function groupsFrom(waiting: readonly Entrant[], now = Date.now()): Entrant[][] 
     }
 
     // A short table is a real game and a full one is a better game, so a group
-    // that could still fill up is put back rather than started early.
+    // that could still fill up is put back to wait for its minute.
     if (group.length < MAX_SEATS && waited < FULL_TABLE_WAIT_MS) {
       pool.unshift(...group);
       break;
@@ -251,16 +247,17 @@ function groupsFrom(waiting: readonly Entrant[], now = Date.now()): Entrant[][] 
 type Pending = { ending: MatchEnding; hands: number };
 
 /**
- * Matches whose runtime has finished but whose chips have not gone back yet.
+ * Matches whose runtime has finished and whose chips are still on the way
+ * back.
  *
  * Kept and retried every tick until it lands. Until then the seats stay written
- * and the match stays marked as playing, so its agents cannot queue and their
- * stacks sit on a table nobody is dealing.
+ * and the match stays marked as playing, so its agents wait to queue and their
+ * stacks sit on a closed table.
  *
  * Parked on `globalThis` because the health check counts it from a route, and a
- * route does not resolve to the copy of this module the engine runs in: a
- * module-level map would be filled by the engine while `/api/health` counted an
- * empty one, and stacks stuck on a closed table would be reported as none.
+ * route resolves to its own copy of this module: `globalThis` is the one map
+ * the engine and `/api/health` both see, so stacks stuck on a closed table are
+ * reported truthfully.
  */
 const globalForSettlement = globalThis as unknown as {
   __pokertunityUnsettled?: Map<string, Pending>;
@@ -271,7 +268,7 @@ function unsettled(): Map<string, Pending> {
   return globalForSettlement.__pokertunityUnsettled;
 }
 
-/** Settlements running right now, so a retry never overlaps the attempt it retries. */
+/** Settlements running right now, so each retry waits for the attempt before it. */
 const settling = new Set<string>();
 
 /** How many finished matches are still holding chips, for the health check. */
@@ -282,9 +279,9 @@ export function unsettledMatches(): number {
 /**
  * Closes out a match the moment its runtime says it is done.
  *
- * Settling is deliberately not the runtime's job. It returns chips and rewrites
- * ratings, and none of that belongs tangled up with the loop that deals cards.
- * The runtime is dropped at once, since it has nothing left to deal; the chips
+ * Settling deliberately lives here, apart from the runtime. It returns chips
+ * and rewrites ratings, and that work stays apart from the loop that deals
+ * cards. The runtime is dropped at once, since its dealing is done; the chips
  * are the part that is retried until it lands.
  */
 function onFinished(matchId: string, ending: MatchEnding, hands: number): void {
@@ -313,11 +310,10 @@ async function settle(matchId: string): Promise<void> {
  * Tells every entrant the match is over, and starts each one's wait again.
  *
  * Told after settling, because the rating in the frame is the one the match
- * produced and it does not exist until the finishing order does. Every entrant
- * is told, not only the rated ones: an abandoned match still ended, and an agent
- * never told so waits for a frame that is not coming. The wait restarts here
- * because time spent at a table is not time spent in the queue, and the rating
- * band widens with the queue.
+ * produced, and it exists once the finishing order does. Every entrant is told,
+ * rated and unrated alike: an abandoned match still ended, and every agent is
+ * owed that frame. The wait restarts here because time at a table is separate
+ * from time in the queue, and the rating band widens with the queue.
  */
 function announce(matchId: string, ending: MatchEnding, hands: number, settlement: Settlement): void {
   const placed = new Map(settlement.finishes.map((finish) => [finish.agentId, finish]));

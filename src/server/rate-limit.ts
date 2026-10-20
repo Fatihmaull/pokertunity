@@ -3,23 +3,22 @@
  *
  * Two routes here do real work on someone else's behalf. Confirming a deposit
  * makes two calls to a chain RPC against a transaction hash the caller chose,
- * and starting one writes a row. Neither is dangerous once, and both are a way
- * to spend this deployment's RPC quota or fill its tables from a single
- * signed-in account.
+ * and starting one writes a row. Each is harmless once, and both are a way to
+ * spend this deployment's RPC quota or fill its tables from a single signed-in
+ * account.
  *
  * The public reads are here for a different reason. Each is cheap to ask for
- * and not cheap to answer, needs no sign-in, and runs on the same process that
+ * and costly to answer, is public, and runs on the same process that
  * deals the cards, so one client looping on any of them is felt at every table.
  *
  * Held in memory, which means per instance. That is worth being clear about: it
- * is a brake on ordinary abuse, not a defence against a determined attacker
- * spreading requests across instances. The reason it is still the right shape
- * is that the alternative, a counter in Postgres, adds a write to the path of
- * every request in order to make a limit slightly harder to walk around.
+ * is a brake on ordinary abuse. It is still the right shape because it keeps
+ * every request's path free of a database write, which matters more than
+ * making a limit slightly harder to walk around.
  */
 
 interface Bucket {
-  /** Requests still available right now. Refills continuously, not in steps. */
+  /** Requests still available right now. Refills continuously. */
   tokens: number;
   lastRefill: number;
 }
@@ -35,12 +34,11 @@ interface Limit {
  * The limits, by what the route actually costs.
  *
  * Deposits are slow and rare in real use, so their allowance is small. Sign-in
- * is bounded loosely: a person retrying a wallet prompt is normal, and locking
- * them out of their own account is worse than the nonces they waste.
+ * is bounded loosely: a person retrying a wallet prompt is normal, and keeping
+ * them in their own account is worth the nonces they waste.
  *
  * The reads are sized from below by what this site's own pages ask for, with
- * room for a second tab. A limit the interface trips on its own is a bug, not a
- * defence:
+ * room for a second tab. The interface stays inside every limit on its own:
  *
  * - `axes` reads up to five thousand results and every decision in them, then
  *   computes in memory. The console asks once per agent and an account runs at
@@ -50,13 +48,13 @@ interface Limit {
  *   of them and of the viewer's own. The standings page polls it every fifteen
  *   seconds and asks again on every page turned, so the burst lets somebody
  *   page through quickly.
- * - `attestation` runs that same aggregate for one agent when nothing has been
- *   published for it yet. Verifiers fetch it after reading the chain, rarely.
+ * - `attestation` runs that same aggregate for one agent while its record is
+ *   still unpublished. Verifiers fetch it after reading the chain, rarely.
  *   A single published attestation by id shares the bucket.
  * - `registration` is one agent row and its handful of mints, but it is what an
  *   identity's URI resolves to, so ERC-8004 indexers crawl it. Looser than the
  *   aggregates for that reason and because it is cheap.
- * - `hands-latest` reads a whole hand and its decisions when nothing is live.
+ * - `hands-latest` reads a whole hand and its decisions while the room is idle.
  *   The landing page asks once per load.
  * - `matches` is a handful of rows: every live match and one page of ended
  *   ones. Every open lobby polls it every five seconds, and the matches page
@@ -80,15 +78,15 @@ export type LimitName = keyof typeof LIMITS;
 
 const buckets = new Map<string, Bucket>();
 
-/** Long enough that a bucket at full tokens carries no information worth keeping. */
+/** Long enough that a bucket at full tokens is safe to forget. */
 const IDLE_MS = 10 * 60_000;
 let lastSweep = Date.now();
 
 /**
  * Spends one request against a caller's allowance.
  *
- * Returns how long to wait when there is nothing left, so the caller can say so
- * in a `Retry-After` rather than only refusing.
+ * Returns how long to wait when the allowance is spent, so the caller can say
+ * so in a `Retry-After`.
  */
 export function take(name: LimitName, who: string): { ok: true } | { ok: false; retryAfterMs: number } {
   const limit = LIMITS[name];
@@ -134,33 +132,31 @@ export function tooMany(retryAfterMs: number): Response {
  * survives a change of address. Signed-out callers fall back to the address the
  * proxy saw.
  *
- * That is the *last* entry of `x-forwarded-for`, never the first. Railway's edge
- * appends the address it accepted the connection from and keeps whatever the
- * client sent ahead of it, so the first entry is whatever the caller chose to
- * write. Reading it made every signed-out limit, and the per-caller spectator
- * cap, one random header away from not existing. Should another proxy ever sit
+ * That is the *last* entry of `x-forwarded-for`. Railway's edge appends the
+ * address it accepted the connection from and keeps whatever the client sent
+ * ahead of it, so the last entry is the one the caller cannot write, and every
+ * signed-out limit and the per-caller spectator cap rest on it. Should another proxy ever sit
  * in front of the edge, the last entry becomes that proxy and every stranger
  * shares a bucket: too strict, and loud, which is the right way to be wrong.
  *
- * With no forwarded address every stranger lands in one bucket, and on a read
- * the whole lobby polls, that bucket is a global tap. Behind the proxy this
- * deployment runs on the header is always set, so its absence in production
- * means the proxy changed, and that is said once rather than discovered as a
- * site that answers 429 to everybody.
+ * Lacking a forwarded address, every stranger lands in one bucket, and on a
+ * read the whole lobby polls, that bucket is a global tap. Behind the proxy
+ * this deployment runs on the header is always set, so its absence in
+ * production means the proxy changed, and the warning says so once, up front.
  */
 export function callerOf(request: Request, userId: string | null): string {
   if (userId) return `user:${userId}`;
   const forwarded = request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim();
   if (!forwarded && !warnedUnknown && process.env.NODE_ENV === 'production') {
     warnedUnknown = true;
-    console.warn('rate limit: a request arrived without x-forwarded-for; every such caller shares one bucket');
+    console.warn('rate limit: a request arrived lacking x-forwarded-for; every such caller shares one bucket');
   }
   return `ip:${forwarded || 'unknown'}`;
 }
 
 let warnedUnknown = false;
 
-/** Drops buckets nobody has touched, so a long-running process does not grow one per caller forever. */
+/** Drops idle buckets, so a long-running process keeps memory flat. */
 function sweep(now: number): void {
   if (now - lastSweep < IDLE_MS) return;
   lastSweep = now;

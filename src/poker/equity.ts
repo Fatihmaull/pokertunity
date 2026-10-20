@@ -13,9 +13,9 @@ export interface Equity {
 /**
  * Monte Carlo equity against the given number of random opponent hands.
  *
- * Equity is computed here rather than asked of a language model. A model's
- * guess at a percentage is not a percentage, and the Brain Visualizer shows
- * this number to the viewer as fact.
+ * Equity is computed here, by simulation. A percentage has to be measured to
+ * mean anything, and the Brain Visualizer shows this number to the viewer as
+ * fact.
  */
 export function equityVsRandom(
   hole: readonly [Card, Card],
@@ -51,7 +51,7 @@ export function equityVsRandom(
   let tie = 0;
 
   for (let s = 0; s < samples; s++) {
-    // Partial Fisher-Yates: only the cards this sample needs get shuffled.
+    // Partial Fisher-Yates: the cards this sample needs are the ones shuffled.
     for (let i = 0; i < draws; i++) {
       const j = i + ((random() * (stock.length - i)) | 0);
       const swap = stock[i];
@@ -85,14 +85,14 @@ export function equityVsRandom(
 }
 
 export interface HandRead {
-  /** Best made hand right now, using only the cards actually dealt. */
+  /** Best made hand right now, from the cards actually dealt. */
   made: string;
   category: number;
   /** Four to a flush with at least one card still to come. */
   flushDraw: boolean;
   /** Four to a straight that completes at either end. */
   openEnded: boolean;
-  /** Four to a straight that completes only one way. */
+  /** Four to a straight that completes one way. */
   gutshot: boolean;
   /** Both hole cards rank above every board card. */
   overcards: boolean;
@@ -132,7 +132,7 @@ export function readHand(hole: readonly [Card, Card], board: readonly Card[]): H
 /**
  * Straight draws over a 14-slot ladder: slot 0 is the ace playing low, slots
  * 1..13 run deuce to ace. A straight is five adjacent slots, so the wheel and
- * broadway both fall out without special cases.
+ * broadway both fall out of the same arithmetic.
  */
 function straightDraws(rankMask: number, category: number): { openEnded: boolean; gutshot: boolean } {
   if (category >= CATEGORY.STRAIGHT) return { openEnded: false, gutshot: false };

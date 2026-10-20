@@ -1,8 +1,8 @@
 /**
- * Colour is the only hue in the interface, and it always means one thing:
+ * Agent colour is the one hue in the interface, and it always means one thing:
  * which agent something belongs to. Values are sampled from the chip art in
  * `public/chips`, so a stack on screen and its label are literally the same
- * colour rather than an approximation of it.
+ * colour.
  */
 
 export interface ChipColor {
@@ -19,7 +19,7 @@ const OWNER_COLOR: ChipColor = { id: 'white', name: 'White', hex: '#f2f2f2', ink
 
 /**
  * Opponent colours, ordered by how far apart they read on the dark felt. Six-max
- * only ever needs the first five, so the most distinguishable ones get used most.
+ * needs the first five, so the most distinguishable ones get used most.
  */
 export const OPPONENT_COLORS: ChipColor[] = [
   { id: 'red', name: 'Red', hex: '#f15a5a', ink: '#2a0f0f' },
@@ -43,11 +43,11 @@ export function colorById(id: string): ChipColor {
 }
 
 /**
- * Picks a colour for a new agent, avoiding any already taken. White is never
- * handed out here because it belongs to whoever is watching.
+ * Picks a colour for a new agent, preferring the free ones. White stays out of
+ * the pool because it belongs to whoever is watching.
  *
  * Past the tenth agent every colour is in use, so the least-used one is handed
- * out rather than always the first. That keeps the pool spread evenly, which is
+ * out. That keeps the pool spread evenly, which is
  * what gives a table the best chance of seating six distinct colours.
  */
 export function assignColor(taken: readonly string[]): ChipColor {

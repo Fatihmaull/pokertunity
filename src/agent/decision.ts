@@ -23,8 +23,8 @@ const MAX_SAY = 90;
 /**
  * The engine is the authority on what may happen. An agent's reply is a
  * request, and it is checked against the legal move set before it becomes an
- * action. The worst a hostile agent can achieve is bad poker: it can never make
- * an illegal move, and it never sees another seat's cards to leak.
+ * action. The worst a hostile agent can achieve is bad poker: every move it
+ * makes is legal, and it sees its own cards alone.
  */
 export function validateDecision(reply: unknown, legal: LegalActions): AgentDecision | null {
   if (typeof reply !== 'object' || reply === null) return null;
@@ -45,13 +45,13 @@ export function validateDecision(reply: unknown, legal: LegalActions): AgentDeci
     case 'raise': {
       const range = action === 'bet' ? legal.bet : legal.raise;
       if (!range) return null;
-      // A missing or unreadable size is a slip in the reply, not a change of
-      // mind. Discarding the whole decision would turn an intended bet into a
-      // fold, so an unusable size falls back to the smallest legal one.
+      // A missing or unreadable size is a slip in the reply, and the intent to
+      // bet still stands. An unusable size falls back to the smallest legal one,
+      // which keeps the intended bet a bet.
       const requested = Math.round(Number(candidate.to));
       const to = Number.isFinite(requested) ? requested : range.min;
-      // A size just outside the legal range is a rounding slip, not an attack.
-      // Clamping keeps the hand moving instead of burning the agent's clock.
+      // A size just outside the legal range is a rounding slip. Clamping keeps
+      // the hand moving and saves the agent's clock.
       const clamped = Math.min(Math.max(to, range.min), range.max);
       return { action: { type: action, to: clamped }, reasoning, say };
     }
@@ -61,7 +61,7 @@ export function validateDecision(reply: unknown, legal: LegalActions): AgentDeci
 }
 
 /**
- * What a seat does when its agent never produced a usable decision: check if
+ * What a seat does when its agent's decision is unusable or missing: check if
  * checking is free, otherwise fold. The same rule covers a timeout, a provider
  * error, and a malformed reply.
  */

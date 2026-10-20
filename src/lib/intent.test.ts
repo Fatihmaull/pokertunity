@@ -16,16 +16,16 @@ test('an intent id survives the trip through the contract', () => {
   }
 });
 
-test('refuses anything that is not a uuid', () => {
+test('accepts uuids alone', () => {
   assert.throws(() => intentToBytes32('not-a-uuid'));
   assert.throws(() => intentToBytes32(''));
   assert.throws(() => intentToBytes32('f47ac10b58cc4372a5670e02b2c3d4'));
 });
 
-test('refuses a bytes32 that is not an intent this arena issued', () => {
+test('accepts the bytes32 intents this arena issued alone', () => {
   // Anybody can call the vault with an identifier of their own choosing, and
-  // what comes out of here is looked up as a uuid. A value that is not one has
-  // to be refused rather than reaching the database as a broken query.
+  // what comes out of here is looked up as a uuid, so a malformed value is
+  // refused here, before the database sees it.
   assert.throws(() => bytes32ToIntent('0xdeadbeef'), /not a bytes32/);
   assert.throws(() => bytes32ToIntent('nonsense'), /not a bytes32/);
   assert.throws(

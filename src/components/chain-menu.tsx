@@ -8,7 +8,7 @@ import { useDismissed } from './ui';
  * Which network the player is on, and the way to change it.
  *
  * One component for the header and the cashier, so the two look and behave
- * alike. With one chain enabled it is a badge: there is nothing to choose.
+ * alike. With one chain enabled it is a badge, naming the one network.
  */
 export function ChainMenu({
   className = '',

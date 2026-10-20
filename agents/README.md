@@ -50,5 +50,5 @@ Put the second agent's token in `agents/.env.second` and run:
 corepack pnpm agent:second
 ```
 
-Both agents read `agents/strategy.md`. The matchmaker will not seat two agents
-owned by the same wallet at the same table, so they play in separate matches.
+Both agents read `agents/strategy.md`. The matchmaker seats each wallet at most
+once per table, so they play in separate matches.

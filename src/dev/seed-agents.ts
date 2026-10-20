@@ -10,36 +10,34 @@ import { STARTING_GRANT } from '../lib/economy';
 /**
  * Creates accounts and agents, and writes the field file that runs them.
  *
- * One account per agent, on purpose. The matchmaker refuses to seat two agents
- * with the same owner at one table, because an owner who sees both sets of hole
- * cards can have one fold every pot the other contests until the chips are
- * wherever they want them. So a field sharing an account could never form a
- * match at all.
+ * One account per agent, on purpose. The matchmaker seats each owner at most
+ * once per table, because an owner who sees both sets of hole cards can have
+ * one fold every pot the other contests until the chips are wherever they want
+ * them. So a field forms matches when every agent has its own account.
  *
  * The arithmetic that follows from that: N accounts can put at most N agents in
  * one match, so running N+1 agents leaves one permanently free. A stranger who
- * connects is then seated against the spare within seconds rather than waiting
- * out somebody else's match, which at a hundred hands is over an hour.
+ * connects is then seated against the spare within seconds.
  *
- * Addresses here are random rather than real wallets, which is why this refuses
- * to run against production: nobody can ever sign in to these accounts.
+ * Addresses here are random, which is why this refuses to run against
+ * production: these accounts belong to wallets nobody holds.
  */
 
 const CHARACTERS = [
   {
     name: 'Viridian',
     strategy:
-      'Play tight and punish. Fold anything weak before the flop. When you do enter a pot, bet three quarters of it on every street and do not slow down for one raise.',
+      'Play tight and punish. Fold weak hands before the flop. When you do enter a pot, bet three quarters of it on every street and keep firing through a single raise.',
   },
   {
     name: 'Cinnabar',
     strategy:
-      'Apply pressure constantly. Raise from late position with almost anything. Bluff the river whenever the board missed and your opponent has shown no strength.',
+      'Apply pressure constantly. Raise from late position with almost anything. Bluff the river whenever the board missed and your opponent has shown weakness.',
   },
   {
     name: 'Cerulean',
     strategy:
-      'Follow the maths and nothing else. Call only when the price is below your equity. Never bluff. Never fold a hand that is getting the right price.',
+      'Follow the maths, purely. Call when your equity beats the price. Bet for value alone. Continue with every hand that is getting the right price.',
   },
   {
     name: 'Marigold',
@@ -49,18 +47,18 @@ const CHARACTERS = [
   {
     name: 'Amethyst',
     strategy:
-      'Be unreadable. Vary your sizing at random. Occasionally shove with nothing. Fold hands you would normally play about one time in four.',
+      'Be unreadable. Vary your sizing at random. Occasionally shove with air. Fold hands you would normally play about one time in four.',
   },
   {
     name: 'Umber',
     strategy:
-      'Survive first. Never risk more than a third of your stack in one hand unless you hold two pair or better. Fold to any all-in without the nuts.',
+      'Survive first. Keep each hand to a third of your stack at most, unless you hold two pair or better. Call an all-in with the nuts and fold the rest.',
   },
 ];
 
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('seed-agents is a development tool and will not run in production');
+    throw new Error('seed-agents is a development tool, for development databases');
   }
 
   const wanted = Math.min(Number(process.argv[2] ?? CHARACTERS.length), CHARACTERS.length);
@@ -92,8 +90,8 @@ async function main(): Promise<void> {
     const name = `${character.name} (dev)`;
     const { token, agentId } = await registerAgent(userId, name);
 
-    // Switched on at once, since keeping the floor inhabited is the only thing
-    // a seeded agent is for.
+    // Switched on at once, since keeping the floor inhabited is what a seeded
+    // agent is for.
     await db.update(agents).set({ queueEnabled: true }).where(eq(agents.id, agentId));
 
     const brain = index < modelSeats ? 'model' : 'heuristic';

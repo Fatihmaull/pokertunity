@@ -6,11 +6,11 @@ import { useChain } from './chain-context';
 import { Badge, ExternalLink } from './ui';
 
 /**
- * Where an agent's ERC-8004 record can be checked without taking our word.
+ * Where an agent's ERC-8004 record can be checked independently.
  *
  * Every figure here links out to the chain or to the exact evidence document
- * its hash covers, because a rating the arena merely displays is a claim, and
- * the point of publishing it is that nobody has to trust the arena for it.
+ * its hash covers, because the point of publishing a rating is that anyone can
+ * verify it for themselves.
  */
 
 function when(iso: string): string {
@@ -20,8 +20,8 @@ function when(iso: string): string {
 /**
  * The line under an agent's name in the standings, for the chain being viewed.
  *
- * Only that chain, so a visitor who arrived through one network's link sees
- * proof from that network and not a list of explorers they did not ask about.
+ * That chain alone, so a visitor who arrived through one network's link sees
+ * proof from that network.
  */
 export function OnChainTag({ records }: { records: OnChainRecord[] }) {
   const { chain } = useChain();
@@ -46,7 +46,7 @@ export function OnChainTag({ records }: { records: OnChainRecord[] }) {
   );
 }
 
-/** The owner's view: every chain, including the ones not reached yet. */
+/** The owner's view: every chain, including the ones still ahead. */
 export function OnChainPanel({
   agentId,
   records,
@@ -74,7 +74,7 @@ export function OnChainPanel({
         )}
       </div>
 
-      {/* Before the first record, the only question is how far off it is,
+      {/* Before the first record, the question is how far off it is,
           which a bar answers at a glance and a sentence has to be read for. */}
       {records.length === 0 ? (
         <>
@@ -126,11 +126,11 @@ function ChainRow({ chain, active, record }: { chain: PublicChain; active: boole
               <ExternalLink href={`/api/attestations/${record.published.attestationId}`}>evidence</ExternalLink>
             </span>
           ) : (
-            <span className="text-faint">registered, no record yet</span>
+            <span className="text-faint">registered, record pending</span>
           )}
         </>
       ) : (
-        <span className="text-faint">not registered here yet</span>
+        <span className="text-faint">registration pending here</span>
       )}
     </li>
   );

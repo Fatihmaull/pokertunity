@@ -22,10 +22,9 @@ function heads(): HandState {
  * A scripted agent, standing in for somebody else's program.
  *
  * Every way a real one can misbehave is reachable from here: answering late,
- * answering with a move that is not on offer, streaming reasoning and then
- * saying nothing, or simply not being there. All of them have to arrive at a
- * legal action, because the arena cannot stall a table waiting for good
- * manners.
+ * answering with a move outside the legal set, streaming reasoning and then
+ * falling silent, or simply being away. All of them arrive at a legal action,
+ * because the table keeps moving.
  */
 class FakeAgent implements Askable {
   seen: ActFrame[] = [];
@@ -89,20 +88,20 @@ test('takes a legal action and keeps the streamed reasoning', async () => {
   assert.equal(record.equity.samples, 200);
 });
 
-test('the request carries what the agent is entitled to and nothing else', async () => {
+test('the request carries exactly what the agent is entitled to', async () => {
   const link = new FakeAgent(move('call'));
   await decide({ ...base, link: () => link, state: heads(), clockMs: 5000 });
 
   const [frame] = link.seen;
   assert.equal(frame.hole.length, 2, 'its own cards');
   assert.equal(frame.opponents.length, 1);
-  assert.ok(!JSON.stringify(frame.opponents).includes('hole'), 'never anybody else’s cards');
-  assert.ok(frame.equity.samples > 0, 'the arena computed the equity, not the agent');
+  assert.ok(!JSON.stringify(frame.opponents).includes('hole'), 'opponents’ cards stay hidden');
+  assert.ok(frame.equity.samples > 0, 'the arena computed the equity');
   assert.ok(frame.legal.fold || frame.legal.check, 'and settled what is legal before asking');
   assert.equal(frame.remainingMs, 5000);
 });
 
-test('seat numbers on the wire are chairs, not engine positions', async () => {
+test('seat numbers on the wire are chairs', async () => {
   // The engine renumbers players densely every hand as agents bust out. An
   // agent needs a number that means the same thing all match, or its own notes
   // about seat three stop being about anybody.
@@ -114,12 +113,12 @@ test('seat numbers on the wire are chairs, not engine positions', async () => {
   assert.equal(frame.opponents[0].seat, 7);
 });
 
-test('an agent that is not connected checks or folds, and is not recorded as folding', async () => {
+test('a disconnected agent checks or folds, and is recorded as an error', async () => {
   const record = await decide({ ...base, link: () => null, state: heads(), clockMs: 5000 });
 
   assert.deepEqual(record.action, { type: 'fold' }, 'facing a blind, folding is the free move');
-  assert.equal(record.outcome, 'error', 'not "decided": nobody decided anything');
-  assert.equal(record.failure, 'not connected');
+  assert.equal(record.outcome, 'error', 'recorded as an error, because the seat was silent');
+  assert.equal(record.failure, 'disconnected');
 });
 
 test('an agent that runs out the clock is recorded as a timeout', async () => {
@@ -133,10 +132,10 @@ test('an agent that runs out the clock is recorded as a timeout', async () => {
   assert.deepEqual(record.action, { type: 'fold' });
 });
 
-test('an illegal move is refused and named, rather than played', async () => {
+test('an illegal move is refused and named', async () => {
   const link = new FakeAgent(move('check'));
 
-  // Facing the big blind, checking is not on offer.
+  // Facing the big blind, checking is off the menu.
   const record = await decide({ ...base, link: () => link, state: heads(), clockMs: 5000 });
 
   assert.equal(record.outcome, 'error');
@@ -144,7 +143,7 @@ test('an illegal move is refused and named, rather than played', async () => {
   assert.deepEqual(record.action, { type: 'fold' });
 });
 
-test('a raise outside the legal range is clamped rather than discarded', async () => {
+test('a raise outside the legal range is clamped into it', async () => {
   const link = new FakeAgent(move('raise', { to: 999_999 }));
 
   const record = await decide({ ...base, link: () => link, state: heads(), clockMs: 5000 });
@@ -161,14 +160,14 @@ test('facing an all-in, the agent is still asked, because folding is a real choi
   const record = await decide({ ...base, link: () => link, state, seatIndex: 1, clockMs: 5000 });
 
   assert.deepEqual(record.action, { type: 'fold' });
-  assert.equal(link.seen.length, 1, 'the agent was asked rather than the arena folding for it');
+  assert.equal(link.seen.length, 1, 'the agent was asked, and its answer counted');
   assert.ok(link.seen[0].legal.call !== null, 'calling is on offer, capped at what it has');
 });
 
-test('an agent answering after the clock cannot affect the next hand', async () => {
+test('an agent answering after the clock leaves the next hand alone', async () => {
   // The correlation id is what makes this safe. Two hands running through the
-  // same connection produce different ids, so a late answer to the first is not
-  // a valid answer to the second.
+  // same connection produce different ids, so a late answer to the first is
+  // rejected by the second.
   const first = new FakeAgent(move('call'));
   const second = new FakeAgent(move('call'));
 
@@ -180,9 +179,9 @@ test('an agent answering after the clock cannot affect the next hand', async () 
 
 test('a socket that drops mid-decision is asked again on the one that comes back', async () => {
   // The case: an agent on flaky wifi loses its connection between being asked
-  // and answering. Reconnecting should cost it a moment, not a hand.
+  // and answering. Reconnecting costs it a moment, and it keeps the hand.
   const revived = new FakeAgent(move('call'));
-  // Returns nothing and then hands the seat a working connection, which is what
+  // Returns null and then hands the seat a working connection, which is what
   // a reconnect looks like from the arena's side.
   const dead = new FakeAgent(() => {
     current = revived;

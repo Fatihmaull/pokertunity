@@ -13,13 +13,13 @@ import type { Brain } from './brain';
 /**
  * A reference agent.
  *
- * It does what any agent has to do and nothing more: connect, say hello, ask to
- * be queued, answer act frames before the clock runs out, and reconnect when
- * the socket drops. Everything about how it plays lives behind `Brain`, so this
- * file is the protocol and nothing else.
+ * It does exactly what an agent has to do: connect, say hello, ask to be
+ * queued, answer act frames before the clock runs out, and reconnect when the
+ * socket drops. Everything about how it plays lives behind `Brain`, so this
+ * file is the protocol, start to finish.
  *
  * Read it as documentation. An agent in another language that does these six
- * things is a first-class entrant with no special support needed from us.
+ * things is a first-class entrant, on the same footing as this one.
  */
 
 export interface AgentOptions {
@@ -78,9 +78,9 @@ export class Agent {
       this.ws = null;
       const why = reason.toString() || `code ${code}`;
 
-      // A version mismatch or a bad token is not going to fix itself, so
-      // hammering the arena would only add noise to somebody else's logs. Every
-      // other close is worth retrying, because most of them are the network.
+      // A version mismatch or a bad token needs its owner to fix it, so the agent
+      // stops and keeps the arena's logs clean. Every other close is worth
+      // retrying, because most of them are the network.
       if (code === CLOSE.VERSION || code === CLOSE.UNAUTHORIZED) {
         this.log(`refused: ${why}`);
         this.stopped = true;
@@ -116,7 +116,7 @@ export class Agent {
         return;
 
       case 'queued':
-        this.log(frame.queued ? 'queued for a match' : `not queued: ${frame.reason ?? 'unknown'}`);
+        this.log(frame.queued ? 'queued for a match' : `waiting: ${frame.reason ?? 'unknown'}`);
         return;
 
       case 'match-start':
@@ -152,10 +152,10 @@ export class Agent {
    * Answers one act frame.
    *
    * The clock is the arena's, and it is shorter than the arena's by a margin,
-   * because an answer that arrives as the clock expires is an answer that
-   * arrives too late. Anything that goes wrong is swallowed: the arena's own
-   * fallback checks when checking is free and folds when it is not, which is a
-   * better outcome than a crashed agent losing every remaining hand.
+   * because an answer that arrives as the clock expires arrives too late.
+   * Anything that goes wrong is swallowed: the arena's own fallback checks when
+   * checking is free and folds when it costs chips, and the agent stays up for
+   * every remaining hand.
    */
   private async act(frame: ActFrame): Promise<void> {
     const clock = new AbortController();
@@ -166,10 +166,9 @@ export class Agent {
     let buffered = '';
     let flushTimer: NodeJS.Timeout | null = null;
 
-    // Coalesced rather than sent per chunk. A model streams tokens far faster
-    // than anyone can read them, and forwarding each one as its own frame turns
-    // a working agent into a flood. Batching costs the panel nothing: it is
-    // still well under what reads as live.
+    // Coalesced into batches. A model streams tokens far faster than anyone can
+    // read them, and batching keeps a working agent well inside the frame budget.
+    // The panel still reads it as live.
     const flush = () => {
       if (flushTimer) {
         clearTimeout(flushTimer);
@@ -179,8 +178,8 @@ export class Agent {
 
       const text = buffered;
       buffered = '';
-      // Kept under the arena's cap here rather than discovering it there, since
-      // breaching it costs the connection and not just the hand.
+      // Kept under the arena's cap here, at the source, since breaching it costs
+      // the connection as well as the hand.
       if (sent + Buffer.byteLength(text) > MAX_REASONING_BYTES) return;
       sent += Buffer.byteLength(text);
       this.send({ type: 'reasoning', id: frame.id, text });
@@ -196,7 +195,7 @@ export class Agent {
       flush();
       this.send({ type: 'decision', id: frame.id, ...decision });
     } catch (error) {
-      this.log(`could not decide on hand ${frame.handNumber}: ${describe(error)}`);
+      this.log(`decision failed on hand ${frame.handNumber}: ${describe(error)}`);
     } finally {
       if (flushTimer) clearTimeout(flushTimer);
       clearTimeout(timer);

@@ -17,8 +17,7 @@ type Tab = "thinking" | "players" | "log";
 /**
  * How often, and how many times, a finished match asks for its result page.
  * Settling is one transaction, so it lands well inside the first few; the
- * limit only stops a page on an instance that never sees it from asking
- * forever.
+ * limit gives a page on an instance that misses it a natural end.
  */
 const RESULT_CHECK_MS = 1_500;
 const RESULT_CHECKS = 10;
@@ -32,8 +31,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
 /**
  * The watch page, laid out the way any live-video page is: one big stage, and a
  * side panel with named tabs beside it. The panel is the reason to be here, so
- * it says what it is at the top of every tab rather than presenting a wall of
- * unlabelled figures.
+ * it says what it is at the top of every tab, so every figure has a label.
  */
 export function Arena({ matchId }: { matchId: string }) {
   const {
@@ -51,10 +49,10 @@ export function Arena({ matchId }: { matchId: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("thinking");
 
-  // The match is over, and the result belongs on this page rather than behind
-  // a reload. The page decides which of the two it renders from the match row,
-  // which flips once the chips have gone back — a moment after the feed says
-  // it is over, not at the same instant — so it is asked again until it does.
+  // The match is over, and the result belongs on this page, live. The page
+  // decides which of the two it renders from the match row, which flips once
+  // the chips have gone back (a moment after the feed says it is over), so it
+  // is asked again until it does.
   useEffect(() => {
     if (!idleReason) return;
     let asked = 0;
@@ -65,15 +63,15 @@ export function Arena({ matchId }: { matchId: string }) {
     }, RESULT_CHECK_MS);
     return () => clearInterval(timer);
   }, [idleReason, router]);
-  // Every agent this viewer owns. Only one of them can be at any given table,
-  // because the matchmaker refuses to seat two of an owner's agents together.
+  // Every agent this viewer owns. At most one of them sits at any given
+  // table, because the matchmaker seats each owner once per table.
   const myAgentIds = new Set((account?.agents ?? []).map((agent) => agent.id));
 
   // Picking a tab leaves focus on the tab button, whose nearest scrollable
   // ancestor is the page, so the arrow keys scroll the page out from under the
-  // panel the reader just asked for. Hand focus to the panel's own scroller
-  // instead, but only when a tab was actually picked: stealing focus on first
-  // paint would drag a reader away from wherever they came in.
+  // panel the reader just asked for. Hand focus to the panel's own scroller,
+  // when a tab was actually picked, so first paint leaves the reader wherever
+  // they came in.
   const panel = useRef<HTMLDivElement>(null);
   const picked = useRef(false);
   useEffect(() => {
@@ -106,17 +104,17 @@ export function Arena({ matchId }: { matchId: string }) {
     : null;
 
   /*
-    The feed refused long enough that it is not coming. The page only renders
-    this component for a match the server said was still being dealt, so the
-    remaining cause is that it is being dealt somewhere this instance cannot
-    see — a second web instance, or a deploy that has already handed the room
-    over. Saying so beats a spinner that never resolves.
+    The feed has refused long enough to call it. The page renders this
+    component for a match the server said was still being dealt, so the
+    remaining cause is that it is being dealt on another instance (a second web
+    instance, or a deploy that has already handed the room over). Saying so
+    gives the reader a clear answer.
   */
   if (gaveUp && !table) {
     return (
       <div className="page mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
         <Card className="p-6 text-center">
-          <h1 className="text-lg font-semibold">This match is not being dealt here</h1>
+          <h1 className="text-lg font-semibold">This match is dealt elsewhere</h1>
           <p className="mt-2 text-sm text-muted">It may have just finished. Its result appears on the matches list.</p>
           <div className="mt-5 flex justify-center">
             <ButtonLink href="/matches">Back to matches</ButtonLink>
@@ -148,17 +146,16 @@ export function Arena({ matchId }: { matchId: string }) {
         </div>
 
         {/*
-          The panel is exactly as tall as the felt beside it and never taller.
-          Its height comes from the stage, not from what is in it, so switching
-          to the hand log scrolls inside the panel instead of stretching the
-          page and dragging the table out from under the reader.
+          The panel is exactly as tall as the felt beside it. Its height comes from
+          the stage, so switching to the hand log scrolls inside the panel and the
+          table stays put under the reader.
         */}
         <Card className="flex h-[32rem] min-w-0 flex-col overflow-hidden lg:h-[var(--stage-h)]">
           {/*
             One tab stop for the row, and the arrow keys move along it, which
             is how every other tab row a keyboard user meets behaves. Arrowing
-            keeps focus on the tabs rather than handing it to the panel the way
-            a click does, or the next arrow would scroll the panel instead.
+            keeps focus on the tabs, where a click hands it to the panel, so the next
+            arrow moves to the next tab.
           */}
           <div
             role="tablist"
@@ -231,8 +228,7 @@ export function Arena({ matchId }: { matchId: string }) {
 /**
  * Everything you need to know about the table before you look at it. The way
  * back is here because this is a page people reach from a shared link and land
- * on cold. It is the only way back: a second "other matches" button beside the
- * title went to the same place and there is nothing else here to press.
+ * on cold. It is the one way back, and the one button on this strip.
  */
 function TableBar({
   table,
@@ -314,7 +310,7 @@ function PlayersPanel({
                     {seat.agentId ? seatLabel(seat) : `Seat ${seat.index + 1}`}
                   </span>
                   {seat.isDealer ? <DealerButton size={13} /> : null}
-                  {/* The seat is the agent, not its owner, so it says Yours
+                  {/* The seat is the agent, so it says Yours
                       the way the result table does. */}
                   {mine ? <Badge tone="accent">Yours</Badge> : null}
                 </div>
@@ -360,9 +356,8 @@ function LogPanel({ table }: { table: TableView | null }) {
   const lines = table?.log ?? [];
   const scroller = useRef<HTMLDivElement>(null);
 
-  // Scroll the log itself rather than asking the newest line to bring itself
-  // into view. The panel is a fixed height now, and scrollIntoView on a nested
-  // scroller is free to move the page as well to satisfy the request.
+  // Scroll the log itself. The panel is a fixed height, and scrolling the log
+  // directly keeps the page where it is.
   useEffect(() => {
     const box = scroller.current;
     if (box) box.scrollTop = box.scrollHeight;
@@ -377,7 +372,7 @@ function LogPanel({ table }: { table: TableView | null }) {
     >
       {lines.length === 0 ? (
         <p className="px-1 py-8 text-center text-sm text-muted">
-          No actions yet.
+          The first action lands here.
         </p>
       ) : (
         <ol className="space-y-1">

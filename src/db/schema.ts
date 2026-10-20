@@ -36,7 +36,8 @@ export const decisionOutcome = pgEnum('decision_outcome', ['decided', 'timeout',
  *
  * `elimination` is one agent left holding everything. `cap` is the hand limit
  * arriving with several still alive. `abandoned` is the process that was
- * dealing going away mid-match, which returns every stack and rates nobody.
+ * dealing going away mid-match, which returns every stack and leaves ratings as
+ * they were.
  */
 export const matchStatus = pgEnum('match_status', ['waiting', 'playing', 'elimination', 'cap', 'abandoned']);
 
@@ -64,28 +65,26 @@ export const agents = pgTable(
     /** Chip colour that identifies this agent at every table. */
     color: text('color').notNull(),
     /**
-     * SHA-256 of the token this agent connects with. Never the token itself:
-     * a database that leaks should not hand out working credentials, and an
-     * owner who loses theirs rotates rather than asks us to look it up.
+     * SHA-256 of the token this agent connects with. The hash alone is stored,
+     * so a leaked database holds zero working credentials, and an owner who loses
+     * a token rotates it.
      */
     tokenHash: text('token_hash').notNull(),
-    /** Last time a socket for this agent was open. Null if it has never connected. */
+    /** Last time a socket for this agent was open. Null until its first connection. */
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     /**
      * Why the last connection ended, in a sentence.
      *
-     * Kept because the alternative is an owner watching their agent silently
-     * fail to appear with no way to find out whether the arena refused it, its
-     * token was wrong, or it flooded the socket.
+     * Kept so an owner whose agent fails to appear can find out why: the arena
+     * refused it, its token was wrong, or it flooded the socket.
      */
     lastCloseReason: text('last_close_reason'),
     /**
      * What we think this agent is worth, and how sure we are of it.
      *
-     * Kept on the row rather than recomputed from match results, because a
-     * rating is path-dependent: it is the running product of every update in
-     * the order they happened, so it cannot be derived from a set of rows the
-     * way a win rate can. The match results table keeps the before and after of
+     * Kept on the row, because a rating is path-dependent: it is the running
+     * product of every update in the order they happened, so it lives as state,
+     * where a win rate can be summed from rows. The match results table keeps the before and after of
      * every update, which is what makes it auditable anyway.
      */
     ratingMu: real('rating_mu').notNull().default(25),
@@ -101,28 +100,26 @@ export const agents = pgTable(
      *
      * Saying `ready` on the socket is the agent asking; this is the owner
      * agreeing. Off for a new agent, so the first time somebody points freshly
-     * written code at the arena it connects and can be watched answering, but is
-     * not charged a seat until its owner decides it is fit to play one.
+     * written code at the arena it connects and can be watched answering, and it
+     * is charged a seat once its owner decides it is fit to play one.
      *
-     * Agents that existed before the switch did were already playing, and were
-     * left on: the column arrived defaulting to true and was flipped to false in
-     * a second migration, so turning it off is a choice nobody made for them.
+     * Agents registered before the switch existed kept playing: they carry true,
+     * and the default for new rows is false.
      */
     queueEnabled: boolean('queue_enabled').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // Not unique: an owner may run several agents, because a team
-    // testing three strategies should not have to be three people. What stops
-    // that becoming collusion is the matchmaker, which refuses to seat two
-    // agents of one owner at the same table.
+    // Many per owner: a team testing three strategies runs them from one
+    // account. The matchmaker keeps that honest by seating each owner at most
+    // once per table.
     index('agents_user_idx').on(table.userId),
     uniqueIndex('agents_token_idx').on(table.tokenHash),
   ],
 );
 
-/** Chips the operator issued against a deposit that has not landed yet. */
+/** Chips the operator issued against a deposit on its way. */
 export const depositIntents = pgTable(
   'deposit_intents',
   {
@@ -133,8 +130,8 @@ export const depositIntents = pgTable(
     /** EIP-155 id of the chain this deposit settles on. Always written explicitly. */
     chainId: integer('chain_id').notNull(),
     /**
-     * Unused. Nullable for now so the process a deploy replaces can still
-     * insert while both run; a later migration drops it.
+     * Retired. Nullable so the process a deploy replaces can insert while both
+     * run; a later migration drops it.
      */
     packageId: text('package_id'),
     chips: integer('chips').notNull(),
@@ -145,22 +142,20 @@ export const depositIntents = pgTable(
     blockNumber: bigint('block_number', { mode: 'number' }),
     /**
      * Which of the transaction's logs paid this intent. Null until credited:
-     * the hash is written the moment the wallet returns it, the log only once
-     * the receipt has been read.
+     * the hash is written the moment the wallet returns it, the log once the
+     * receipt has been read.
      */
     logIndex: integer('log_index'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     creditedAt: timestamp('credited_at', { withTimezone: true }),
   },
   (table) => [
-    // One credit per deposit event, enforced by the database rather than by
-    // whatever the indexer believes it has already seen. Scoped to the chain
-    // because a hash is only unique within one, and to the log because one
-    // transaction can carry several deposits: keyed on the hash alone, the
-    // second intent a batching wallet paid in the same call could never be
-    // credited, and the player's money sat in the vault against nothing.
-    // Rows noted before confirmation have no log yet, and Postgres counts
-    // those nulls as distinct, so noting a hash never collides.
+    // One credit per deposit event, enforced by the database itself. Scoped to
+    // the chain because a hash is unique within one, and to the log because one
+    // transaction can carry several deposits: keying on the log as well lets a
+    // batching wallet's second intent in the same call be credited too. Rows
+    // noted before confirmation carry a null log, and Postgres counts those
+    // nulls as distinct, so noting a hash always succeeds.
     uniqueIndex('deposit_intents_tx_idx').on(table.chainId, table.txHash, table.logIndex),
     index('deposit_intents_status_idx').on(table.status),
   ],
@@ -169,14 +164,13 @@ export const depositIntents = pgTable(
 /**
  * The ERC-8004 identity minted for an agent, one per chain.
  *
- * One row per chain rather than a column on the agent, because the same agent
+ * One row per chain, because the same agent
  * is registered on every chain the arena settles on and each mint hands back
  * its own token id. All of them point at the same registration file, which
  * lists every one, so a reader on any chain finds the others.
  *
- * Written only by `pnpm attest`, never on sign-up: an identity nobody has played
- * a hand under is a name with no record behind it, which is exactly the kind of
- * empty entry the registries already have too many of.
+ * Written by `pnpm attest`, once an agent has a record: every identity the
+ * arena mints has hands behind it, which is what the registries are short of.
  */
 export const agentIdentities = pgTable(
   'agent_identities',
@@ -189,9 +183,9 @@ export const agentIdentities = pgTable(
     /**
      * The Identity Registry it lives in, as it was when minted.
      *
-     * Stored rather than read from configuration, because the registration file
-     * has to name the registry that actually holds the token, and a later change
-     * to an environment variable does not move a token that already exists.
+     * Stored on the row, because the registration file has to name the registry
+     * that actually holds the token, and the token stays where it was minted
+     * whatever an environment variable later says.
      */
     registry: text('registry').notNull(),
     /** The token id, as a decimal string: a uint256 exceeds what a double holds exactly. */
@@ -211,7 +205,7 @@ export const agentIdentities = pgTable(
  * Kept because an attestation is a claim made in public: the hash on chain has
  * to be checkable against the document that was current when it was posted, and
  * a row here is what says which document that was. Append-only, so a later
- * attestation supersedes an earlier one rather than erasing it.
+ * attestation supersedes an earlier one and both remain.
  */
 export const attestations = pgTable(
   'attestations',
@@ -240,12 +234,12 @@ export const attestations = pgTable(
      * The transactions, filled in as each is mined.
      *
      * The row is written before anything is sent, because the URI that goes on
-     * chain names this row: a record posted by a process that then died would
-     * otherwise point at evidence that was never stored. A row with no
-     * reputation transaction is therefore not a published attestation.
+     * chain names this row: that order guarantees every posted record points at
+     * stored evidence. A row becomes a published attestation once its reputation
+     * transaction is filled in.
      */
     reputationTx: text('reputation_tx'),
-    /** Null where the chain has no Validation Registry. */
+    /** Null on a chain with zero Validation Registries configured. */
     validationTx: text('validation_tx'),
     validationResponseTx: text('validation_response_tx'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -284,7 +278,7 @@ export const matches = pgTable(
     /** What the match is called on screen, "Match 142". Counts up in the order matches are created. */
     number: integer('number').generatedByDefaultAsIdentity(),
     status: matchStatus('status').notNull().default('waiting'),
-    /** Copied in rather than read from configuration, so a finished match still describes itself. */
+    /** Copied in, so a finished match still describes itself. */
     seatCount: integer('seat_count').notNull(),
     smallBlind: integer('small_blind').notNull(),
     bigBlind: integer('big_blind').notNull(),
@@ -307,9 +301,8 @@ export const matches = pgTable(
 /**
  * How one agent finished one match, and what that did to its rating.
  *
- * The before and after are both stored so a rating can be audited without
- * replaying every match anybody ever played. It is also the only place the
- * finishing order survives, since stacks are returned and seats deleted the
+ * The before and after are both stored so a rating can be audited row by row.
+ * It is also where the finishing order survives, since stacks are returned and seats deleted the
  * moment a match ends.
  */
 export const matchResults = pgTable(
@@ -327,11 +320,9 @@ export const matchResults = pgTable(
     /**
      * The chair this agent played, copied off the seat before it is deleted.
      *
-     * Settling deletes the seats, so without this a finished match cannot say
-     * who sat where and the lobby draws a table of empty chairs for a game six
-     * agents actually played. Nullable because rows written before it existed
-     * genuinely do not know, and inventing a chair for them would be worse than
-     * admitting the gap.
+     * Settling deletes the seats, so this is how a finished match says who sat
+     * where and the lobby draws the table six agents actually played. Nullable
+     * because older rows predate it, and an honest gap beats an invented chair.
      */
     seatIndex: integer('seat_index'),
     /** Chips in front of it when the match ended. Zero for anyone eliminated. */
@@ -370,17 +361,16 @@ export const seats = pgTable(
      *
      * The chips in front of a seat belong to the hand while it is being played,
      * so paying that stack out would refund a buy-in the agent is busy losing
-     * and mint the difference. The only other writer is the process that
-     * abandons matches after a restart, and it did
-     * not deal the hand. The rule lives on the row, where that process can see
-     * it, rather than in the memory of the one that went away.
+     * and mint the difference. The other writer is the process that abandons
+     * matches after a restart, which dealt a different hand. The rule lives on the
+     * row, where that process can see it.
      */
     inHand: boolean('in_hand').notNull().default(false),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('seats_match_seat_idx').on(table.matchId, table.seatIndex),
-    // An agent plays one match at a time, so its stack is never split.
+    // An agent plays one match at a time, so its stack stays whole.
     uniqueIndex('seats_agent_idx').on(table.agentId),
   ],
 );
@@ -395,11 +385,12 @@ export const hands = pgTable(
       .references(() => matches.id, { onDelete: 'cascade' }),
     handNumber: integer('hand_number').notNull(),
     /**
-     * Set only on hands with no stored `deck`. A seed an agent can search for is
-     * a deck it can read, so no hand is dealt from one.
+     * Set on hands that carry a seed in place of a stored `deck`. A seed an agent
+     * can search for is a deck it can read, so played hands are dealt from a
+     * CSPRNG.
      */
     seed: integer('seed'),
-    /** The deck as dealt, off the end, from a CSPRNG. Null only on hands that carry a seed. */
+    /** The deck as dealt, off the end, from a CSPRNG. Null on hands that carry a seed. */
     deck: jsonb('deck').$type<number[]>(),
     button: integer('button').notNull(),
     /** Agent identities and starting stacks, as dealt. */
@@ -419,7 +410,7 @@ export const hands = pgTable(
 /**
  * One row per decision an agent made, including the ones it failed to make.
  * This is what the Brain Visualizer replays, so a timeout is recorded as a
- * timeout rather than dressed up as a fold.
+ * timeout.
  */
 export const decisions = pgTable(
   'decisions',
@@ -446,7 +437,7 @@ export const decisions = pgTable(
   (table) => [
     index('decisions_hand_idx').on(table.handId, table.id),
     // What the axes read by: one agent's own decisions, and every opponent's
-    // preflop ones. Without it each of those is a scan of the largest table.
+    // preflop ones. The index keeps each of those off a scan of the largest table.
     index('decisions_agent_idx').on(table.agentId, table.street),
   ],
 );
@@ -454,14 +445,12 @@ export const decisions = pgTable(
 /**
  * One row per agent per hand: what the hand did to its stack.
  *
- * Every number the arena publishes is a query over this table rather than a
- * counter kept somewhere. A counter can only answer the question it was written
- * for, and it cannot be recomputed when the question changes; these rows can
+ * Every number the arena publishes is a query over this table. These rows can
  * answer a metric nobody has thought of yet, over hands already played.
  *
- * The big blind is copied in rather than joined, because a win rate is measured
- * in big blinds and a match carries its own, which is not guaranteed to be the
- * figure the arena uses today.
+ * The big blind is copied in, because a win rate is measured in big blinds and
+ * a match carries its own, which may differ from the figure the arena uses
+ * today.
  */
 export const results = pgTable(
   'results',
@@ -478,13 +467,13 @@ export const results = pgTable(
       .references(() => matches.id, { onDelete: 'cascade' }),
     bigBlind: integer('big_blind').notNull(),
     startingStack: integer('starting_stack').notNull(),
-    /** Chips won or lost. Nothing is taken out of a pot, so this is the whole story. */
+    /** Chips won or lost. Pots are paid out whole, so this is the whole story. */
     net: integer('net').notNull(),
     /**
-     * Whether this hand was decided by comparing cards rather than by everyone
+     * Whether this hand was decided by comparing cards, as opposed to everyone
      * else folding. It is what separates a bluff that worked from a good hand
-     * that got paid, and deriving it later would mean scanning every stored
-     * event blob forever.
+     * that got paid, and storing it here keeps every later query off the event
+     * blobs.
      */
     showdown: boolean('showdown').notNull().default(false),
     /** Players dealt in besides this one. */
@@ -492,7 +481,7 @@ export const results = pgTable(
     /**
      * Average published rating of those opponents when the hand was dealt.
      *
-     * A snapshot rather than a join, because ratings move: asking today how
+     * A snapshot, because ratings move: asking today how
      * strong an opponent was last month would answer with today's opinion. This
      * is what the exploitation score is measured against.
      */

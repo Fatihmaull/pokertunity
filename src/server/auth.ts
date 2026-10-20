@@ -20,7 +20,7 @@ export interface Session {
 
 function secret(): Uint8Array {
   const value = process.env.SESSION_SECRET;
-  if (!value) throw new Error('SESSION_SECRET is not set. Generate one with: openssl rand -base64 32');
+  if (!value) throw new Error('SESSION_SECRET is required. Generate one with: openssl rand -base64 32');
   return new TextEncoder().encode(value);
 }
 
@@ -45,10 +45,10 @@ async function read<T>(token: string | undefined): Promise<T | null> {
 /**
  * The host a sign-in message must be bound to.
  *
- * Reading this from the request would make the check circular: an attacker who
- * collected a signature for their own domain need only send that domain in the
- * `Host` header for it to verify here. In production the value is pinned by
- * configuration and the header is ignored. In development it falls back to the
+ * Configured, because a value read from the request would make the check
+ * circular: an attacker who collected a signature for their own domain could
+ * send that domain in the `Host` header. In production the value is pinned by
+ * configuration. In development it falls back to the
  * request so that localhost, a LAN address and a tunnel all work unconfigured.
  */
 export function expectedHost(requestHost: string): string {
@@ -57,12 +57,12 @@ export function expectedHost(requestHost: string): string {
     try {
       return new URL(configured).host;
     } catch {
-      throw new Error(`APP_ORIGIN is not a URL: ${configured}`);
+      throw new Error(`APP_ORIGIN must be a URL, got ${configured}`);
     }
   }
 
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('APP_ORIGIN is not set. Sign-in cannot be bound to a domain without it.');
+    throw new Error('APP_ORIGIN is required. Sign-in is bound to the domain it names.');
   }
 
   return requestHost;
@@ -99,9 +99,9 @@ export interface SignInResult {
  * Verifies a Sign-In With Ethereum message and opens a session.
  *
  * The nonce is read from the cookie this server issued and cleared immediately,
- * so a captured message cannot be replayed. The domain is checked against this
- * deployment's configured host rather than against the request's own, which is
- * what stops a signature collected on another site from working here.
+ * so a captured message works once. The domain is checked against this
+ * deployment's configured host, which is what keeps a signature collected on
+ * another site from working here.
  */
 export async function signIn(message: string, signature: string, requestHost: string): Promise<SignInResult> {
   let host: string;
@@ -122,13 +122,13 @@ export async function signIn(message: string, signature: string, requestHost: st
   try {
     parsed = new SiweMessage(message);
   } catch {
-    return { ok: false, error: 'That sign-in message could not be read.' };
+    return { ok: false, error: 'That sign-in message is unreadable.' };
   }
 
   // Any chain this deployment settles on is an acceptable place to have signed.
-  // The chain a signature names is not what makes it safe here: the nonce and
-  // the domain are. Pinning one network instead would only break the player who
-  // switched chains between fetching the message and signing it.
+  // The nonce and the domain are what make a signature safe here, so any
+  // enabled chain is accepted, including one the player switched to between
+  // fetching the message and signing it.
   const chains = enabledChains();
   if (!chains.some((chain) => chain.id === parsed.chainId)) {
     const names = chains.map((chain) => chain.shortName).join(' or ');
@@ -136,7 +136,7 @@ export async function signIn(message: string, signature: string, requestHost: st
   }
 
   const result = await parsed.verify({ signature, nonce: issued.nonce, domain: host }, { suppressExceptions: true });
-  if (!result.success) return { ok: false, error: 'That signature did not match the message.' };
+  if (!result.success) return { ok: false, error: 'That signature belongs to a different message.' };
 
   const address = parsed.address.toLowerCase();
   const session = await openSession(address);
@@ -154,8 +154,7 @@ async function openSession(address: string): Promise<Session> {
       .returning({ id: users.id });
 
     // Written to the ledger like any other movement. The chips column is a
-    // cache of these rows, so a balance that appeared without one would be the
-    // only chips in the system nothing accounts for.
+    // cache of these rows, so every chip in every balance is accounted for.
     await tx.insert(ledgerEntries).values({
       userId: created.id,
       delta: STARTING_GRANT,
@@ -164,9 +163,8 @@ async function openSession(address: string): Promise<Session> {
       reference: 'new-account',
     });
 
-    // No agent is created here. An agent is a program somebody runs, so it
-    // exists once its owner registers one and collects a token, not because
-    // somebody connected a wallet.
+    // Sign-in creates the account alone. An agent is a program somebody runs,
+    // so it exists once its owner registers one and collects a token.
     return created.id;
   });
 

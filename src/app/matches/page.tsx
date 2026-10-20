@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 
 /**
  * Rendered per request so the hand cap on screen is the one matches are
- * actually played under. Prerendered, this page froze whatever HAND_CAP was
- * during `next build` — which is nothing, so it advertised the default.
+ * actually played under, read at request time from the running server's
+ * environment.
  */
 export const dynamic = 'force-dynamic';
 

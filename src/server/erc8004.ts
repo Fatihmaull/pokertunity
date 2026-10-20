@@ -30,12 +30,11 @@ import { leaderboard } from './metrics';
 /**
  * Publishing this arena's records to ERC-8004.
  *
- * Nothing here runs inside the web server. Attestations are posted by an
- * operator running `pnpm attest`, because the process serving pages holds no
- * key and signs nothing, so a bug in a route
- * cannot move anything on chain. It also matches what an attestation is. A
- * rating is a claim about a body of play, not about the last hand, and
- * republishing it every hand would cost gas to say almost nothing new.
+ * This runs from the operator's command line. Attestations are posted by an
+ * operator running `pnpm attest`, because the process serving pages is
+ * read-only on chain, so every route stays harmless to the chain. It also
+ * matches what an attestation is: a rating is a claim about a body of play,
+ * published when that body has grown enough to say something new.
  *
  * The addresses are per-chain and come from the environment the same way vaults
  * do, named after the chain's own key: `MONAD_TESTNET_IDENTITY_REGISTRY` and its
@@ -49,14 +48,14 @@ type Address = `0x${string}`;
 interface Registries {
   identity: Address;
   reputation: Address;
-  /** Null on a chain with no Validation Registry, which today is every chain. */
+  /** Null on a chain with zero Validation Registries configured, which today is every chain. */
   validation: Address | null;
 }
 
 function addressFrom(name: string): Address | null {
   const value = process.env[name]?.trim();
   if (!value) return null;
-  if (!/^0x[0-9a-fA-F]{40}$/.test(value)) throw new NotConfigured(`${name} is not an address: ${value}`);
+  if (!/^0x[0-9a-fA-F]{40}$/.test(value)) throw new NotConfigured(`${name} must be an address, got ${value}`);
   return value as Address;
 }
 
@@ -72,16 +71,16 @@ function registriesFor(chain: DeployedChain): Registries {
   ].filter(Boolean);
   if (missing.length > 0) {
     throw new NotConfigured(
-      `${chain.name} has no ERC-8004 registries configured. Set ${missing.join(', ')} to the singletons deployed there.`,
+      `${chain.name} needs its ERC-8004 registries configured. Set ${missing.join(', ')} to the singletons deployed there.`,
     );
   }
 
   return {
     identity: identity!,
     reputation: reputation!,
-    // Optional rather than required: the specification still has this registry
-    // under revision and nobody has deployed a canonical one. Requiring it would
-    // mean no chain could be published to at all.
+    // Optional: the specification still has this registry under revision and
+    // canonical deployments are still to come, so every chain publishes either
+    // way.
     validation: addressFrom(`${prefix}_VALIDATION_REGISTRY`),
   };
 }
@@ -93,9 +92,8 @@ type Signing = WalletClient & { account: Account };
  *
  * The registrar is a hot key sitting in an environment file, and whoever holds
  * an identity is who can repoint it. Handing each one to an operator's own
- * wallet leaves the registrar nothing worth stealing and nothing lost with it.
- * The price is the validation request, which the standard only takes from the
- * owner or an operator, so a chain with a Validation Registry publishes
+ * wallet leaves the registrar empty and cheap to lose. The price is the
+ * validation request, which the standard takes from the owner or an operator, so a chain with a Validation Registry publishes
  * reputation alone while this is set.
  */
 function identityOwner(): Address | null {
@@ -110,7 +108,7 @@ const KEY_VARS: Record<Signer, string> = {
 function signerFor(chain: DeployedChain, role: Signer): Signing {
   const name = KEY_VARS[role];
   const key = process.env[name]?.trim();
-  if (!key) throw new NotConfigured(`${name} is not set. Attestations are signed, so they need both accounts.`);
+  if (!key) throw new NotConfigured(`${name} is required. Attestations are signed, so they need both accounts.`);
 
   return createWalletClient({
     account: privateKeyToAccount(key as Address),
@@ -122,12 +120,12 @@ function signerFor(chain: DeployedChain, role: Signer): Signing {
 /**
  * Both accounts, refused if they are the same one.
  *
- * Both are separate from the treasury on purpose, since they only ever write
- * claims and can be handed to whatever posts them without also handing over the
- * account that owns the vault. They are separate from each other because the
- * registrar owns every identity and the Reputation Registry refuses feedback
- * from an owner. One key doing both would fail on chain, after paying for the
- * mint, so it is refused here instead.
+ * Both are separate from the treasury on purpose, since they write claims and
+ * can be handed to whatever posts them while the vault's account stays put.
+ * They are separate from each other because the registrar owns every identity
+ * and the Reputation Registry refuses feedback from an owner. One key doing
+ * both would fail on chain after paying for the mint, so the check happens
+ * here, first.
  */
 function signers(chain: DeployedChain): Record<Signer, Signing> {
   const registrar = signerFor(chain, 'registrar');
@@ -169,8 +167,7 @@ export interface Readiness {
 
 /**
  * What a run on this chain would sign with, and whether either account is
- * empty. Asked before anything is sent, so an unfunded key is one plain line
- * rather than a failure per agent.
+ * empty. Asked before anything is sent, so an unfunded key is one plain line.
  */
 export async function readiness(chain: DeployedChain): Promise<Readiness> {
   const registries = registriesFor(chain);
@@ -188,12 +185,12 @@ export async function readiness(chain: DeployedChain): Promise<Readiness> {
 }
 
 /**
- * Mints an ERC-8004 identity for an agent on this chain, if it has none there.
+ * Mints an ERC-8004 identity for an agent on this chain, unless it has one there.
  *
  * The URI is the agent's registration file, which lists its identity on every
  * chain, so all of an agent's mints point at the same document. Returns the
- * existing id unchanged if it already has one here: a second identity on the
- * same chain would split its record in half, which is the shape a Sybil takes.
+ * existing id unchanged if it already has one here: one identity per chain
+ * keeps its record whole, which is the opposite of the shape a Sybil takes.
  */
 export async function registerIdentity(
   chain: DeployedChain,
@@ -201,7 +198,7 @@ export async function registerIdentity(
   baseUrl: string,
 ): Promise<{ registryId: string; txHash: Hash | null; transferTx: Hash | null }> {
   const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId)).limit(1);
-  if (!agent) throw new NotConfigured(`no agent ${agentId}`);
+  if (!agent) throw new NotConfigured(`unknown agent ${agentId}`);
 
   const registries = registriesFor(chain);
   const { registrar } = signers(chain);
@@ -209,7 +206,7 @@ export async function registerIdentity(
   const existing = await identityOn(chain, agentId);
   if (existing) {
     // Asked again of an identity already minted, so a run that died between
-    // the mint and the handover finishes the handover rather than leaving it.
+    // the mint and the handover finishes the handover.
     const transferTx = await handOver(chain, registries, registrar, existing.registryId);
     return { registryId: existing.registryId, txHash: null, transferTx };
   }
@@ -223,15 +220,15 @@ export async function registerIdentity(
     chain: chainDefinition(chain),
   });
 
-  // The id comes from the receipt rather than the return value, because a
-  // write does not hand one back: the mint is only real once it is mined.
+  // The id comes from the receipt, because the mint becomes real once it is
+  // mined and the receipt is where the id appears.
   const receipt = await publicClientFor(chain).waitForTransactionReceipt({ hash: txHash, confirmations: 1 });
   if (receipt.status !== 'success') throw new Error(`identity registration reverted: ${txHash}`);
 
-  // Decoded by name, not by position. Identity is an ERC-721, so minting also
-  // emits a transfer, and that event's first indexed topic is the sender rather
-  // than the token. Reading topics positionally would record every agent as
-  // token zero and point every attestation ever posted at the same identity.
+  // Decoded by name. Identity is an ERC-721, so minting also emits a transfer,
+  // and that event's first indexed topic is the sender. Decoding by name
+  // records each agent's own token and points each attestation at the right
+  // identity.
   let registryId: string | null = null;
   for (const log of receipt.logs) {
     if (log.address.toLowerCase() !== registries.identity.toLowerCase()) continue;
@@ -242,7 +239,7 @@ export async function registerIdentity(
       registryId = (decoded.args as unknown as { agentId: bigint }).agentId.toString();
       break;
     } catch {
-      // Some other event of the registry's, or one this build does not know.
+      // Another event of the registry's, or one this build skips.
       continue;
     }
   }
@@ -263,10 +260,9 @@ export async function registerIdentity(
 /**
  * Moves a freshly minted identity from the registrar to `IDENTITY_OWNER`.
  *
- * Read from the chain rather than remembered, so it is safe to call on every
- * run: an identity already handed over costs one read and sends nothing. One
- * held by some third account is refused loudly, since that is not a state this
- * arena can produce by itself.
+ * Read from the chain, so it is safe to call on every run: an identity already
+ * handed over costs one read. One held by some third account is refused
+ * loudly, since that state comes from outside the arena.
  */
 async function handOver(
   chain: DeployedChain,
@@ -320,17 +316,17 @@ const ABIS = {
  * Publishes one agent's record on one chain: the rating to Reputation, and how
  * much to believe it to Validation where the chain has that registry.
  *
- * The URI that goes on chain names this attestation's own row, not the agent's
- * latest, so a reader who follows an old record still fetches the bytes its
+ * The URI that goes on chain names this attestation's own row, so a reader who
+ * follows an old record still fetches the bytes its
  * hash was taken over. The row is therefore written before anything is sent.
  */
 export async function publishRecord(chain: DeployedChain, agentId: string, baseUrl: string): Promise<Published> {
   const [record] = await leaderboard({ agentId, limit: 1 });
-  if (!record) throw new NotConfigured(`no record for agent ${agentId}`);
+  if (!record) throw new NotConfigured(`agent ${agentId} has an empty record`);
 
   const identity = await identityOn(chain, agentId);
   if (!identity) {
-    throw new NotConfigured(`agent ${agentId} has no ERC-8004 identity on ${chain.name}. Register it first.`);
+    throw new NotConfigured(`agent ${agentId} needs an ERC-8004 identity on ${chain.name}. Register it first.`);
   }
 
   const registries = registriesFor(chain);
@@ -373,8 +369,8 @@ export async function publishRecord(chain: DeployedChain, agentId: string, baseU
     uri,
     evidenceHash,
     attestation,
-    // The request must come from the identity's owner, which is no longer the
-    // registrar once identities are handed over.
+    // The request comes from the identity's owner, which is IDENTITY_OWNER once
+    // identities are handed over.
     validation: registries.validation !== null && identityOwner() === null,
   });
 

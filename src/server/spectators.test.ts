@@ -17,7 +17,7 @@ afterEach(() => {
   for (const release of taken.splice(0)) release();
 });
 
-/** A match nobody else in this file watches, so the counts cannot interfere. */
+/** A match unique to each test in this file, so every count starts at zero. */
 function someMatch(): string {
   return `match-${Math.random().toString(36).slice(2)}`;
 }
@@ -49,7 +49,7 @@ test('a viewer leaving hands the seat to the next one', () => {
   assert.equal(admit(match, 'latecomer').ok, true);
 });
 
-test('handing a seat back twice does not make room for two', () => {
+test('handing a seat back twice frees exactly one', () => {
   const match = someMatch();
   const releases = fill(match);
 
@@ -61,7 +61,7 @@ test('handing a seat back twice does not make room for two', () => {
   assert.deepEqual(admit(match, 'second'), { ok: false, reason: 'full' }, 'one release, one seat');
 });
 
-test('one caller cannot take the gallery for themselves', () => {
+test('one caller gets a fair share of the gallery', () => {
   const match = someMatch();
   for (let i = 0; i < SPECTATORS_PER_CALLER; i++) {
     assert.equal(admit(match, 'greedy').ok, true, `feed ${i + 1} from one caller`);
@@ -87,7 +87,7 @@ test('matches are counted separately', () => {
   const full = someMatch();
   fill(full);
 
-  assert.equal(admit(someMatch(), 'viewer-0').ok, true, 'a full match does not close another');
+  assert.equal(admit(someMatch(), 'viewer-0').ok, true, 'each match fills on its own');
 });
 
 test('the per-caller ceiling sits well under the match ceiling', () => {

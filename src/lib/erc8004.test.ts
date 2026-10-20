@@ -28,12 +28,12 @@ function after(matches: number): Rating {
   return rating;
 }
 
-test('an agent nobody has watched is worth nothing on chain', () => {
+test('a newcomer scores zero confidence on chain', () => {
   assert.equal(confidenceIn(DEFAULT_RATING), 0);
-  assert.equal(confidenceIn(settled(40, DEFAULT_RATING.sigma * 2)), 0, 'wider than a newcomer is still nothing');
+  assert.equal(confidenceIn(settled(40, DEFAULT_RATING.sigma * 2)), 0, 'wider than a newcomer is still zero');
 });
 
-test('confidence climbs as the doubt closes, and only then', () => {
+test('confidence climbs as the doubt closes', () => {
   const thin = confidenceIn(after(3));
   const thick = confidenceIn(after(40));
 
@@ -41,16 +41,14 @@ test('confidence climbs as the doubt closes, and only then', () => {
   assert.ok(thick > thin, 'more matches is more confidence');
   assert.ok(thick >= 70, `forty matches scored ${thick}`);
 
-  // The registry is being told how sure we are, not how much we liked the
-  // result. A confidently terrible agent scores high here, and should.
+  // The registry is being told how sure we are, whatever the result. A confidently terrible agent scores high here, and should.
   assert.equal(confidenceIn(settled(45, 2)), confidenceIn(settled(5, 2)));
 });
 
-test('the arena never claims to be certain about an agent', () => {
+test('the arena keeps some doubt about every agent', () => {
   // Drift keeps a floor under the doubt on purpose: an owner can rewrite an
-  // agent between matches, so a rating that had collapsed to certainty would be
-  // making a claim about a thing that no longer exists. The published
-  // confidence plateaus rather than reaching a hundred, and that is honest.
+  // agent between matches, so the rating keeps room to follow it. The
+  // published confidence plateaus below a hundred, and that is honest.
   const seasoned = confidenceIn(after(80));
   const veteran = confidenceIn(after(400));
 
@@ -84,7 +82,7 @@ test('the same record hashes to the same bytes whatever order it was built in', 
 
   assert.equal(once, again);
   assert.match(once, /^\{"agentId":/, 'keys are sorted, so agentId leads');
-  assert.ok(!once.includes('\n'), 'no incidental whitespace to disagree about');
+  assert.ok(!once.includes('\n'), 'compact, so the whitespace is fixed');
 });
 
 test('changing any published figure changes the hash input', () => {
@@ -97,14 +95,14 @@ test('changing any published figure changes the hash input', () => {
   assert.notEqual(original, canonicalise(buildAttestation({ ...RECORD, name: 'Viridian ' })));
 });
 
-test('the attestation carries what it took to earn the record, not just the score', () => {
+test('the attestation carries what it took to earn the record, alongside the score', () => {
   const attestation = buildAttestation(RECORD);
 
   assert.equal(attestation.matches, 42);
   assert.equal(attestation.hands, 3_100);
   assert.equal(attestation.rating, Math.round(conservative(RECORD.rating) * 100) / 100);
   assert.equal(attestation.confidence, confidenceIn(RECORD.rating));
-  assert.ok(attestation.method.includes('arena, not by the agent'), 'the method says who chose the opponents');
+  assert.ok(attestation.method.includes('chosen by the arena'), 'the method says who chose the opponents');
   assert.ok(attestation.method.includes('entry fee'), 'and that a seat costs something');
 });
 
@@ -138,7 +136,7 @@ function feedbackValue(rating: Rating): bigint {
   return feedback.args[1] as bigint;
 }
 
-test('feedback is never signed by the key that owns the identity', () => {
+test('feedback is signed by the attestor, apart from the identity’s owner', () => {
   // The deployed Reputation Registry reverts feedback from an owner or operator,
   // and the registrar is the owner of every identity it mints.
   for (const validation of [true, false]) {
@@ -162,7 +160,7 @@ test('validation is requested by the owner, naming the attestor, who answers it'
   assert.equal(plan[0].args[0], ATTESTOR, 'the validator named is the account that responds');
 });
 
-test('a chain with no Validation Registry gets the reputation alone', () => {
+test('a chain lacking a Validation Registry gets the reputation alone', () => {
   const plan = planFor(false);
   assert.deepEqual(
     plan.map((write) => write.registry),
@@ -187,7 +185,7 @@ test('an agent that keeps finishing last posts a negative value', () => {
   assert.equal(REPUTATION_DECIMALS, 2);
 });
 
-test('the value on chain is the published rating, not the raw estimate', () => {
+test('the value on chain is the published rating', () => {
   // Publishing mu would let an agent with three lucky matches outrank one with
   // three hundred honest ones, which is the whole thing this guards against.
   const lucky = settled(40, 8);
@@ -215,7 +213,7 @@ test('one registration file names the agent on every chain it was minted on', ()
   assert.ok(registration.services.every((service) => service.endpoint.startsWith('https://arena.test/')));
 });
 
-test('an agent not yet minted anywhere still has a file, listing nothing', () => {
+test('an agent still to be minted has a file with an empty list', () => {
   const registration = buildRegistration({ agentId: 'a', name: 'Ace', baseUrl: 'https://arena.test', identities: [] });
   assert.deepEqual(registration.registrations, []);
 });

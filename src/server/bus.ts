@@ -4,18 +4,17 @@ type Listener = (event: ArenaEvent) => void;
 
 /**
  * One broadcast channel per table. Spectators subscribe over server-sent
- * events; the table publishes and never waits for them.
+ * events; the table publishes and moves on.
  *
- * Nothing is buffered here. A spectator arriving mid-hand is caught up by the
+ * The bus is unbuffered. A spectator arriving mid-hand is caught up by the
  * stream route rendering a fresh `runtime.view(viewer)` snapshot, which is what
- * keeps redaction per-viewer; a shared replay log would hold seat state nobody
- * had redacted yet.
+ * keeps redaction per-viewer, with every snapshot rendered for its viewer.
  */
 export class TableBus {
   private readonly listeners = new Set<Listener>();
 
-  // Called as `runtime.bus.subscribe` from the SSE route, which static analysis
-  // does not follow through the field.
+  // Called as `runtime.bus.subscribe` from the SSE route, a path static
+  // analysis skips through the field.
   // fallow-ignore-next-line unused-class-member
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -29,7 +28,7 @@ export class TableBus {
       try {
         listener(event);
       } catch {
-        // A broken subscriber must never stop a hand.
+        // A hand plays on past a broken subscriber.
       }
     }
   }

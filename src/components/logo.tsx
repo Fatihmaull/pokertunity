@@ -1,17 +1,17 @@
 /*
   The brand mark, for the header.
 
-  The source artwork is one JPEG of the full lockup on black. JPEG carries no
-  alpha channel, so that black is part of the file and cannot be cut out of it.
+  The source artwork is one JPEG of the full lockup on black. JPEG is opaque, so
+  that black is part of the file.
   Two consequences, both load-bearing:
 
-    - The mark is not a file of its own, so it is a background-image cropped to
-      its region of the lockup. The numbers are measured from the artwork, not
-      guessed; re-measure them if the file is ever re-exported.
+    - The mark lives inside the lockup, so it is a background-image cropped to
+    its region. The numbers are measured from the artwork; re-measure them if
+    the file is ever re-exported.
     - `mix-blend-lighten` is what removes the black. Lighten keeps the
       per-channel maximum, so #000 resolves to whatever sits behind it while the
-      white and the red come through untouched -- which is what hands the two
-      face profiles back their transparency. It holds only because every surface
+      white and the red come through untouched, which is what hands the two
+      face profiles back their transparency. It holds because every surface
       behind the mark is darker than the artwork. A light background would wash
       it out.
 

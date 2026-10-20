@@ -5,16 +5,15 @@ import { callerOf, take, tooMany } from '@/server/rate-limit';
 
 /**
  * Feeds the landing page. If a table is dealing right now the hero watches it
- * live; if none is, the page replays the last real hand and says so. It never
- * invents a hand to fill the space.
+ * live; while the room is idle, the page replays the last real hand and says
+ * so. Every hand it shows was really played.
  *
- * A hand that was thrown away unseen stays unseen here too. The table mucks, so
- * publishing every seat's read of its own cards afterwards would hand back
- * exactly what mucking withholds, to anyone who asks for it in a browser: the
- * opponents from that hand are usually still sitting at the same table, and an
- * owner who learns what one of them folded can write it straight into their own
- * agent. What each agent did is public. What it was holding when
- * it declined to show is not.
+ * A hand that was thrown away face down stays face down here too. The table
+ * mucks, and this route keeps the muck private: the opponents from that hand
+ * are usually still sitting at the same table, and an owner who learned what
+ * one of them folded could write it straight into their own agent. What each
+ * agent did is public. What it was holding when it declined to show stays
+ * private.
  */
 export async function GET(request: Request): Promise<Response> {
   const allowed = take('hands-latest', callerOf(request, (await getSession())?.userId ?? null));
@@ -64,9 +63,9 @@ export async function GET(request: Request): Promise<Response> {
 /**
  * Seats that turned their cards face up, read from the hand's own events.
  *
- * The engine already decided this when it settled: only winners table, plus
- * everyone still live once somebody is all in. Recomputing the rule here would
- * be a second copy of it, and the two would eventually disagree.
+ * The engine already decided this when it settled: winners table, plus
+ * everyone still live once somebody is all in. Reading the events keeps the
+ * rule in one place.
  */
 function tabled(events: unknown): Set<number> {
   if (!Array.isArray(events)) return new Set();

@@ -7,7 +7,7 @@ import { useDismissed } from './ui';
 
 /**
  * One example of every hand, strongest first. It leads with the cards that make
- * the hand and dims the rest, which only break a tie, so each row shows what
+ * the hand and dims the rest, which break ties, so each row shows what
  * the hand is made of as well as naming it.
  */
 const HANDS: ReadonlyArray<{ category: Category; cards: string; makes: number; says: string }> = [
@@ -19,7 +19,7 @@ const HANDS: ReadonlyArray<{ category: Category; cards: string; makes: number; s
   { category: CATEGORY.TRIPS, cards: '7s 7h 7d Kc 2s', makes: 3, says: 'Three cards of one rank' },
   { category: CATEGORY.TWO_PAIR, cards: 'Js Jd 5h 5c As', makes: 4, says: 'Two different pairs' },
   { category: CATEGORY.PAIR, cards: 'Ac Ah Qs 8d 3c', makes: 2, says: 'Two cards of one rank' },
-  { category: CATEGORY.HIGH_CARD, cards: 'As Jh 8d 5c 2s', makes: 1, says: 'None of the above' },
+  { category: CATEGORY.HIGH_CARD, cards: 'As Jh 8d 5c 2s', makes: 1, says: 'The highest card plays' },
 ];
 
 /**
@@ -67,7 +67,7 @@ export function HandRankings() {
             <span className="label text-faint">Strongest first</span>
           </div>
           {/* One list, ruled between hands, so all nine stand on a table of
-              ordinary height without scrolling, each on one line of words. */}
+              ordinary height in one view, each on one line of words. */}
           <div className="scroll-y min-h-0" tabIndex={0}>
             <ol className="divide-y divide-line">
               {HANDS.map((hand) => (

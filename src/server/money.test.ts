@@ -46,16 +46,17 @@ import { setQueueEnabled } from './credentials';
  * The paths that move chips, against a real database.
  *
  * Everything else about the arena can be wrong for a hand and recover. A ledger
- * that credits twice, charges a seat nobody sat in, or settles a match into more
+ * that credits twice, charges for an empty seat, or settles a match into more
  * chips than went onto the table stays wrong, so these run the real queries and
- * the real transactions rather than a model of them.
+ * the real transactions.
  */
 
 const CHAIN = 'bnb-testnet';
 const TX = `0x${'ab'.repeat(32)}`;
 
-// Starting a deposit refuses a chain with no vault. The address is never
-// called: the chain read is replaced below, and nothing here signs anything.
+// Starting a deposit needs a chain with a vault. The address stays
+// uncalled: the chain read is replaced below, and every test here is
+// read-only on chain.
 process.env.BNB_TESTNET_VAULT_ADDRESS ||= '0x000000000000000000000000000000000000dEaD';
 
 after(async () => {
@@ -107,7 +108,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.ok(seated.every((seat) => seat.stack === MATCH.buyIn));
   });
 
-  test('an entrant who cannot cover a seat is left out rather than overdrawn', async () => {
+  test('an entrant short of a seat is left out, balance intact', async () => {
     const a = await candidate(SEAT_COST, 'A');
     const broke = await candidate(SEAT_COST - 1, 'Broke');
     const b = await candidate(SEAT_COST, 'B');
@@ -116,7 +117,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.ok(match);
     assert.equal(match.config.seats, 2);
 
-    assert.equal(await balance(broke.ownerId), SEAT_COST - 1, 'charged nothing');
+    assert.equal(await balance(broke.ownerId), SEAT_COST - 1, 'balance unchanged');
     const seated = await seatsOf(match.id);
     assert.deepEqual(
       seated.map((seat) => [seat.seatIndex, seat.agentId]),
@@ -124,19 +125,19 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
         [0, a.agentId],
         [1, b.agentId],
       ],
-      'and it leaves no gap, because nobody can arrive in one later',
+      'and the numbering stays dense, because the seats a match opens with are final',
     );
   });
 
-  test('a match that could seat fewer than two charges nobody at all', async () => {
+  test('a match that could seat fewer than two leaves every balance as it was', async () => {
     const a = await candidate(SEAT_COST, 'A');
     const broke = await candidate(10, 'Broke');
 
     const match = await createMatch([a, broke]);
 
     assert.equal(match, null);
-    assert.equal(await balance(a.ownerId), SEAT_COST, 'the one entrant who could pay was not charged');
-    assert.equal((await db.select().from(matches)).length, 0, 'and no match was left behind');
+    assert.equal(await balance(a.ownerId), SEAT_COST, 'the one entrant who could pay keeps the full balance');
+    assert.equal((await db.select().from(matches)).length, 0, 'and the matches table stays empty');
     assert.equal((await db.select().from(ledgerEntries)).length, 0);
   });
 
@@ -167,7 +168,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     );
     assert.ok(
       seated.every((seat) => !seat.inHand),
-      'and no seat belongs to the hand any more',
+      'and every seat is released from the hand',
     );
 
     assert.equal((await db.select().from(results)).length, 2);
@@ -179,18 +180,18 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
     const [stored] = await db.select().from(hands);
     assert.deepEqual(stored.deck, hand.deck, 'the deck is stored as dealt, which is what a replay deals from');
-    assert.equal(stored.seed, null, 'and no seed, because nothing was dealt from one');
+    assert.equal(stored.seed, null, 'and a null seed, because the deck came from the CSPRNG');
 
     const [row] = await db.select().from(matches).where(eq(matches.id, match.id));
     assert.equal(row.handsPlayed, 1);
   });
 
-  test('a hand that cannot be recorded changes nothing at all', async () => {
+  test('a hand that fails to record rolls back entirely', async () => {
     const field = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B')];
     const match = (await createMatch(field))!;
     const hand = foldedHand(match.id, field, [MATCH.buyIn, MATCH.buyIn]);
 
-    // An outcome for an agent that does not exist fails on its foreign key, by
+    // An outcome for an unknown agent fails on its foreign key, by
     // which point the hand row and its decisions have already been written.
     const broken: PersistedHand = {
       ...hand,
@@ -209,7 +210,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     );
     assert.ok(
       (await countersOf(field)).every((row) => row.handsPlayed === 0),
-      'and nobody is counted for a hand that is not on record',
+      'and the counters match the hands on record',
     );
   });
 
@@ -236,7 +237,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     const field = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B'), await candidate(SEAT_COST, 'C')];
     const match = (await createMatch(field))!;
 
-    // Chips moved between them during play. What is on the table has not changed.
+    // Chips moved between them during play. What is on the table is the same total.
     await setStacks(match.id, [{ stack: 3_000 }, { stack: 2_000 }, { stack: 1_000 }]);
 
     const { finishes } = await settleMatch(match.id, 'cap', 100);
@@ -249,7 +250,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     for (const entrant of field) await ledgerAgrees(entrant.ownerId, SEAT_COST);
 
     const after = (await Promise.all(field.map((entrant) => balance(entrant.ownerId)))).reduce((a, b) => a + b, 0);
-    assert.equal(after, SEAT_COST * field.length - ENTRY_FEE * field.length, 'the entry fees are the only chips that left');
+    assert.equal(after, SEAT_COST * field.length - ENTRY_FEE * field.length, 'the entry fees are the one outflow');
 
     assert.equal((await seatsOf(match.id)).length, 0, 'the seats are gone once the chips are back');
     const [row] = await db.select().from(matches).where(eq(matches.id, match.id));
@@ -275,11 +276,11 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
       field.map((entrant) => finishes.find((finish) => finish.agentId === entrant.agentId)?.place),
       [1, 2, 3],
     );
-    assert.equal(await balance(field[1].ownerId), 0, 'a stack of nothing returns nothing');
+    assert.equal(await balance(field[1].ownerId), 0, 'a zero stack returns zero');
     await ledgerAgrees(field[1].ownerId, SEAT_COST);
   });
 
-  test('an abandoned match gives the stacks back and rates nobody', async () => {
+  test('an abandoned match gives the stacks back and leaves ratings as they were', async () => {
     const field = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B')];
     const match = (await createMatch(field))!;
     await setStacks(match.id, [{ stack: 2_500 }, { stack: 1_500 }]);
@@ -293,8 +294,8 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
       'but it still names everyone it seated, so each can be told the match ended',
     );
     assert.deepEqual(await Promise.all(field.map((entrant) => balance(entrant.ownerId))), [2_500, 1_500]);
-    // Current policy, pinned so a change to it is a decision rather than an
-    // accident: the stacks come back, the entry fee does not.
+    // Current policy, pinned so any change to it is deliberate: the stacks
+    // come back, and the entry fee stays with the house.
     const total = (await Promise.all(field.map((entrant) => balance(entrant.ownerId)))).reduce((a, b) => a + b, 0);
     assert.equal(total, SEAT_COST * 2 - ENTRY_FEE * 2);
 
@@ -318,17 +319,17 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
     const [row] = await db.select().from(matches).where(eq(matches.id, match.id));
     assert.equal(row.status, 'abandoned');
-    assert.equal(row.handsPlayed, 1, 'a hand that was dealt and stored is not recorded as never having happened');
+    assert.equal(row.handsPlayed, 1, 'a hand that was dealt and stored is counted');
   });
 
-  test('a field nobody has rated records no band rather than a band of zero', async () => {
+  test('a field of newcomers records a null band', async () => {
     const fresh = [await candidate(SEAT_COST, 'A'), await candidate(SEAT_COST, 'B')];
     const match = (await createMatch(fresh))!;
 
     const [row] = await db.select().from(matches).where(eq(matches.id, match.id));
-    // Not a number near zero. Mu minus three sigma over a stored default lands
-    // a hair either side of it, so a reader testing the sign gets whichever
-    // way the rounding fell. An unrated field is not a field rated zero.
+    // Null, exactly. Mu minus three sigma over a stored default lands a hair
+    // either side of zero, so a reader testing the sign would get whichever way
+    // the rounding fell. An unrated field is a field still to be rated.
     assert.equal(row.bandRating, null);
   });
 
@@ -389,7 +390,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
     assert.equal(first.pages, 2);
     assert.deepEqual(playing(first), [live.id]);
-    assert.deepEqual(playing(second), [live.id], 'a live match is never paged out');
+    assert.deepEqual(playing(second), [live.id], 'a live match appears on every page');
     assert.deepEqual(history(first), ended.slice(1).reverse().map((row) => row.id));
     assert.deepEqual(history(second), [ended[0].id], 'the earliest to end is on the last page');
     assert.equal((await storedMatches(9)).page, 2, 'a page past the end answers with the last one');
@@ -410,7 +411,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(intent.expectedWei, quote.valueWei);
   });
 
-  test('a chip count outside the range writes no intent', async () => {
+  test('a chip count outside the range is refused before any intent is written', async () => {
     const me = await owner(0);
 
     for (const chips of [MIN_PURCHASE - 1, MAX_PURCHASE + 1, 1_500.5]) {
@@ -428,8 +429,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(result.chips, quote.chips);
     assert.equal(result.balance, quote.chips);
 
-    // Asking again is answered with the credit that already happened, not
-    // with a second one and not with an error about money that arrived.
+    // Asking again is answered with the credit that already happened, once.
     const again = credited(await confirmDeposit(me, TX, CHAIN, observe));
     assert.equal(again.chips, quote.chips);
     assert.equal(again.balance, quote.chips);
@@ -449,7 +449,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     const observe = paid(quote.bytes32, me.address, BigInt(quote.valueWei));
 
     // Both are told it landed, which is what a cashier closed and reopened
-    // mid-wait does: two pollers on one hash. Only one of them credits it.
+    // mid-wait does: two pollers on one hash. Exactly one of them credits it.
     const outcomes = await Promise.all([
       confirmDeposit(me, TX, CHAIN, observe),
       confirmDeposit(me, TX, CHAIN, observe),
@@ -472,7 +472,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     ]);
 
     // Both at once. The cashier stops asking at the first credit, and a batch
-    // made outside it was never noted, so nothing would come back for the rest.
+    // made outside it was noted nowhere, so this call is the one that sees them.
     const result = credited(await confirmDeposit(me, TX, CHAIN, observe));
     assert.equal(result.chips, first.chips + second.chips);
     assert.equal(result.balance, first.chips + second.chips);
@@ -489,7 +489,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     );
   });
 
-  test('a short deposit in a batch does not hold up the others it was paid with', async () => {
+  test('a short deposit in a batch leaves the others it was paid with to credit', async () => {
     const me = await owner(0);
     const short = await startDeposit(me, 10_000, CHAIN);
     const full = await startDeposit(me, 10_000, CHAIN);
@@ -504,7 +504,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     await ledgerAgrees(me.userId, 0);
   });
 
-  test('a deposit not mined yet is pending, not refused', async () => {
+  test('a deposit still being mined is pending', async () => {
     // The first ask after a wallet hands back a hash nearly always lands here;
     // treated as a failure, it would end the cashier's wait on its first poll.
     const me = await owner(0);
@@ -516,7 +516,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(await balance(me.userId), 0);
   });
 
-  test('a deposit short of its confirmations credits nothing yet', async () => {
+  test('a deposit short of its confirmations waits to credit', async () => {
     const me = await owner(0);
     const quote = await startDeposit(me, 10_000, CHAIN);
 
@@ -548,13 +548,13 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(await balance(me.userId), 0);
   });
 
-  test('a deposit is finished only on the chain its intent was priced on', async () => {
+  test('a deposit is finished on the chain its intent was priced on', async () => {
     const me = await owner(0);
     const quote = await startDeposit(me, 10_000, CHAIN);
 
     await assert.rejects(
       confirmDeposit(me, TX, 'arbitrum-sepolia', paid(quote.bytes32, me.address, BigInt(quote.valueWei))),
-      /paid on Arbitrum Sepolia, but its purchase was priced on BNB Smart Chain Testnet, so it cannot be credited/,
+      /paid on Arbitrum Sepolia, but its purchase was priced on BNB Smart Chain Testnet, so it stays uncredited/,
     );
     assert.equal(await balance(me.userId), 0);
   });
@@ -575,7 +575,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
   /* Standings                                                                */
   /* ------------------------------------------------------------------------ */
 
-  test('the standings are cut on the published rating, not on the estimate', async () => {
+  test('the standings are cut on the published rating', async () => {
     // A lucky newcomer: a high estimate, and all the doubt one match leaves.
     await candidate(0, 'Lucky', { mu: 40, sigma: 8 });
     // An established agent with a lower estimate the arena is far surer of.
@@ -586,10 +586,10 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.equal(top.name, 'Proven', 'published 27 outranks published 16, whatever mu says');
   });
 
-  test('an agent nobody has seen finish a match ranks below every agent that has', async () => {
+  test('an agent still to finish a match ranks below every agent that has', async () => {
     // Played once and came out a little below zero.
     await candidate(0, 'Played', { mu: 20, sigma: 7 }, 1);
-    // Never played: published as exactly zero, which is no rating at all.
+    // Yet to play: published as exactly zero, a placeholder.
     await candidate(0, 'Unseen');
 
     const names = (await leaderboard()).map((row) => row.name);
@@ -606,7 +606,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     await db.insert(agents).values({ userId: owner.ownerId, name: 'Unseen', color: 'red', tokenHash: 'test-unseen' });
 
     const second = await standings({ page: 2, ownerId: owner.ownerId });
-    assert.equal(second.pages, 2, 'only the rated are counted toward pages');
+    assert.equal(second.pages, 2, 'the rated are the ones counted toward pages');
     assert.deepEqual(
       second.ranked.map((row) => `${row.place} ${row.name}`),
       [`${STANDINGS_PAGE + 1} R${STANDINGS_PAGE + 1}`],
@@ -614,7 +614,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.deepEqual(
       second.mine?.map((row) => `${row.place} ${row.name}`),
       [`${STANDINGS_PAGE + 1} R${STANDINGS_PAGE + 1}`, 'null Unseen'],
-      'the owner’s agent carries the place the page shows it at, and the unranked one follows with none',
+      'the owner’s agent carries the place the page shows it at, and the unranked one follows with a null place',
     );
 
     const first = await standings({ page: 1, ownerId: null });
@@ -622,14 +622,14 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
       first.ranked.map((row) => row.place),
       Array.from({ length: STANDINGS_PAGE }, (_, index) => index + 1),
     );
-    assert.equal(first.mine, null, 'somebody signed out has no agents of their own to list');
+    assert.equal(first.mine, null, 'somebody signed out gets a null list');
   });
 
   /* ------------------------------------------------------------------------ */
   /* The owner's switch                                                       */
   /* ------------------------------------------------------------------------ */
 
-  test('an agent is queued only once its owner has switched matches on', async () => {
+  test('an agent is queued once its owner has switched matches on', async () => {
     const entrant = await candidate(SEAT_COST, 'Fresh');
 
     assert.deepEqual(await queuedAgents([entrant.agentId]), [], 'a new agent starts with matches off');
@@ -641,11 +641,11 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
     assert.deepEqual(await queuedAgents([entrant.agentId]), []);
   });
 
-  test('nobody can switch matches on for an agent they do not own', async () => {
+  test('switching matches on is for the agent’s own owner', async () => {
     const entrant = await candidate(SEAT_COST, 'Theirs');
     const stranger = await owner(0);
 
-    await assert.rejects(setQueueEnabled(stranger.userId, entrant.agentId, true), /No such agent/);
+    await assert.rejects(setQueueEnabled(stranger.userId, entrant.agentId, true), /unknown on this account/);
     assert.deepEqual(await queuedAgents([entrant.agentId]), []);
   });
 
@@ -653,7 +653,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
   /* A finished match, as its entrants read it                                */
   /* ------------------------------------------------------------------------ */
 
-  test('an owner whose agent went out with nothing is told so, not left out', async () => {
+  test('an owner whose agent went out empty is told so', async () => {
     const field = [await candidate(SEAT_COST, 'Winner'), await candidate(SEAT_COST, 'Broke')];
     const match = (await createMatch(field))!;
     await setStacks(match.id, [{ stack: 4_000 }, { stack: 0, bustedAtHand: 3 }]);
@@ -661,7 +661,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
     const broke = await matchSummary(match.id, field[1].ownerId);
     assert.equal(broke?.mine, field[1].agentId);
-    assert.equal(broke?.cashOut, 0, 'no ledger row is written for nothing, but the owner still sees it');
+    assert.equal(broke?.cashOut, 0, 'the ledger skips a zero stack, and the owner still sees it');
 
     const winner = await matchSummary(match.id, field[0].ownerId);
     assert.equal(winner?.mine, field[0].agentId);
@@ -679,7 +679,7 @@ describe('ledger', { skip: testDatabaseUrl ? false : 'set TEST_DATABASE_URL to a
 
 let wallets = 0;
 
-/** An account holding some chips it was given directly, with no ledger row for them. */
+/** An account holding some chips it was given directly, outside the ledger. */
 async function owner(chips: number): Promise<Session> {
   wallets += 1;
   const address = `0x${wallets.toString(16).padStart(40, '0')}`;
@@ -692,7 +692,7 @@ async function candidate(
   name: string,
   rating: Rating = DEFAULT_RATING,
   // Written onto the row as well as carried on the candidate, because the two
-  // disagreeing is exactly the bug a fixture should not be able to hide.
+  // disagreeing is exactly the bug a fixture has to keep visible.
   matchesPlayed = 0,
 ): Promise<Candidate> {
   const account = await owner(chips);
@@ -728,7 +728,7 @@ async function balance(userId: string): Promise<number> {
  * The balance is a cache of the ledger, so the two must agree.
  *
  * The opening balance is whatever the fixture wrote straight onto the account,
- * which is the one movement no ledger row describes.
+ * which is the one movement outside the ledger.
  */
 async function ledgerAgrees(userId: string, opening: number): Promise<void> {
   const rows = await db.select().from(ledgerEntries).where(eq(ledgerEntries.userId, userId)).orderBy(ledgerEntries.id);

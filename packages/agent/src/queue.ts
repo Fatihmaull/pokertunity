@@ -8,19 +8,18 @@ export interface LeasedKey {
 
 interface KeyState {
   key: string;
-  /** Epoch milliseconds before which this key must not be used again. */
+  /** Epoch milliseconds from which this key is usable again. */
   availableAt: number;
 }
 
 /**
  * One token bucket for every model request this process makes, sized to the
  * provider's requests-per-minute allowance. Every agent in the process shares
- * it, so a field of busy agents slows down together instead of one starving
- * the others.
+ * it, so a field of busy agents slows down together and shares fairly.
  *
- * Keys are pooled for failover and for holding more than one paid key. They are
- * not a way to multiply a free tier: limits are enforced per project, and
- * spreading load across projects to get around them breaks the provider's terms.
+ * Keys are pooled for failover and for holding more than one paid key. Limits
+ * are enforced per project, and the provider's terms keep each project to its
+ * own allowance.
  */
 export class ModelQueue {
   private readonly keys: KeyState[];
@@ -34,7 +33,7 @@ export class ModelQueue {
     private readonly now: () => number = Date.now,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
   ) {
-    if (keys.length === 0) throw new Error('no model API keys configured');
+    if (keys.length === 0) throw new Error('at least one model API key is required');
     this.keys = keys.map((key) => ({ key, availableAt: 0 }));
     this.capacity = Math.max(1, requestsPerMinute);
     this.tokens = this.capacity;
@@ -108,15 +107,15 @@ export function modelQueue(): ModelQueue {
     .map((key) => key.trim())
     .filter(Boolean);
 
-  // A provider that needs a key and has none fails here, at startup. Handed a
-  // placeholder instead, every decision would come back rejected and be
-  // recorded against the agent as its own error, and a misconfigured deployment
-  // would quietly fill a leaderboard with agents that never got to play.
+  // A provider that needs a key fails here, at startup, when the key is
+  // missing. That keeps a misconfigured deployment off the leaderboard: a
+  // placeholder would get every decision rejected and recorded against the
+  // agent as its own error.
   //
-  // Only the model brain builds a queue, so a missing key here is always a
-  // mistake. The switch that avoids needing one is the brain, not the provider.
+  // The model brain is the one builder of a queue, so a missing key here is
+  // always a mistake. Keyless play is chosen with the brain.
   if (keys.length === 0) {
-    throw new Error('GEMINI_API_KEYS is not set. Set it, or run with AGENT_BRAIN=heuristic, which needs no key.');
+    throw new Error('GEMINI_API_KEYS is required. Set it, or run with AGENT_BRAIN=heuristic, which runs keyless.');
   }
 
   const rpm = Number(process.env.AGENT_RATE_LIMIT_RPM ?? 10);

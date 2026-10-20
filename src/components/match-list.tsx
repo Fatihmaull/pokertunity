@@ -8,9 +8,8 @@ import { Badge, ButtonLink, Card, EmptyState, LiveBadge } from './ui';
 /**
  * What the arena is dealing, or, with `ended`, what it has dealt.
  *
- * There is nothing to choose here and no button to press. Agents are matched by
- * rating rather than picking their own game, so this is a schedule rather than
- * a lobby: it says which matches are running, how many agents are in them, and
+ * This is a schedule. Agents are matched by rating, so the list is for
+ * watching: it says which matches are running, how many agents are in them, and
  * how far along they are.
  */
 export function MatchList({ lobby, ended = false, limit }: { lobby: Lobby; ended?: boolean; limit?: number }) {
@@ -19,16 +18,15 @@ export function MatchList({ lobby, ended = false, limit }: { lobby: Lobby; ended
 
   return (
     <Card className="overflow-hidden">
-      {/* The column heads exist on wide screens only. Narrow rows label their own cells.
-          Blinds and buy-in are not columns: every match is the same game, so
-          they would repeat one value down the page. The matches page states
-          them once. */}
+      {/* The column heads exist on wide screens. Narrow rows label their own cells.
+      Blinds and buy-in live in the page header: every match is the same game,
+      so the matches page states them once. */}
       <div className="hidden grid-cols-[minmax(11rem,1.6fr)_minmax(8rem,1fr)_7rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-2.5 lg:grid">
         <span className="label text-faint">Match</span>
         <span className="label text-center text-faint">Agents</span>
         <span className="label text-center text-faint">Hands</span>
         {/* The buttons below name themselves, Watch or Review, so a head over
-            them would only repeat one of the two and be wrong half the time. */}
+            them would repeat one of the two. */}
         <span aria-hidden />
       </div>
 
@@ -49,19 +47,19 @@ function Empty({ lobby, ended }: { lobby: Lobby; ended: boolean }) {
   if (!lobby.loaded) {
     return lobby.failed ? (
       <EmptyState
-        title="Matches could not be loaded"
-        body="The arena did not answer. This list asks again every few seconds."
+        title="Matches failed to load"
+        body="The arena is slow to answer. This list asks again every few seconds."
       />
     ) : (
       <EmptyState title="Loading matches…" />
     );
   }
 
-  if (ended) return <EmptyState title="No match has ended yet" />;
+  if (ended) return <EmptyState title="Finished matches appear here" />;
 
   return (
     <EmptyState
-      title="Nothing is being dealt right now"
+      title="The tables are quiet right now"
       body="A match starts once two agents are queued."
       action={
         <ButtonLink href="/agent" size="sm">
@@ -78,8 +76,8 @@ function MatchRow({ match, mine }: { match: LobbyMatch; mine: boolean }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           {/*
-            Underlined rather than recoloured on hover: the accent is now the
-            same white as body text, so a colour shift here would be invisible.
+            Underlined on hover: the accent is the same white as body text, so the
+            underline is what shows.
           */}
           <Link
             href={`/match/${match.id}`}
@@ -89,7 +87,7 @@ function MatchRow({ match, mine }: { match: LobbyMatch; mine: boolean }) {
           </Link>
           {/* History is every match that ended, so the one kind of ending a
               row has to name is the server stopping it: its chips went back
-              and nobody was rated. */}
+              and ratings stayed as they were. */}
           {match.live ? (
             <LiveBadge label="Ongoing" />
           ) : match.status === 'abandoned' ? (
@@ -120,7 +118,7 @@ function MatchRow({ match, mine }: { match: LobbyMatch; mine: boolean }) {
 
       <div className="hidden text-center lg:block">
         <span className="mono text-sm text-muted tabular-nums">
-          {match.handNumber > 0 ? `${match.handNumber}/${match.handCap}` : '—'}
+          {match.handNumber > 0 ? `${match.handNumber}/${match.handCap}` : '–'}
         </span>
       </div>
 

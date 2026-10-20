@@ -9,7 +9,7 @@ import { Badge, Card, LiveBadge } from './ui';
 interface ReplayDecision {
   seatIndex: number;
   street: string;
-  /** Null for a hand that was mucked. The table did not show it, so neither does this. */
+  /** Null for a hand that was mucked. The table kept it private, and so does this. */
   equity: number | null;
   handRead: { made: string; flushDraw: boolean; openEnded: boolean; gutshot: boolean; overcards: boolean } | null;
   reasoning: string | null;
@@ -35,13 +35,13 @@ type Feed =
 /**
  * A worked example of the thing the page is selling, shown before the reader
  * has to click anything. If a table is dealing it is that table; if one has
- * dealt before it is the last real hand; only when neither is true does it fall
- * back to a written sample, and then it says so on the card.
+ * dealt before it is the last real hand; before the first hand ever dealt it
+ * shows a written sample, and says so on the card.
  */
 export function HeroPreview() {
   const [feed, setFeed] = useState<Feed>({ mode: 'loading' });
   const [step, setStep] = useState(0);
-  /** Held while someone is reading it, so a paragraph is not swapped out mid-sentence. */
+  /** Held while someone is reading it, so a paragraph stays put mid-sentence. */
   const [held, setHeld] = useState(false);
 
   useEffect(() => {
@@ -61,9 +61,9 @@ export function HeroPreview() {
 
   const live = useMatchStream(feed.mode === 'live' ? feed.matchId : null);
 
-  // Only the decisions of hands that were actually shown. A mucked hand comes
-  // back with its reasoning withheld, which makes for an empty panel, and the
-  // hero is meant to be a worked example rather than a redacted one.
+  // The decisions of hands that were actually shown. A mucked hand comes back
+  // with its reasoning sealed, and the hero is meant to be a full worked
+  // example.
   const shown = feed.mode === 'replay' ? feed.decisions.filter((decision) => !decision.mucked) : [];
   const count = shown.length;
   useEffect(() => {
@@ -75,9 +75,9 @@ export function HeroPreview() {
   const brain = build(feed, shown, live, step);
   const matchId = feed.mode === 'live' || feed.mode === 'replay' ? feed.matchId : null;
 
-  // A fixed height, not a minimum. The decisions it cycles through run from a
-  // line to a paragraph, and a card that grew and shrank with each one moved
-  // the headline beside it and everything below it on every turn. Taller where
+  // A fixed height. The decisions it cycles through run from a line to a
+  // paragraph, and a fixed card keeps the headline beside it and everything
+  // below it still on every turn. Taller where
   // it is stacked, because the narrower card wraps the same paragraph longer.
   return (
     <Card className="flex h-[32rem] flex-col overflow-hidden lg:h-[28rem]">
@@ -127,15 +127,15 @@ export function HeroPreview() {
 }
 
 /**
- * Shown only when no hand has ever been dealt, and labelled Example on the card
- * so it is never mistaken for a real decision.
+ * Shown before the first hand is ever dealt, and labelled Example on the card
+ * so it reads as a sample.
  */
 const SAMPLE: BrainState = {
   seatName: 'Maverick',
   color: 'red',
   street: 'turn',
   reasoning:
-    'He has bet every street and I have called every street. The flush card came and he cut his bet to a third of the pot. That is the size you pick when you want a cheap look at the river, not the size you pick holding a flush. I have nine cards to the nut flush and he is laying me better than three to one to go and get them.',
+    'He has bet every street and I have called every street. The flush card came and he cut his bet to a third of the pot. That is the size you pick when you want a cheap look at the river, and a small one for a made flush. I have nine cards to the nut flush and he is laying me better than three to one to go and get them.',
   streaming: false,
   equity: 0.384,
   potOdds: 0.31,
@@ -193,20 +193,20 @@ function build(
     };
   }
 
-  // Nothing was tabled in the last hand, so there is nothing honest to replay.
+  // The last hand was mucked whole, so the sample is the honest thing to show.
   if (feed.mode === 'empty' || feed.mode === 'replay') return SAMPLE;
   return null;
 }
 
 function footnote(feed: Feed, shown: ReplayDecision[], step: number): string | null {
   if (feed.mode === 'loading') return 'Loading…';
-  if (feed.mode === 'empty') return 'No hands dealt yet.';
+  if (feed.mode === 'empty') return 'The first hand is still to come.';
   if (feed.mode === 'replay') {
-    // Says which hand, and does not pretend the mucked seats were not there.
+    // Says which hand, and counts the mucked seats too.
     const mucked = feed.decisions.length - shown.length;
     if (shown.length === 0) return 'Last hand was mucked.';
 
-    const tail = mucked > 0 ? ` · ${mucked} mucked, not shown` : '';
+    const tail = mucked > 0 ? ` · ${mucked} mucked, kept private` : '';
     return `Hand ${feed.handNumber} · decision ${(step % shown.length) + 1} of ${shown.length}${tail}`;
   }
   return null;

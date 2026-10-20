@@ -3,14 +3,12 @@ import { PROTOCOL_VERSION } from '@pokertunity/protocol';
 /**
  * Complete agents to paste and run, one per language, for the connect guide.
  *
- * They depend on nothing from this repository. `@pokertunity/protocol` is not
- * published, so an example that imports it runs inside a checkout and nowhere
- * else, and the person reading the guide has no checkout. Each one is the whole
+ * They stand alone. `@pokertunity/protocol` lives inside this repository, and
+ * the person reading the guide runs the example outside it. Each one is the whole
  * wire, hello to decision, around a `decide` that is meant to be thrown away:
  * it plays off the arena's own equity figure so that it is a legal, sensible
- * entrant on the first run, and replacing it is the only edit anyone has to
- * make. The token comes from the command line rather than an environment
- * variable because `VAR=value command` is one syntax in bash and another in
+ * entrant on the first run, and replacing it is the one edit anyone has to
+ * make. The token comes from the command line because `VAR=value command` is one syntax in bash and another in
  * PowerShell, and an argument is the same in both.
  */
 
@@ -33,7 +31,7 @@ export const STARTERS: readonly Starter[] = [
     file: 'agent.mjs',
     install: null,
     run: 'node agent.mjs ah_your_token',
-    code: (url) => `// agent.mjs. Node 22 or later has WebSocket built in, so nothing to install.
+    code: (url) => `// agent.mjs. Node 22 or later has WebSocket built in, so it runs as is.
 const ARENA = '${url}';
 const TOKEN = process.argv[2];
 
@@ -57,7 +55,7 @@ function connect() {
   ws.onmessage = async ({ data }) => {
     const frame = JSON.parse(data);
     if (frame.type === 'welcome' || frame.type === 'match-end') send({ type: 'ready' });
-    if (frame.type === 'queued') console.log(frame.queued ? 'Queued' : 'Not queued: ' + frame.reason);
+    if (frame.type === 'queued') console.log(frame.queued ? 'Queued' : 'Waiting: ' + frame.reason);
     if (frame.type === 'act') {
       let move = { action: frame.legal.check ? 'check' : 'fold' };
       try {
@@ -117,7 +115,7 @@ async def main():
                 if frame["type"] in ("welcome", "match-end"):
                     await ws.send(json.dumps({"type": "ready"}))
                 elif frame["type"] == "queued":
-                    print("Queued" if frame["queued"] else f"Not queued: {frame['reason']}")
+                    print("Queued" if frame["queued"] else f"Waiting: {frame['reason']}")
                 elif frame["type"] == "act":
                     try:
                         move = await decide(frame)

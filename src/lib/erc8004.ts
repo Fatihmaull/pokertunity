@@ -2,15 +2,14 @@
  * What this arena publishes to ERC-8004, and why anyone should believe it.
  *
  * ERC-8004's own weak point is that reputation is self-reported. An agent, or
- * whoever runs one, posts feedback about itself or about its friends, and
- * nothing in the standard makes that expensive. Published work on the ecosystem
- * says the same: the registries are sound, the signals going into them are not.
+ * whoever runs one, posts feedback about itself or about its friends, and the
+ * standard leaves that cheap. Published work on the ecosystem says the same: the
+ * registries are sound, and the signals going into them are the weak part.
  *
  * A poker record is the opposite kind of signal. It is adversarial, it is
  * measured in money that came from somewhere, and every match costs an entry
- * fee. Nobody can Sybil their way to a rating: the only way to have finished
- * above somebody is to have taken chips off them while they tried to keep them,
- * and the arena chose the opponents rather than the agent.
+ * fee. A rating is Sybil-proof: finishing above somebody means taking chips
+ * off them while they tried to keep them, and the arena chose the opponents.
  *
  * So two things go on chain, and they answer different questions.
  *
@@ -22,30 +21,30 @@
  *   more direct answer than any proxy: the uncertainty term literally means how
  *   sure we are.
  *
- * No chain has a canonical Validation Registry yet, so where one is not
- * configured only the reputation goes up. The confidence still does, inside the
- * evidence document the reputation's hash commits to.
+ * Canonical Validation Registries are still to come, so on a chain with none
+ * configured the reputation goes up alone. The confidence still does, inside
+ * the evidence document the reputation's hash commits to.
  *
  * Everything here is pure. The numbers can be checked against the published
- * evidence document by anybody, without this server's cooperation.
+ * evidence document by anybody, independently of this server.
  */
 
 import { DEFAULT_RATING, conservative, type Rating } from './rating';
 
 /**
- * Uncertainty this wide says nothing at all, so it scores zero.
+ * Uncertainty this wide carries zero information, so it scores zero.
  *
- * The starting sigma is exactly that: an agent nobody has watched play. A
- * confidence of zero for one is not harshness, it is the truth.
+ * The starting sigma is exactly that: an agent the arena has yet to watch play.
+ * A confidence of zero for one is simply the truth.
  */
 const USELESS_SIGMA = DEFAULT_RATING.sigma;
 
 /**
- * Hands an agent must have played before anything is published for it.
+ * Hands an agent plays before its record is published.
  *
- * Below this the interval is so wide the confidence would be zero anyway, and a
- * registry full of scores that mean nothing is the exact problem this
- * integration exists to be better than.
+ * By this point the interval has closed enough for the confidence to mean
+ * something, and a registry of meaningful scores is the whole point of this
+ * integration.
  */
 export const MIN_ATTESTED_HANDS = 200;
 
@@ -59,8 +58,8 @@ const VALIDATION_TAG = 'poker-record';
 /**
  * How much to believe the rating, as the 0 to 100 the Validation Registry takes.
  *
- * Read straight off the uncertainty, which is the one input an attacker cannot
- * fake: it only closes by playing matches the arena chose the opponents for,
+ * Read straight off the uncertainty, which is the one input an attacker has to
+ * earn: it closes by playing matches the arena chose the opponents for,
  * each of which costs an entry fee. A confidently terrible agent scores high
  * here and should, because the arena is sure about it.
  */
@@ -75,7 +74,7 @@ export function confidenceIn(rating: Rating): number {
  * The document a reader fetches to check the claim.
  *
  * Its hash goes on chain beside the score, so an operator that later edits the
- * record breaks its own attestation rather than quietly rewriting history.
+ * record visibly breaks its own attestation.
  */
 export interface Attestation {
   /** The document format, so a reader knows what it is holding. */
@@ -91,9 +90,9 @@ export interface Attestation {
   ratingSigma: number;
   /** Matches won outright. */
   wins: number;
-  /** Net chips won at the tables. Purchases and the signup grant never touch it. */
+  /** Net chips won at the tables, counted from play alone. */
   earnings: number;
-  /** Big blinds per 100 hands, published beside the rating rather than instead of it. */
+  /** Big blinds per 100 hands, published beside the rating. */
   winRateBb100: number;
   /** The 0 to 100 that went into the Validation Registry, restated here. */
   confidence: number;
@@ -103,7 +102,7 @@ export interface Attestation {
 }
 
 const METHOD =
-  'The rating is a TrueSkill-family estimate updated from the finishing order of every match, computed as pairwise comparisons within each one. The published figure is three standard deviations below the estimate, so it climbs with evidence rather than with luck. Opponents are chosen by the arena, not by the agent, and every seat costs a fixed buy-in plus an entry fee. Confidence is how far the uncertainty has closed from where an unseen agent starts.';
+  'The rating is a TrueSkill-family estimate updated from the finishing order of every match, computed as pairwise comparisons within each one. The published figure is three standard deviations below the estimate, so it climbs with evidence. Opponents are chosen by the arena, and every seat costs a fixed buy-in plus an entry fee. Confidence is how far the uncertainty has closed from where an unseen agent starts.';
 
 export function buildAttestation(input: {
   agentId: string;
@@ -137,7 +136,7 @@ export function buildAttestation(input: {
 /**
  * The exact bytes that get hashed.
  *
- * Keys in a fixed order and no incidental whitespace, so the same record hashes
+ * Keys in a fixed order and compact whitespace, so the same record hashes
  * the same on any machine. A reader that re-serialises the fetched document
  * with this function and gets a different hash has found a changed record,
  * which is the entire point of putting the hash on chain.
@@ -157,12 +156,12 @@ function round(value: number): number {
 /**
  * Which of the arena's two keys signs a write.
  *
- * Two, because the standard pulls in opposite directions and one key cannot
- * satisfy both. Feedback must not come from the agent's owner or an approved
- * operator, and the deployed Reputation Registry reverts it if it does. A
- * validation request must come from exactly that owner. So the registrar owns
- * every identity and asks for validation, and the attestor, which owns nothing,
- * is the judge that answers it and scores the agent.
+ * Two, because the standard pulls in opposite directions and each key
+ * satisfies one side. Feedback comes from outside the agent's owner and
+ * approved operators, and the deployed Reputation Registry reverts it otherwise.
+ * A validation request comes from exactly that owner. So the registrar owns
+ * every identity and asks for validation, and the attestor, which owns zero
+ * identities, is the judge that answers it and scores the agent.
  */
 export type Signer = 'registrar' | 'attestor';
 
@@ -179,9 +178,8 @@ export interface PlannedWrite {
  * Every write that publishes one attestation, in the order they must be mined.
  *
  * The validation request goes first where there is a registry for it, so the
- * score that follows answers a question that was already public rather than
- * one written to fit the answer. Pure, so who signs what is testable without a
- * chain: that is the mistake that cost a revert on every feedback before.
+ * score that follows answers a question that was already public. Pure, so who
+ * signs what is testable in memory, which is where a signer mix-up gets caught.
  */
 export function publishPlan(input: {
   registryId: bigint;
@@ -245,7 +243,7 @@ export interface Identity {
  *
  * One file for every chain. Each chain's mint points here, and the file lists
  * all of them, which is how the standard says an agent registered in several
- * places is recognised as one agent rather than several strangers.
+ * places is recognised as one agent.
  */
 export interface Registration {
   type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
@@ -292,7 +290,7 @@ export function buildRegistration(input: {
 /**
  * What the interface is told about one agent on one chain.
  *
- * Hashes rather than links, since which explorer a hash belongs to is the
+ * Hashes, since which explorer a hash belongs to is the
  * chain registry's business and the browser already has it.
  */
 export interface OnChainRecord {

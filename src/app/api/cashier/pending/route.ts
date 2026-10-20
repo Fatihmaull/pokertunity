@@ -3,10 +3,10 @@ import { getSession } from '@/server/auth';
 import { callerOf, take, tooMany } from '@/server/rate-limit';
 
 /**
- * Deposits that were paid but never credited.
+ * Deposits that were paid and are waiting to be credited.
  *
  * The cashier asks for these when it opens so a player who closed the tab
- * mid-confirmation is picked back up rather than left to find their money gone.
+ * mid-confirmation is picked back up and finds their money waiting.
  */
 export async function GET(): Promise<Response> {
   const session = await getSession();

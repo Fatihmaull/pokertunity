@@ -3,19 +3,19 @@
 /*
   A dark product surface, built on the conventions people already know from
   poker lobbies and wallet apps: one neutral ramp, one accent, standard radii,
-  a 4px spacing grid. Nothing here is novel on purpose. The only place the
-  interface is allowed to look like a game is inside the table itself, where
-  the felt and the real card art live.
+  a 4px spacing grid. Familiar on purpose. The interface looks like a game
+  inside the table itself, where the felt and the real card art live.
 
-  Agent colour is the exception and it is not in this file. Every hue that is
-  not listed here belongs to an agent and is sampled from the chip art in
-  public/chips, so colour always answers "whose is that?" and never decorates.
+  Agent colour is the exception, and it lives in src/agent/colors.ts. Every hue
+  beyond the ones listed here belongs to an agent and is sampled from the chip
+  art in public/chips, so colour always answers "whose is that?" and always
+  carries meaning.
 */
 
 @theme {
   /*
     Neutral ramp, and neutral on purpose. The mark is black, white and red, and
-    a green cast beneath a red accent reads as mud. The felt is the only thing
+    a green cast beneath a red accent reads as mud. The felt is the one thing
     wearing green, which is the point: the table is where the interface is
     allowed to become a game.
   */
@@ -38,8 +38,8 @@
   /*
     One accent, and it is the mark's white. Join, live and money in are the
     things a player is here to do, and on a screen this dark white is the
-    loudest a colour gets -- louder than the red, which is exactly why the red
-    is not spent on them.
+    loudest a colour gets, louder than the red, which is exactly why the red is
+    saved for attention.
   */
   --color-accent: #fafafa;
   --color-accent-hover: #e4e4e7;
@@ -47,17 +47,16 @@
   --color-accent-ink: #0a0a0b;
 
   /*
-    The mark's red, sampled from the artwork. It is for fills and dots, never
-    for a sentence: at this value it clears the 3:1 a graphic owes its
-    background but not the 4.5:1 a line of text does. Red you can read is
-    --color-danger.
+    The mark's red, sampled from the artwork. It is for fills and dots: at this
+    value it clears the 3:1 a graphic owes its background, short of the 4.5:1 a
+    line of text needs. Red you can read is --color-danger.
   */
   --color-brand: #e60116;
 
   /*
-    Red means attention and means nothing else here -- a table dealing now, or
-    something that failed. Lifted off the mark's red only as far as 4.5:1 on a
-    card demands, so the two still read as one colour.
+    Red means attention, and attention alone: a table dealing now, or something
+    that failed. Lifted off the mark's red exactly as far as 4.5:1 on a card
+    demands, so the two still read as one colour.
   */
   --color-danger: #ff4550;
   --color-danger-soft: #2b0a0f;
@@ -78,11 +77,10 @@
 }
 
 /*
-  Tailwind 4 stopped giving buttons the pointer, on the grounds that the
-  platform does not. Here every control that acts on a click is a real button,
-  a select or a summary, so they get it back in one place rather than a class
-  each, and a new button cannot forget it. Disabled ones are left alone, where
-  the not-allowed cursor from the button styles applies instead.
+  Tailwind 4 leaves buttons with the platform's default cursor. Here every
+  control that acts on a click is a real button, a select or a summary, so they
+  get the pointer in one place, and every new button has it from the start.
+  Disabled ones keep the not-allowed cursor from the button styles.
 */
 @layer base {
   button:not(:disabled),
@@ -95,21 +93,21 @@
 
 :root {
   color-scheme: dark;
-  /* The header's height, so a page can subtract it without guessing. */
+  /* The header's height, so a page can subtract it exactly. */
   --header-h: 3.5rem;
   /*
     How tall the stage is. The felt sets it and the panel beside it matches, so
-    the two columns end level and no tab in the panel can push the page taller
-    than the table it is reporting on.
+    the two columns end level and every tab in the panel fits the height of the
+    table it is reporting on.
   */
   --stage-h: max(31rem, min(72vh, 43rem));
 
   /*
     One curve for everything that arrives: fast off the mark, a long
     deceleration, and it stops where it stops. Chips and cards slide on cloth,
-    and friction does not bounce, so nothing here overshoots its rest position.
-    Nothing eases in either, because nothing on a real table accelerates from
-    rest under its own power.
+    and friction damps, so everything here settles exactly at its rest position.
+    Motion starts at full speed too, because objects on a real table are pushed
+    into motion.
   */
   --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -124,7 +122,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Headings are the sans face, tightened. There is no separate display family. */
+/* Headings are the sans face, tightened. One family serves display and text. */
 h1,
 h2,
 h3 {
@@ -136,8 +134,8 @@ h3 {
 
 /*
   The board voice: Archivo narrowed and set heavy, the way a tournament board or
-  a televised table's lower third sets a title and a bet. Spent on two things
-  only, a page's own title and the move an agent made, so it stays the loudest
+  a televised table's lower third sets a title and a bet. Spent on two things,
+  a page's own title and the move an agent made, so it stays the loudest
   type on any screen by being rare on it.
 */
 .display {
@@ -155,10 +153,9 @@ h3 {
 /*
   Small structural label above a section or beside a figure.
 
-  Deliberately not all-caps with tracking. A column head is read, not shouted,
-  and setting every label that way flattens the hierarchy: when eight things on
-  a screen are emphasised the same way, none of them is. Weight and colour carry
-  the distinction instead, which also keeps the label legible at this size.
+  Deliberately sentence case. A column head is read, and emphasis works when it
+  is rare on a screen. Weight and colour carry the distinction, which also keeps
+  the label legible at this size.
 */
 .label {
   font-size: 0.75rem;
@@ -209,9 +206,8 @@ h3 {
 /*
   A card comes from somewhere. There is a dealer in the middle of this table, so
   a hole card travels out of the middle to the seat it belongs to, and the seats
-  across the felt are dealt away from the viewer rather than six hands all
-  dropping straight down in place at once. The vector is set per seat; anything
-  that does not set one keeps the plain drop.
+  across the felt are dealt away from the viewer, each hand on its own path. The
+  vector is set per seat; anything unset keeps the plain drop.
 */
 @keyframes deal {
   from {
@@ -256,10 +252,9 @@ h3 {
 }
 
 /*
-  A hand that is out of play is pushed back to the middle. Without this a fold
-  is the cards ceasing to exist, which is the one thing that never happens at a
-  table: they go somewhere, and watching them go is how a spectator catches a
-  fold they were not looking at.
+  A hand that is out of play is pushed back to the middle. At a real table folded
+  cards travel somewhere, and watching them go is how a spectator catches a fold
+  they were looking away from.
 */
 @keyframes muck {
   from {
@@ -280,10 +275,9 @@ h3 {
   Chips crossing the cloth, from a seat to the middle and back again.
 
   The figures on this table already say how much moved. What a figure cannot say
-  is that it moved, and a table where money changes hands with nothing passing
-  between them reads as a scoreboard rather than as a game. The token stays a
-  token on purpose: a countable pile would be a second and less exact answer to
-  "how much", and the figure is the one that has to be believed.
+  is that it moved, and a table where money visibly travels reads as a game. The
+  token stays a token on purpose: the figure is the exact answer to "how much",
+  and the one that has to be believed.
 */
 @keyframes chip-fly {
   0% {
@@ -364,8 +358,8 @@ h3 {
 }
 
 /*
-  The room the table stands in. Nearly black, and barely lit, so the only thing
-  with any colour in it is the table.
+  The room the table stands in. Nearly black, and barely lit, so the table is
+  the one thing with any colour in it.
 */
 .felt {
   background: radial-gradient(120% 90% at 50% 0%, #0e1a17 0%, #080f0d 60%, #060b0a 100%);
@@ -374,7 +368,7 @@ h3 {
 /*
   The table: one flat field of cloth inside a raised rail. Flat on purpose. A
   gradient across the middle of a poker table competes with the cards lying on
-  it, and the cards are the only thing there worth looking at.
+  it, and the cards are the thing there worth looking at.
 */
 .cloth {
   border-radius: 50%;
@@ -393,11 +387,11 @@ h3 {
 
 /*
   A seat's nameplate, and the states it can be in. Every state is drawn the same
-  colour whichever agent is sitting there, so a spectator learns one signal
-  instead of one per opponent.
+  colour whichever agent is sitting there, so a spectator learns one signal for
+  every opponent.
 */
 .plate {
-  /* One line of strip. The plate is sized without it and reaches over it. */
+  /* One line of strip. The plate is sized on its own and reaches over it. */
   --strip-h: 1.3rem;
   --strip-reach: 0px;
   position: relative;
@@ -410,10 +404,9 @@ h3 {
 /*
   A seat with something to say is a taller object than the plate that holds its
   name, because the strip hangs below the plate's own box. Every edge a seat
-  draws is drawn here instead of on the plate, over a box that reaches down far
-  enough to take the strip in: a ring that stopped at the plate would run a lit
-  line straight through the middle of the seat and cut the strip loose from the
-  name it belongs to.
+  draws is drawn here, over a box that reaches down far enough to take the strip
+  in, so a ring wraps the plate and the strip together and keeps the strip
+  joined to the name it belongs to.
 */
 .plate::after {
   content: '';
@@ -422,7 +415,7 @@ h3 {
   right: 0;
   bottom: calc(-1 * var(--strip-reach));
   left: 0;
-  /* Not inherited: the plate squares off the edge the strip covers, and this
+  /* Set here: the plate squares off the edge the strip covers, and this
      box is the one that has to come back round underneath it. */
   border-radius: 0.625rem;
   box-shadow: 0 3px 10px -3px rgba(0, 0, 0, 0.65);
@@ -433,10 +426,9 @@ h3 {
 }
 
 /*
-  The bottom edge of a plate with a strip under it is not an edge of anything:
-  it is the middle of the seat. It squares off there so the round corner falls
-  at the bottom of the strip instead, where the seat actually ends, and no
-  crescent of cloth is left in the join.
+  The bottom edge of a plate with a strip under it is the middle of the seat. It
+  squares off there so the round corner falls at the bottom of the strip, where
+  the seat actually ends, and the join stays solid.
 */
 .has-strip {
   --strip-reach: var(--strip-h);
@@ -444,15 +436,15 @@ h3 {
   border-bottom-left-radius: 0;
 }
 
-/* An empty seat is a recess in the cloth, so it casts nothing. */
+/* An empty seat is a recess in the cloth, so it casts zero shadow. */
 .plate-open::after {
   display: none;
 }
 
 /*
-  Whose turn it is, breathing rather than lit. A static ring is a state; a ring
+  Whose turn it is, breathing. A static ring is a state; a ring
   that moves is a clock running, and the seat on the clock is the one thing on
-  this table a spectator should never have to hunt for. The keyframes carry the
+  this table a spectator should find at a glance. The keyframes carry the
   same shadow the rule does, so switching the animation off leaves the ring.
 */
 @keyframes live-breathe {
@@ -478,8 +470,7 @@ h3 {
 
 /*
   Taking the pot. One flash and then it holds, because the seat keeps the ring
-  until the next hand and a plate that pulsed for thirty seconds would be the
-  loudest thing on a table where nothing is happening.
+  until the next hand, and a steady ring keeps a quiet table quiet.
 */
 @keyframes won-flash {
   0% {
@@ -503,7 +494,7 @@ h3 {
     0 0 22px -6px var(--color-warning);
 }
 
-/* Out of the hand, so out of the light. It fades down rather than dropping. */
+/* Out of the hand, so out of the light. It fades down. */
 .plate-out {
   filter: grayscale(0.9) brightness(0.6);
 }
@@ -534,8 +525,8 @@ h3 {
 /*
   The window the strip drops through: one line high because it takes its height
   from the strip, and clipping, so a strip pushed up by its own height is out of
-  sight rather than drawn over the plate. It carries the strip's colour so the
-  window never shows cloth while the strip is still on its way down.
+  sight. It carries the strip's colour so the window shows that colour while the
+  strip is still on its way down.
 */
 .strip-mask {
   position: absolute;
@@ -568,8 +559,8 @@ h3 {
 }
 
 /*
-  Out from under the plate. It travels its own height and no further, so the
-  eye reads it as having been there all along and only now shown, which is what
+  Out from under the plate. It travels exactly its own height, so the eye reads
+  it as having been there all along and just now shown, which is what
   separates a seat acting from a seat being redrawn.
 */
 @keyframes strip-drop {
@@ -586,11 +577,11 @@ h3 {
 }
 
 /*
-  The button, sitting on the corner of a plate rather than beside it. It is
+  The button, sitting on the corner of a plate. It is
   passed to the left every hand, and the pass is the clearest signal a table
-  gives that one hand ended and another began, so it arrives rather than
-  appearing. The translate is repeated in the keyframes because the animated
-  transform replaces the one the layout sets, it does not add to it.
+  gives that one hand ended and another began, so it visibly arrives. The
+  translate is repeated in the keyframes because the animated transform
+  replaces the one the layout sets.
 */
 @keyframes button-in {
   from {
@@ -615,7 +606,7 @@ h3 {
   animation: button-in 440ms var(--ease-settle) backwards;
 }
 
-/* The chip on a pot, at the size type is. Not the chip art, which is a photo. */
+/* The chip on a pot, at the size type is. A drawn token; the chip art is a photo. */
 .chip-dot {
   width: 0.5rem;
   height: 0.5rem;
@@ -654,7 +645,7 @@ h3 {
   animation: badge-pop 260ms var(--ease-settle) backwards;
 }
 
-/* Money arriving in the middle. One beat, on the pot only. */
+/* Money arriving in the middle. One beat, on the pot. */
 @keyframes pot-hit {
   0% {
     transform: scale(1);
@@ -668,8 +659,7 @@ h3 {
 }
 
 /*
-  Held back so the pot reacts when the chips reach it rather than when the event
-  arrives. The figure underneath is already rolling up over roughly the same
+  Held back so the pot reacts when the chips reach it. The figure underneath is already rolling up over roughly the same
   stretch, so the number and the object agree about when the money landed.
 */
 .pot-hit {
@@ -710,7 +700,7 @@ h3 {
     animation: none;
   }
 
-  /* Nothing travels, so nothing that only exists in flight is drawn at all. */
+  /* Motion is off, so the objects that exist in flight stay hidden. */
   .chip-flight,
   .mucked {
     display: none;
@@ -722,7 +712,7 @@ h3 {
   }
 }
 
-/* Wide content scrolls inside itself. The page body never scrolls sideways. */
+/* Wide content scrolls inside itself, so the page body stays put sideways. */
 .scroll-x {
   overflow-x: auto;
   scrollbar-width: thin;

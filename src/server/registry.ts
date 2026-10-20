@@ -7,10 +7,10 @@ import type { MatchEnding } from './store';
  *
  * A match lives here from the moment it is created until it is settled, and
  * then it is gone: matches are ephemeral by design, so this map turns over
- * constantly rather than holding a fixed roster.
+ * constantly.
  *
- * Hangs off globalThis because a hot reload that built a second registry would
- * deal every open match twice.
+ * Hangs off globalThis so a hot reload keeps the one registry, and every open
+ * match is dealt once.
  */
 const globalForMatches = globalThis as unknown as {
   __pokertunityMatches?: Map<string, MatchRuntime>;
@@ -33,8 +33,8 @@ export function allMatches(): MatchRuntime[] {
  * Starts dealing a match that has already been created and seated.
  *
  * The seats exist by the time this is called, and the buy-ins have already left
- * their owners' balances, so this only puts a dealer on a game that is
- * otherwise ready.
+ * their owners' balances, so this puts a dealer on a game that is otherwise
+ * ready.
  */
 export function openMatch(
   matchId: string,
@@ -55,7 +55,7 @@ export function openMatch(
  * Takes a finished match off the floor.
  *
  * Called the moment its runtime says it is done, before the chips go back. The
- * runtime holds nothing the seat rows do not, and the settlement that returns
+ * seat rows hold everything the runtime holds, and the settlement that returns
  * them is retried by the matchmaker until it lands.
  */
 export function closeMatch(id: string): void {

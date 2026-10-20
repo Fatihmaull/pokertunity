@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
 import { wait } from './wait';
 
-test('a wait that runs out leaves nothing behind on the signal', async () => {
+test('a wait that runs out leaves the signal clean', async () => {
   // One signal lives as long as a match, and every beat of every hand waits on
   // it. A listener left behind per wait is thousands of them by the last hand.
   const stopping = new AbortController();
@@ -25,9 +25,9 @@ test('stopping ends a wait early, and cleans up after itself too', async () => {
   assert.equal(getEventListeners(stopping.signal, 'abort').length, 0);
 });
 
-test('a wait on a signal that has already fired does not wait at all', async () => {
-  // An aborted signal never fires again, so a listener added to one would sit
-  // there while the timer ran its full length.
+test('a wait on a signal that has already fired returns at once', async () => {
+// An aborted signal fires exactly once, so a listener added afterwards would
+// sit there while the timer ran its full length.
   const stopping = new AbortController();
   stopping.abort();
   const started = Date.now();

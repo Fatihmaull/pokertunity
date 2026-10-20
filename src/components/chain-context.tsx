@@ -7,10 +7,10 @@ import { currentChainId, ensureChain, hasWallet, watchWallet } from '@/lib/walle
 /**
  * Which network the player is on, for the whole interface.
  *
- * The list comes from the server rather than from a constant here, so this
- * build runs against whatever chains the deployment enabled. Until it arrives
- * the active chain is null and anything that would move money stays disabled,
- * which is better than guessing a network and sending a deposit to it.
+ * The list comes from the server, so this build runs against whatever chains
+ * the deployment enabled. Until it arrives the active chain is null and
+ * anything that would move money stays disabled, so every deposit goes to a
+ * known network.
  */
 
 interface ChainContextValue {
@@ -70,8 +70,8 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
         }
         setActive(key);
 
-        // The wallet is moved too, but its refusal is not a failure: watching a
-        // table needs no wallet, and the next transaction asks again anyway.
+        // The wallet is moved too, and its refusal is fine: watching a table is
+        // wallet-free, and the next transaction asks again anyway.
         if (hasWallet()) await ensureChain(target).catch(() => {});
       } finally {
         setSwitching(false);
@@ -83,14 +83,13 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
   /**
    * Follows the wallet when the player switches network inside it.
    *
-   * The cookie is what prices a deposit, so leaving it behind means the next
-   * purchase is issued for the chain the header still shows and `ensureChain`
-   * then drags the wallet back — which reads as the site overruling a choice
-   * the player just made.
+   * The cookie is what prices a deposit, so following the wallet keeps the
+   * next purchase on the chain the player just chose, and the site respects
+   * that choice.
    *
-   * A wallet that moves to a network this deployment does not settle on is
-   * left alone: there is no cookie value that describes it, and the cashier
-   * already refuses anything it cannot price.
+   * A wallet that moves to a network outside this deployment's set is left
+   * alone: the cookie keeps its last value, and the cashier already refuses
+   * every purchase outside its price list.
    */
   const follow = useCallback(
     (id: number | null) => {
@@ -119,10 +118,10 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
     });
   }, [chains, follow]);
 
-  // The events above only see changes made while a tab is open. A player who
+  // The events above see changes made while a tab is open. A player who
   // switched with the site closed comes back to a cookie naming the old
   // network, so the wallet is asked once on load, silently: `eth_chainId`
-  // opens no prompt and works before any account is connected.
+  // is prompt-free and works before any account is connected.
   const reconciled = useRef(false);
   useEffect(() => {
     if (reconciled.current || chains.length === 0 || active === null || !hasWallet()) return;

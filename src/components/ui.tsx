@@ -5,8 +5,8 @@ import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 
 /**
  * The shared control vocabulary. Every button, card and badge in the product
- * comes from here, so a control that looks the same behaves the same and
- * nothing has to be restyled twice.
+ * comes from here, so a control that looks the same behaves the same and each
+ * style lives in one place.
  */
 
 type ButtonTone = 'primary' | 'secondary' | 'ghost';
@@ -25,9 +25,9 @@ const SIZES: Record<ButtonSize, string> = {
 };
 
 /*
-  A control gives under a press. It is 3% and 120ms and nobody will ever name
-  it, which is the point: a button that does not move under the pointer is the
-  difference between a page that responds and a page that merely re-renders.
+  A control gives under a press. It is 3% and 120ms and goes unnamed, which is
+  the point: a button that moves under the pointer is what makes a page feel
+  responsive.
 */
 const BUTTON_BASE =
   'inline-flex shrink-0 items-center justify-center rounded-control font-medium whitespace-nowrap transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100';
@@ -65,8 +65,8 @@ type BadgeTone = 'neutral' | 'accent' | 'live' | 'warning' | 'danger';
 /*
   `live` and `danger` are both red because red carries one meaning here: look
   at this. They are separate tones anyway, because a table that is dealing and
-  a deposit that failed are not the same event, and the day one of them needs
-  to stop being red the other should not move with it.
+  a deposit that failed are different events, and each can change colour on
+  its own.
 */
 const BADGE_TONES: Record<BadgeTone, string> = {
   neutral: 'border-line-strong bg-surface-2 text-muted',
@@ -129,7 +129,7 @@ export function Stat({
 
 /**
  * An empty screen is an invitation to act, so it always carries the action that
- * fills it rather than only reporting that there is nothing here.
+ * fills it.
  */
 export function EmptyState({
   title,
@@ -185,10 +185,9 @@ export function useDismissed(
 }
 
 /**
- * Detail that only some readers want, closed until asked for.
+ * Detail that some readers want, closed until asked for.
  *
- * The contents mount when it opens rather than being hidden, so a closed one
- * fetches nothing. That matters where the detail is an expensive read made
+ * The contents mount when it opens, so a closed one stays idle. That matters where the detail is an expensive read made
  * once per agent on the page.
  */
 export function Disclosure({
@@ -233,7 +232,7 @@ export function Disclosure({
 /**
  * The top of every page reached from the navigation, so each one opens on the
  * same left edge with the same title treatment and a visitor moving between
- * them sees the content change rather than the frame.
+ * them sees the content change and the frame hold still.
  */
 export function PageHeader({
   title,
@@ -314,8 +313,7 @@ export function SectionHeading({
 
 /**
  * Back and forward through a list the server hands over a page at a time.
- * Nothing is drawn while one page holds everything: a pager with nowhere to go
- * is two buttons that do nothing.
+ * Drawn once there is a second page to go to.
  */
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
   if (pages <= 1) return null;

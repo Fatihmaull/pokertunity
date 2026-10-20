@@ -13,13 +13,13 @@ import { HeuristicBrain, ModelBrain } from './brain';
  * pnpm --filter @pokertunity/agent start
  * ```
  *
- * `AGENT_BRAIN=heuristic` needs no key and no network beyond the arena, which
- * is what to use when developing or filling a field.
+ * `AGENT_BRAIN=heuristic` runs keyless and talks to the arena alone, which is
+ * what to use when developing or filling a field.
  */
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is not set.`);
+  if (!value) throw new Error(`${name} is required.`);
   return value;
 }
 

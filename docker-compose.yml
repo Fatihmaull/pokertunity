@@ -10,11 +10,10 @@ services:
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
-      # A named volume, not a bind mount into the checkout. Docker Desktop on
-      # WSL2 restarts this container before the distro's files are shared with
-      # it, finds the bind source missing and mounts an empty directory in its
-      # place without a word, so every reboot initialised a fresh cluster and
-      # the dev database lost its schema.
+      # A named volume, which Docker owns and keeps. Docker Desktop on WSL2
+      # restarts this container before the distro's files are shared with it, so
+      # a bind mount into the checkout comes back as a silent empty directory and
+      # a fresh cluster on every reboot.
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U pokertunity -d pokertunity']

@@ -13,7 +13,7 @@ import { Button, useDismissed } from './ui';
 
 /*
   Each label is the title of the page it opens, so a link and the heading it
-  lands on never disagree.
+  lands on always agree.
 */
 const NAV = [
   { href: '/', label: 'Home' },
@@ -42,7 +42,7 @@ export function SiteHeader() {
         */}
         <div className="mx-auto flex h-[var(--header-h)] w-full max-w-[84rem] items-center gap-x-2 px-4 sm:gap-x-6 sm:px-6">
           {/*
-            The only thing in the row that gives way. The name wraps onto a
+            The one thing in the row that gives way. The name wraps onto a
             second line the link's height clips, so it shows wherever it fits
             and leaves the mark alone on a narrow phone holding a big balance.
           */}
@@ -192,8 +192,8 @@ function WalletMenu({ address, onSignOut }: { address: string; onSignOut: () => 
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="menu"
-        // On a phone the address is hidden and only the dot is left, which
-        // names nothing to a screen reader without this.
+        // On a phone the address is hidden and the dot remains, so this label
+        // names it for a screen reader.
         aria-label={`Wallet ${shortAddress(address)}`}
         className="mono inline-flex h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 text-[0.8125rem] text-muted transition-colors hover:text-ink"
       >

@@ -1,15 +1,15 @@
 name: CI
 
-# Pull requests and main. A branch with no pull request open is somebody's work
-# in progress, and a red tick on it tells nobody anything they were waiting for.
+# Pull requests and main. A branch gets checked once it is proposed, which is
+# when a red tick tells somebody something they are waiting for.
 on:
   push:
     branches: [main]
   pull_request:
 
 concurrency:
-  # A second push supersedes the first. The older run is answering a question
-  # about code nobody is going to merge.
+  # A second push supersedes the first, because the newest code is what will
+  # merge.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
@@ -19,11 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # The ledger suite is the one thing here that cannot be faked. It charges
-    # seats, settles matches and credits deposits through the real transactions,
-    # so it needs a real Postgres or it skips itself and the money paths go
-    # untested. Same major as docker-compose, because a migration that applies
-    # on one and not the other is a deploy that fails at the wrong moment.
+    # The ledger suite runs against the real thing. It charges seats, settles
+    # matches and credits deposits through the real transactions, so it gets a
+    # real Postgres and the money paths get tested. Same major as docker-compose,
+    # so a migration that applies here applies in development and on deploy.
     services:
       postgres:
         image: postgres:17-alpine
@@ -40,7 +39,7 @@ jobs:
 
     env:
       # Named for what it is on purpose: the suite truncates every table between
-      # tests and refuses outright any database whose name does not end in _test.
+      # tests and accepts a database whose name ends in _test.
       TEST_DATABASE_URL: postgres://pokertunity:pokertunity@localhost:5432/pokertunity_test
       NEXT_TELEMETRY_DISABLED: '1'
 
@@ -48,7 +47,7 @@ jobs:
       - uses: actions/checkout@v5
 
       # Reads the version out of package.json's `packageManager`, so the runner
-      # and a developer's machine cannot end up resolving against different pnpm.
+      # and a developer's machine resolve against the same pnpm.
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v5
@@ -60,8 +59,8 @@ jobs:
 
       # A tracked node_modules holds symlinks to one developer's absolute paths,
       # so every `pnpm install` rewrites them and every commit carries the noise.
-      # .gitignore does not help once a file is tracked.
-      - name: No dependencies are committed
+      # .gitignore covers untracked files, so this step covers the tracked ones.
+      - name: Dependencies stay untracked
         run: |
           if git ls-files | grep -E '(^|/)node_modules/'; then
             echo "::error::A node_modules tree is tracked. Untrack it: git rm -r --cached <path>"
@@ -70,8 +69,8 @@ jobs:
 
       - run: pnpm lint
 
-      # Ahead of the tests rather than beside them: the suite expects the schema
-      # to already be there, and a migration that fails should say so as itself.
+      # Ahead of the tests: the suite expects the schema to already be there, and a
+      # migration that fails says so as itself.
       - name: Migrate the test database
         run: pnpm db:migrate
         env:
@@ -80,18 +79,17 @@ jobs:
       - run: pnpm test
 
       # The same placeholder the Dockerfile uses. Next evaluates every route
-      # module to collect page data and the database client refuses to load
-      # without a connection string, but nothing connects during a build. Using
-      # the placeholder here rather than the live test database keeps that a
-      # claim CI checks instead of one the Dockerfile only makes.
+      # module to collect page data and the database client needs a connection
+      # string to load, and the build connects to nothing. The placeholder here
+      # makes that a claim CI checks for the Dockerfile.
       - name: Build
         run: pnpm build
         env:
           DATABASE_URL: postgres://build:build@127.0.0.1:5/build
 
-      # After the build, never before. Next generates the route, page and layout
-      # types into .next/types during a build, and without them tsc cannot
-      # resolve RouteContext and fails on every dynamic route in the app.
+      # After the build. Next generates the route, page and layout types into
+      # .next/types during a build, and tsc reads RouteContext from there for every
+      # dynamic route in the app.
       - name: Typecheck
         run: pnpm exec tsc --noEmit
 
@@ -103,14 +101,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # forge-std is a submodule; without it forge has no test harness.
+          # forge-std is a submodule, and it is forge's test harness.
           submodules: recursive
 
       - uses: foundry-rs/foundry-toolchain@v1
 
-      # forge directly rather than `pnpm test:contracts`, which is the same
-      # command: the contracts do not need the Node workspace, and installing it
-      # would add a minute to every run for nothing.
+      # forge directly, the same command `pnpm test:contracts` runs: the contracts
+      # stand apart from the Node workspace, and skipping its install saves a minute
+      # on every run.
       - name: forge test
         run: forge test -vv
         working-directory: contracts

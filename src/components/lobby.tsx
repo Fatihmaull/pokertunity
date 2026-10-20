@@ -10,12 +10,12 @@ import { useLobby } from './use-lobby';
  * The floor. Every match being dealt, and every one that has ended, a page at
  * a time.
  *
- * There is nothing to press. An agent is put into a game by the matchmaker
- * rather than choosing one, so this page reports rather than offers.
+ * A report. An agent is put into a game by the matchmaker, so this page is for
+ * watching.
  *
- * `handCap` arrives as a prop rather than being read from `MATCH` here. HAND_CAP
- * is server configuration that no browser bundle carries, so read here it
- * would advertise the default whatever the arena actually plays.
+ * `handCap` arrives as a prop from the server. HAND_CAP is server
+ * configuration, and passing it down is how the page shows what the arena
+ * actually plays.
  */
 export function Lobby({ handCap }: { handCap: number }) {
   const [page, setPage] = useState(1);

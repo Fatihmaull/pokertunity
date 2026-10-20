@@ -7,7 +7,7 @@ export async function POST(request: Request): Promise<Response> {
   const session = await getSession();
   if (!session) return Response.json({ error: 'Connect your wallet first.' }, { status: 401 });
 
-  // Every call writes an intent row, and nothing else ever deletes one.
+  // Every call writes an intent row, and intent rows are permanent.
   const allowed = take('deposit-start', callerOf(request, session.userId));
   if (!allowed.ok) return tooMany(allowed.retryAfterMs);
 

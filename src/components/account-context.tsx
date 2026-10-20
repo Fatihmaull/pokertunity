@@ -27,16 +27,16 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     const response = await fetch('/api/account', { cache: 'no-store' });
-    // A route that throws answers 500 with no body at all, and parsing that
-    // surfaced as "Unexpected end of JSON input" in place of a sign-in error.
-    if (!response.ok) throw new Error('Your account could not be loaded. Try again in a moment.');
+    // A route that throws answers 500 with an empty body, so the status is
+    // checked first and the reader gets a plain sentence.
+    if (!response.ok) throw new Error('Your account failed to load. Try again in a moment.');
     const body = (await response.json()) as { session: unknown; account?: Account };
     setAccount(body.session && body.account ? body.account : null);
     setLoading(false);
   }, []);
 
   // The session lives on the server, so it is read once on mount and applied in
-  // a callback rather than assigned while the effect body runs.
+  // a callback, after the effect body runs.
   useEffect(() => {
     let cancelled = false;
     fetch('/api/account', { cache: 'no-store' })
@@ -62,23 +62,22 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       // Signing in puts the wallet on the network the server will name in the
-      // message, so the two do not disagree on the first transaction.
+      // message, so the two agree on the first transaction.
       if (!chain) throw new Error('Still loading the available networks. Try again in a moment.');
 
       // The network is settled whichever way the address arrives. `connect()`
-      // does it on the way in, but a wallet that has approved this origin
-      // before never goes through it, and every sign-in after the first would
-      // otherwise complete with the wallet on whatever network it was already
-      // on — while the message it just signed names ours.
+      // does it on the way in, and a wallet that has approved this origin
+      // before skips that path, so settling it here keeps every sign-in after
+      // the first on the network the signed message names.
       const existing = await currentAddress();
       const address = existing ?? (await connect(chain));
       if (existing) await ensureChain(chain);
 
       const nonceResponse = await fetch(`/api/auth/nonce?address=${address}`, { cache: 'no-store' });
       const nonceBody = (await nonceResponse.json().catch(() => ({}))) as { message?: string; error?: string };
-      if (!nonceResponse.ok || !nonceBody.message) throw new Error(nonceBody.error ?? 'Could not start sign-in.');
+      if (!nonceResponse.ok || !nonceBody.message) throw new Error(nonceBody.error ?? 'Sign-in failed to start. Try again.');
 
-      // Signed exactly as the server wrote it. Nothing here edits the message,
+      // Signed exactly as the server wrote it, verbatim,
       // so the domain, chain and nonce checked on verify are the ones signed.
       const message = nonceBody.message;
       const signature = await signMessage(address, message);
@@ -111,10 +110,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
    * The session names one address. When the wallet stops pointing at it, the
    * honest thing is to stop claiming it.
    *
-   * Signing out rather than quietly refreshing, because the session is not
-   * the new account's and cannot be made into it without a fresh signature.
-   * Staying signed in would show somebody another person's chips and agents
-   * while their own wallet is the one on screen.
+   * Signing out, because the session belongs to the old account and the new
+   * one needs a fresh signature. That keeps every screen showing the chips and
+   * agents of the wallet that is actually on screen.
    */
   useEffect(() => {
     const signedInAs = account?.address;
@@ -128,12 +126,11 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     });
   }, [account?.address, signOut]);
 
-  // The listener above only hears changes made while a tab is open. A player
-  // who switched accounts with the site closed comes back signed in as the old
-  // one, so the wallet is asked once, silently: `eth_accounts` opens no prompt.
-  // A wallet that reports no account at all is locked, not changed, and is left
-  // alone; signing out every locked wallet would sign people out for stepping
-  // away.
+  // The listener above hears changes made while a tab is open. A player who
+  // switched accounts with the site closed comes back signed in as the old
+  // one, so the wallet is asked once, silently: `eth_accounts` is
+  // prompt-free. A wallet that reports an empty account list is locked, and
+  // is left alone, so stepping away keeps people signed in.
   const checkedAccount = useRef(false);
   useEffect(() => {
     const signedInAs = account?.address;

@@ -23,8 +23,8 @@ function table(stacks: number[], overrides: Partial<Parameters<typeof startHand>
   });
 }
 
-// Once a hand settles the pot has already been paid into the stacks, so only
-// an unfinished hand still has chips sitting in the middle.
+// Once a hand settles the pot has already been paid into the stacks, so chips
+// sit in the middle while a hand is unfinished.
 const chipsInPlay = (state: HandState) =>
   state.seats.reduce((sum, s) => sum + s.stack, 0) + (state.street === 'complete' ? 0 : totalPot(state));
 const play = (state: HandState, actions: Action[]) => actions.reduce((s, a) => applyAction(s, a), state);
@@ -50,14 +50,14 @@ test('heads-up reverses order after the flop', () => {
   assert.equal(state.toAct, 1, 'the big blind acts first out of position');
 });
 
-test('deals two hole cards to every live seat and no duplicates', () => {
+test('deals two distinct hole cards to every live seat', () => {
   const state = table([1000, 1000, 1000, 1000]);
   const dealt = state.seats.flatMap((seat) => seat.hole ?? []);
   assert.equal(dealt.length, 8);
   assert.equal(new Set(dealt).size, 8);
 });
 
-test('a free check cannot be folded', () => {
+test('a free check offers check and withholds fold', () => {
   const state = play(table([1000, 1000]), [{ type: 'call' }]);
   const legal = legalActions(state)!;
   assert.equal(legal.toCall, 0);
@@ -74,7 +74,7 @@ test('the big blind keeps the option after a round of calls', () => {
   assert.notEqual(legal.raise, null);
 });
 
-test('everyone folding awards the pot uncontested and shows no cards', () => {
+test('everyone folding awards the pot uncontested and keeps every card face down', () => {
   const state = play(table([1000, 1000, 1000]), [{ type: 'fold' }, { type: 'fold' }]);
   assert.equal(state.street, 'complete');
   assert.equal(state.seats[2].stack, 1010);
@@ -94,9 +94,9 @@ test('a reraise must clear the previous raise size', () => {
   assert.equal(legalActions(state)!.raise!.min, 100, 'previous raise was forty');
 });
 
-test('a short all-in does not reopen betting for players who already acted', () => {
+test('a short all-in leaves players who already acted to call or fold', () => {
   // Button on seat 2 makes the order seat 2, then the blinds on seats 0 and 1.
-  // Seat 2 raises to 60, seat 1 shoves 70 which is only a ten-chip raise.
+  // Seat 2 raises to 60, seat 1 shoves 70, a ten-chip raise.
   const state = play(table([1000, 70, 1000], { button: 2 }), [
     { type: 'raise', to: 60 },
     { type: 'fold' },
@@ -106,7 +106,7 @@ test('a short all-in does not reopen betting for players who already acted', () 
   assert.equal(state.toAct, 2, 'the original raiser owes the extra ten');
   const legal = legalActions(state)!;
   assert.equal(legal.call, 10);
-  assert.equal(legal.raise, null, 'a short shove does not reopen the betting');
+  assert.equal(legal.raise, null, 'a short shove keeps the betting closed');
 });
 
 test('runs the board out and shows cards when everyone is all in', () => {
@@ -120,7 +120,7 @@ test('runs the board out and shows cards when everyone is all in', () => {
 });
 
 test('builds side pots when a short stack is all in', () => {
-  // Seat 1 can only cover 100. Seats 0 and 2 shove past it into a side pot.
+  // Seat 1 covers 100 at most. Seats 0 and 2 shove past it into a side pot.
   const state = play(table([1000, 100, 1000], { button: 2 }), [
     { type: 'raise', to: 1000 },
     { type: 'call' },
@@ -173,7 +173,7 @@ test('plays a full hand to showdown with the pot fully awarded', () => {
   assert.equal(chipsInPlay(state), 3000);
 });
 
-test('a folded seat cannot win the pot it paid into', () => {
+test('a folded seat forfeits the pot it paid into', () => {
   const state = play(table([1000, 1000, 1000]), [{ type: 'raise', to: 100 }, { type: 'fold' }, { type: 'fold' }]);
   const awards = state.events.filter((e) => e.type === 'award');
   assert.equal(awards.length, 1, 'one winner, one pot');
@@ -181,7 +181,7 @@ test('a folded seat cannot win the pot it paid into', () => {
   assert.equal(state.seats[0].stack, 1030, 'wins its own hundred back plus both blinds');
 });
 
-test('survives thousands of random hands without losing a chip', () => {
+test('conserves every chip across thousands of random hands', () => {
   const random = mulberry32(2024);
   const pick = <T,>(items: T[]) => items[(random() * items.length) | 0];
 
@@ -201,7 +201,7 @@ test('survives thousands of random hands without losing a chip', () => {
 
     let steps = 0;
     while (state.toAct !== null) {
-      assert.ok(steps++ < 500, 'hand did not terminate');
+      assert.ok(steps++ < 500, 'hand terminates');
       const legal = legalActions(state)!;
       const choices: Action[] = [];
       if (legal.fold) choices.push({ type: 'fold' });
@@ -219,13 +219,13 @@ test('survives thousands of random hands without losing a chip', () => {
     assert.equal(state.street, 'complete');
     const after = state.seats.reduce((sum, seat) => sum + seat.stack, 0);
     assert.equal(after, expected, `hand ${hand} leaked chips`);
-    assert.ok(state.seats.every((seat) => seat.stack >= 0), 'no seat may go negative');
+    assert.ok(state.seats.every((seat) => seat.stack >= 0), 'every seat stays at zero or above');
   }
 });
 
 test('blinds that put everyone all in still get a board and a showdown', () => {
-  // Nobody is left to act, but the hand is not over: settling here would pick a
-  // winner by comparing two hole cards against nothing.
+  // The action is closed and the hand is still live: the board runs out first,
+  // so the winner is picked from seven cards each.
   const state = startHand({
     handId: 'all-in-blinds',
     seats: [
@@ -252,8 +252,8 @@ test('blinds that put everyone all in still get a board and a showdown', () => {
   );
 });
 
-// The house takes its cut at the door, so the engine conserves chips with no
-// exception: whatever went in comes back out, every time, whatever shape the
+// The house takes its cut at the door, so the engine conserves chips
+// exactly: whatever went in comes back out, every time, whatever shape the
 // hand took.
 function totalChips(state: HandState): number {
   return state.seats.reduce((sum, seat) => sum + seat.stack, 0);
@@ -277,7 +277,7 @@ test('chips are conserved however the hand ends', () => {
       ],
     },
     {
-      name: 'a bet nobody called',
+      name: 'an uncalled bet',
       stacks: [1000, 1000],
       actions: [
         [{ type: 'call' }, { type: 'check' }],
@@ -302,8 +302,8 @@ test('chips are conserved however the hand ends', () => {
   ];
 
   for (const line of lines) {
-    // Measured from what everyone sat down with, not from the state after
-    // blinds are posted: a posted blind has already left its stack.
+    // Measured from what everyone sat down with, before the blinds: a posted
+    // blind has already left its stack.
     const before = line.stacks.reduce((sum, stack) => sum + stack, 0);
     let state = table(line.stacks);
 
@@ -314,10 +314,9 @@ test('chips are conserved however the hand ends', () => {
   }
 });
 
-test('a pot split between two winners loses no odd chip', () => {
-  // Three chips between two players cannot halve evenly. The odd one goes to a
-  // player rather than to nobody, which is the only place a rounding bug could
-  // destroy chips.
+test('a pot split between two winners keeps the odd chip', () => {
+  // Three chips between two players halve unevenly. The odd one goes to a
+  // player, which is the one place a rounding bug could destroy chips.
   const before = 3000;
   let state = table([1000, 1000, 1000]);
 
@@ -330,9 +329,9 @@ test('a pot split between two winners loses no odd chip', () => {
   assert.equal(totalChips(state), before);
 });
 
-test('a beaten hand is mucked rather than shown', () => {
-  // Both players see every street and check it down, so nobody is all in and
-  // the loser never has to table anything.
+test('a beaten hand is mucked face down', () => {
+  // Both players see every street and check it down, so the betting stays open
+  // to the river and the loser keeps their cards private.
   let state = table([1000, 1000]);
   state = play(state, [{ type: 'call' }, { type: 'check' }]);
   state = play(state, [{ type: 'check' }, { type: 'check' }]);
@@ -344,5 +343,5 @@ test('a beaten hand is mucked rather than shown', () => {
   const winners = new Set(state.events.filter((event) => event.type === 'award').map((event) => event.seat));
 
   assert.ok(shown.length >= 1, 'somebody has to table a hand to claim the pot');
-  assert.equal(shown.length, winners.size, 'only the hands that took chips were shown');
+  assert.equal(shown.length, winners.size, 'the hands that took chips are the ones shown');
 });

@@ -27,18 +27,18 @@ export interface Lobby {
   /** Which page of the ended matches this is, and how many there are. */
   page: number;
   pages: number;
-  /** False until the first poll lands, when nothing about the floor is known. */
+  /** False until the first poll lands and the floor is known. */
   loaded: boolean;
-  /** The last poll was refused or never answered. */
+  /** The last poll was refused or timed out. */
   failed: boolean;
 }
 
 /**
  * What is being dealt right now, and one page of what has ended.
  *
- * There is no roster. Matches are created by the matchmaker and settled the
- * moment they end, so which ones exist is only knowable from the server and the
- * list starts empty until the first poll lands.
+ * Matches are created by the matchmaker and settled the moment they end, so
+ * the server is where the list comes from, and it starts empty until the first
+ * poll lands.
  */
 export function useLobby(page = 1): Lobby {
   const [matches, setMatches] = useState<LobbyMatch[]>([]);
@@ -48,15 +48,14 @@ export function useLobby(page = 1): Lobby {
   const [failed, setFailed] = useState(false);
 
   // The floor is external state, so it is polled and applied in a callback
-  // rather than assigned while the effect body runs.
+  // after the effect body runs.
   useEffect(() => {
     let cancelled = false;
 
     const poll = () => {
-      // A refusal is not an empty floor. Keeping what is on screen until the
-      // next poll is honest; replacing it with the error body is not. It is
-      // still recorded, because before the first answer there is nothing on
-      // screen to keep, and "loading" would otherwise be shown forever.
+      // A refusal differs from an empty floor. Keeping what is on screen until
+      // the next poll is honest. It is still recorded, because before the first
+      // answer the screen is empty, and the failure message replaces "loading".
       fetch(`/api/matches?page=${page}`, { cache: 'no-store' })
         .then((response) =>
           response.ok
