@@ -7,7 +7,7 @@ import { HeroPreview } from './hero-preview';
 import { MatchList } from './match-list';
 import { ChipDot } from './table-art';
 import { useLobby } from './use-lobby';
-import { Button, ButtonLink, Card, Disclosure, SectionHeading, Stat } from './ui';
+import { Button, ButtonLink, Card, SectionHeading, Stat } from './ui';
 
 /**
  * Home has one job: make a stranger understand the loop before they scroll.
@@ -56,17 +56,19 @@ function Hero() {
           {/* A sentence to a line where there is width for it: the offer, then
               the promise. Left to wrap on its own it breaks "poker / agent". */}
           <h1 className="display text-[clamp(2.75rem,6.4vw,4.75rem)] text-ink">
-            <span className="sm:block">Bring your poker agent. </span>
-            <span className="sm:block">Find out how good it is.</span>
+            <span className="rise sm:block">Bring your poker agent. </span>
+            <span className="rise text-muted [--i:1] sm:block">
+              Find out how good it is.
+            </span>
           </h1>
 
-          <p className="mt-6 max-w-[52ch] text-base text-muted sm:text-lg">
+          <p className="rise mt-6 max-w-[52ch] text-base text-muted [--i:2] sm:text-lg">
             The arena matches it against opponents of similar strength, deals the hands, and publishes its rating.
           </p>
 
           {/* Named for what the click does, the same as the header's button:
               it opens the wallet. The token is minted on the next screen. */}
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="rise mt-8 flex flex-wrap items-center gap-3 [--i:3]">
             <Button tone="primary" size="lg" onClick={() => void signIn()} disabled={connecting}>
               {connecting ? 'Check your wallet' : 'Connect wallet'}
             </Button>
@@ -98,19 +100,30 @@ const STEPS = [
   },
 ];
 
+/*
+  The steps run down the page beside their heading rather than across it, so
+  they read as one sequence instead of three equal claims. The numeral is set
+  large and quiet: it orders the steps without competing with their titles.
+  The display voice stays off both, since it belongs to page titles and moves.
+*/
 function HowItWorks() {
   return (
     <section className="border-b border-line">
-      <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
-        <SectionHeading title="How it works" />
-        <ol className="grid gap-x-10 gap-y-8 md:grid-cols-3">
+      <div className="mx-auto grid w-full max-w-[84rem] gap-x-16 gap-y-8 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+        <h2 className="text-xl text-ink">How it works</h2>
+        <ol className="max-w-[44rem]">
           {STEPS.map((step, index) => (
-            <li key={step.title} className="border-t border-line-strong pt-4">
-              <h3 className="flex items-baseline gap-2.5 text-base text-ink">
-                <span className="mono text-sm text-accent tabular-nums">{index + 1}</span>
-                {step.title}
-              </h3>
-              <p className="mt-2 max-w-[42ch] text-sm text-muted">{step.body}</p>
+            <li
+              key={step.title}
+              className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-4 border-t border-line py-6 first:border-t-0 first:pt-0 sm:grid-cols-[4rem_minmax(0,1fr)]"
+            >
+              <span aria-hidden className="mono text-2xl leading-none text-faint tabular-nums sm:text-3xl">
+                {index + 1}
+              </span>
+              <div>
+                <h3 className="text-lg leading-none text-ink">{step.title}</h3>
+                <p className="mt-1.5 max-w-[52ch] text-[0.9375rem] text-muted">{step.body}</p>
+              </div>
             </li>
           ))}
         </ol>
@@ -258,17 +271,17 @@ function GoodToKnow() {
     <section className="border-t border-line bg-surface/40">
       <div className="mx-auto w-full max-w-[84rem] px-4 py-14 sm:px-6">
         <SectionHeading title="FAQ" />
-        {/* Questions only, until one is picked. A reader scans five short
-            lines for theirs rather than reading five answers to find it. */}
-        <ul className="max-w-[48rem] border-t border-line">
+        {/* Every answer is one sentence, so all of them are shown: reading
+            five short answers costs less than a click per question. Flowed in
+            columns so each pair stays whole and nothing lines up in a table. */}
+        <dl className="gap-x-16 md:columns-2">
           {FACTS.map((fact) => (
-            <li key={fact.question} className="border-b border-line py-4">
-              <Disclosure summary={<span className="text-[0.9375rem] text-ink">{fact.question}</span>}>
-                <p className="max-w-[62ch] text-sm text-muted">{fact.answer}</p>
-              </Disclosure>
-            </li>
+            <div key={fact.question} className="mb-8 break-inside-avoid">
+              <dt className="text-[0.9375rem] font-medium text-ink">{fact.question}</dt>
+              <dd className="mt-1.5 max-w-[52ch] text-sm text-muted">{fact.answer}</dd>
+            </div>
           ))}
-        </ul>
+        </dl>
       </div>
     </section>
   );

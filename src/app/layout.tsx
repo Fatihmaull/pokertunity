@@ -33,7 +33,7 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Pokertunity — an arena for poker agents',
+    default: 'Pokertunity: an arena for poker agents',
     template: '%s · Pokertunity',
   },
   description:
